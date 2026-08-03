@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { Sparkles, Star, StarOff, Tag, X } from "lucide-react";
 import { toast } from "sonner";
 import { Modal } from "../ui/Modal";
@@ -59,15 +59,19 @@ export function CharacterBulkEditModal({
   onClose,
   selected,
   onApplied,
+  knownTags = [],
 }: {
   open: boolean;
   onClose: () => void;
   selected: BulkSummarySource[];
   onApplied: () => void;
+  /** Tags already in the library. Offered as autocomplete so bulk edits stop minting near-duplicates. */
+  knownTags?: string[];
 }) {
   const localize = useLocalizedUiText();
   const bulkUpdate = useBulkUpdateCharacters();
   const { data: connections } = useConnections();
+  const knownTagsDatalistId = useId();
 
   const [addTagDraft, setAddTagDraft] = useState("");
   const [removeTagDraft, setRemoveTagDraft] = useState("");
@@ -186,6 +190,12 @@ export function CharacterBulkEditModal({
           {selected.length} {selected.length === 1 ? localize("character selected") : localize("characters selected")}
         </p>
 
+        <datalist id={knownTagsDatalistId}>
+          {knownTags.map((tag) => (
+            <option key={tag} value={tag} />
+          ))}
+        </datalist>
+
         <section>
           <label className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--marinara-chat-chrome-panel-muted)]">
             {localize("Add tags")}
@@ -199,6 +209,7 @@ export function CharacterBulkEditModal({
               commitTag(addTagDraft, "add");
             }}
             onBlur={() => commitTag(addTagDraft, "add")}
+            list={knownTagsDatalistId}
             placeholder={localize("Type a tag and press Enter")}
             className={cn(fieldClass, "mt-2")}
           />
@@ -218,6 +229,7 @@ export function CharacterBulkEditModal({
               commitTag(removeTagDraft, "remove");
             }}
             onBlur={() => commitTag(removeTagDraft, "remove")}
+            list={knownTagsDatalistId}
             placeholder={localize("Type a tag and press Enter")}
             className={cn(fieldClass, "mt-2")}
           />

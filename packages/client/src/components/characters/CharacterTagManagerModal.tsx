@@ -164,18 +164,29 @@ export function CharacterTagManagerModal({ open, onClose }: { open: boolean; onC
 
     setBusyTag(winner.tag);
     try {
+      // One call per spelling, but failures are collected instead of thrown: a mid-loop failure
+      // used to abort the merge and report nothing about which spellings had already collapsed.
+      const failed: string[] = [];
+      let merged = 0;
       for (const loser of losers) {
         const ids = index.idsByTag.get(loser.tag) ?? [];
         if (ids.length === 0) continue;
-        await bulkUpdate.mutateAsync({
-          characterIds: ids,
-          changes: { addTags: [winner.tag], removeTags: [loser.tag] },
-        });
+        try {
+          await bulkUpdate.mutateAsync({
+            characterIds: ids,
+            changes: { addTags: [winner.tag], removeTags: [loser.tag] },
+          });
+          merged++;
+        } catch {
+          failed.push(loser.tag);
+        }
       }
-      toast.success(localize(`Merged into "${winner.tag}"`));
+
+      if (merged > 0) toast.success(localize(`Merged ${merged} spellings into "${winner.tag}"`));
+      if (failed.length > 0) {
+        toast.error(localize(`Could not merge: ${failed.map((tag) => `"${tag}"`).join(", ")}`));
+      }
       await reload();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : localize("Merge failed"));
     } finally {
       setBusyTag(null);
     }
