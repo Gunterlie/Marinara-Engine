@@ -3,23 +3,34 @@ import {
   ArrowLeft,
   ArrowUpDown,
   Check,
+  CheckSquare,
   Download,
   Hash,
+  LayoutGrid,
+  ListChecks,
   MessageCircle,
   Pencil,
   Plus,
+  Rows3,
   Search,
   Star,
   User,
 } from "lucide-react";
+import { toast } from "sonner";
 import { type CharacterData } from "@marinara-engine/shared";
 import { useTranslation, useTranslation as useUiTranslation } from "react-i18next";
 import {
   flattenCharacterPages,
   flattenPersonaPages,
   useCharacterPages,
+  useDeleteCharacter,
+  useDeletePersona,
   usePersonaPages,
 } from "../../hooks/use-characters";
+import { api } from "../../lib/api-client";
+import { showConfirmDialog } from "../../lib/app-dialogs";
+import { SelectionActionBar } from "../ui/SelectionActionBar";
+import { CharacterBulkEditModal, type BulkSummarySource } from "./CharacterBulkEditModal";
 import { getCharacterTitle } from "../../lib/character-display";
 import {
   formatCardLibraryMeta,
@@ -95,6 +106,10 @@ type LibraryCard = {
   active: boolean;
   creatorNotes: string;
   sections: LibrarySection[];
+  /** True when `summary` came from a saved `extensions.marinaraSummary` rather than being derived. */
+  hasStoredSummary: boolean;
+  /** Trimmed card text handed to the AI summariser. Empty for personas, which it does not cover. */
+  summarySource: BulkSummarySource;
 };
 
 type LibraryCopy = {
@@ -201,17 +216,28 @@ function parsePersonaAvatarCrop(value: PersonaRow["avatarCrop"]): AvatarCropValu
 
 function toCharacterLibraryCard(char: ParsedCharacterRow): LibraryCard {
   const name = getText(char.parsed.name) || "Unnamed";
+  const tags = getCharacterTags(char);
+  const storedSummary = getText(char.parsed.extensions?.marinaraSummary);
   return {
     id: char.id,
     name,
     title: getCharacterTitle({ name, comment: char.comment }),
     meta: formatCardLibraryMeta(char.parsed.creator, char.parsed.character_version),
-    summary: getCharacterSummary(char),
+    summary: storedSummary || getCharacterSummary(char),
+    hasStoredSummary: !!storedSummary,
+    summarySource: {
+      id: char.id,
+      name,
+      description: getText(char.parsed.description),
+      personality: getText(char.parsed.personality),
+      scenario: getText(char.parsed.scenario),
+      tags,
+    },
     avatarPath: char.avatarPath,
     avatarCrop: char.parsed.extensions?.avatarCrop as AvatarCropValue | undefined,
     createdAt: char.createdAt,
     updatedAt: char.updatedAt,
-    tags: getCharacterTags(char),
+    tags,
     tokenEstimate: estimateCharacterCardTokens(char.parsed),
     favorite: !!char.parsed.extensions?.fav,
     active: false,
@@ -237,6 +263,9 @@ function toPersonaLibraryCard(persona: PersonaRow): LibraryCard {
     active: persona.isActive === true || persona.isActive === "true",
     creatorNotes: getText(persona.creatorNotes),
     sections: getPersonaSections(persona),
+    // Personas are not part of the character bulk-edit endpoint, so they never carry a stored summary.
+    hasStoredSummary: false,
+    summarySource: { id: persona.id, name: getText(persona.name), description: "", personality: "", scenario: "", tags: [] },
   };
 }
 
@@ -402,6 +431,13 @@ export function CharacterLibraryView() {
   const selectedId = isPersonaLibrary ? personaSelectedId : characterSelectedId;
   const sort = isPersonaLibrary ? personaSort : characterSort;
   const [search, setSearch] = useState("");
+  const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
+  const [bulkEditOpen, setBulkEditOpen] = useState(false);
+  const [exportingSelected, setExportingSelected] = useState(false);
+  const deleteCharacter = useDeleteCharacter();
+  const deletePersona = useDeletePersona();
   const serverSearch = useMemo(() => parseCardLibrarySearchQuery(search).text, [search]);
   const characterPages = useCharacterPages({ enabled: !isPersonaLibrary, search: serverSearch, sort: characterSort });
   const personaPages = usePersonaPages({ enabled: isPersonaLibrary, search: serverSearch, sort: personaSort });
@@ -545,6 +581,68 @@ export function CharacterLibraryView() {
     [isPersonaLibrary, openModal],
   );
 
+  const checkedCards = useMemo(() => sortedCards.filter((card) => checkedIds.has(card.id)), [checkedIds, sortedCards]);
+
+  const exitSelectionMode = useCallback(() => {
+    setSelectionMode(false);
+    setCheckedIds(new Set());
+  }, []);
+
+  const toggleChecked = useCallback((id: string) => {
+    setCheckedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleCheckAll = useCallback(() => {
+    setCheckedIds((prev) => (prev.size === sortedCards.length ? new Set() : new Set(sortedCards.map((c) => c.id))));
+  }, [sortedCards]);
+
+  const handleExportSelected = useCallback(async () => {
+    if (checkedIds.size === 0) return;
+    setExportingSelected(true);
+    try {
+      await api.downloadPost(
+        isPersonaLibrary ? "/characters/personas/export-bulk" : "/characters/export-bulk",
+        { ids: [...checkedIds], format: "native" },
+        isPersonaLibrary ? "marinara-personas.zip" : "marinara-characters.zip",
+      );
+      toast.success(localize(`Exported ${checkedIds.size} ${copy.plural}`));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : localize("Export failed"));
+    } finally {
+      setExportingSelected(false);
+    }
+  }, [checkedIds, copy.plural, isPersonaLibrary, localize]);
+
+  const handleDeleteSelected = useCallback(async () => {
+    const ids = [...checkedIds];
+    if (ids.length === 0) return;
+    const confirmed = await showConfirmDialog({
+      title: localize(`Delete ${copy.plural}`),
+      message: localize(`Delete ${ids.length} ${ids.length === 1 ? copy.singular : copy.plural}?`),
+      confirmLabel: localize("Delete"),
+      tone: "destructive",
+    });
+    if (!confirmed) return;
+
+    const results = await Promise.allSettled(
+      ids.map((id) => (isPersonaLibrary ? deletePersona.mutateAsync(id) : deleteCharacter.mutateAsync(id))),
+    );
+    const failedIds = ids.filter((_, index) => results[index]?.status === "rejected");
+    if (ids.length > failedIds.length) toast.success(localize(`Deleted ${ids.length - failedIds.length}`));
+    if (failedIds.length > 0) {
+      // Keep the failures selected so a retry does not have to re-pick them out of the grid.
+      setCheckedIds(new Set(failedIds));
+      toast.error(localize(`Failed to delete ${failedIds.length}`));
+      return;
+    }
+    exitSelectionMode();
+  }, [checkedIds, copy, deleteCharacter, deletePersona, exitSelectionMode, isPersonaLibrary, localize]);
+
   const handleSortChange = (value: string) => {
     if (isPersonaLibrary) setPersonaSort(value as ResourcePanelSort);
     else setCharacterSort(value as CharacterLibrarySort);
@@ -609,6 +707,22 @@ export function CharacterLibraryView() {
               aria-label={localizeUi("ui.characters.characterlibraryview.importValue1", { value1: copy.singular })}
             >
               <Download size="0.75rem" />
+            </button>
+
+            <button
+              onClick={() => (selectionMode ? exitSelectionMode() : setSelectionMode(true))}
+              className={cn(libraryToolbarButtonClass, selectionMode && "mari-chrome-control--selected")}
+              title={localize(selectionMode ? "Cancel selection" : "Select multiple")}
+              aria-pressed={selectionMode}
+            >
+              <ListChecks size="0.75rem" />
+            </button>
+            <button
+              onClick={() => setViewMode((mode) => (mode === "grid" ? "table" : "grid"))}
+              className={libraryToolbarButtonClass}
+              title={localize(viewMode === "grid" ? "Switch to table view" : "Switch to grid view")}
+            >
+              {viewMode === "grid" ? <Rows3 size="0.75rem" /> : <LayoutGrid size="0.75rem" />}
             </button>
 
             <div className="relative min-w-0">
@@ -689,23 +803,51 @@ export function CharacterLibraryView() {
             </div>
           )}
 
-          {!isLoading && sortedCards.length > 0 && (
+          {!isLoading && sortedCards.length > 0 && viewMode === "table" && (
+            <LibraryTable
+              cards={sortedCards}
+              selectedId={selectedId}
+              selectionMode={selectionMode}
+              checkedIds={checkedIds}
+              onToggleChecked={toggleChecked}
+              onToggleCheckAll={toggleCheckAll}
+              onSelect={setSelectedId}
+              onEdit={openDetailFromLibrary}
+            />
+          )}
+
+          {!isLoading && sortedCards.length > 0 && viewMode === "grid" && (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-3 xl:grid-cols-3 2xl:grid-cols-4">
               {sortedCards.map((card) => {
                 const cardSummary = truncateText(card.summary, 180);
                 const isSelected = selectedId === card.id;
+                const isChecked = checkedIds.has(card.id);
                 return (
                   <Fragment key={card.id}>
                     <button
                       type="button"
-                      onClick={() => setSelectedId(card.id)}
+                      aria-pressed={selectionMode ? isChecked : undefined}
+                      onClick={() => (selectionMode ? toggleChecked(card.id) : setSelectedId(card.id))}
                       className={cn(
-                        "group flex h-full items-stretch overflow-hidden rounded-[1.25rem] border bg-[var(--card)]/70 text-left shadow-[0_20px_50px_-32px_rgba(15,23,42,0.75)] transition-all hover:border-[var(--marinara-chat-chrome-button-border-hover)] hover:shadow-[0_24px_60px_-32px_color-mix(in_srgb,var(--marinara-chat-chrome-accent)_35%,transparent)] sm:flex-col sm:rounded-[1.75rem] sm:hover:-translate-y-0.5",
-                        isSelected
+                        "group relative flex h-full items-stretch overflow-hidden rounded-[1.25rem] border bg-[var(--card)]/70 text-left shadow-[0_20px_50px_-32px_rgba(15,23,42,0.75)] transition-all hover:border-[var(--marinara-chat-chrome-button-border-hover)] hover:shadow-[0_24px_60px_-32px_color-mix(in_srgb,var(--marinara-chat-chrome-accent)_35%,transparent)] sm:flex-col sm:rounded-[1.75rem] sm:hover:-translate-y-0.5",
+                        (selectionMode ? isChecked : isSelected)
                           ? "border-[var(--marinara-chat-chrome-button-border-active)] ring-1 ring-[var(--marinara-chat-chrome-focus-ring)]"
                           : "border-[var(--marinara-chat-chrome-panel-border)]",
                       )}
                     >
+                      {selectionMode && (
+                        <span
+                          aria-hidden="true"
+                          className={cn(
+                            "absolute left-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded-lg border sm:left-3 sm:top-3",
+                            isChecked
+                              ? "mari-chrome-accent-surface border-transparent"
+                              : "border-[var(--marinara-chat-chrome-panel-border)] bg-[var(--background)]/80",
+                          )}
+                        >
+                          {isChecked && <Check size="0.75rem" />}
+                        </span>
+                      )}
                       <div
                         className={cn(
                           "mari-avatar-placeholder relative h-24 w-24 shrink-0 overflow-hidden sm:h-auto sm:w-full sm:aspect-square",
@@ -787,7 +929,7 @@ export function CharacterLibraryView() {
                       </div>
                     </button>
 
-                    {isSelected && (
+                    {!selectionMode && isSelected && (
                       <div className="col-span-full lg:hidden">
                         <CardLibraryDetailCard
                           card={card}
@@ -852,6 +994,169 @@ export function CharacterLibraryView() {
           </div>
         </aside>
       </div>
+
+      {selectionMode && (
+        <SelectionActionBar
+          selectedCount={checkedIds.size}
+          exporting={exportingSelected}
+          extraAction={
+            isPersonaLibrary ? undefined : (
+              <button
+                type="button"
+                onClick={() => setBulkEditOpen(true)}
+                disabled={checkedIds.size === 0}
+                className="mari-chrome-control flex-1 px-3 py-2 text-xs"
+              >
+                <Pencil size="0.75rem" />
+                {localize("Bulk edit")}
+              </button>
+            )
+          }
+          onExport={() => void handleExportSelected()}
+          onDelete={() => void handleDeleteSelected()}
+        />
+      )}
+
+      {bulkEditOpen && (
+        <CharacterBulkEditModal
+          open={bulkEditOpen}
+          onClose={() => setBulkEditOpen(false)}
+          selected={checkedCards.map((card) => card.summarySource)}
+          onApplied={exitSelectionMode}
+        />
+      )}
+    </div>
+  );
+}
+
+function LibraryTable({
+  cards,
+  selectedId,
+  selectionMode,
+  checkedIds,
+  onToggleChecked,
+  onToggleCheckAll,
+  onSelect,
+  onEdit,
+}: {
+  cards: LibraryCard[];
+  selectedId: string | null;
+  selectionMode: boolean;
+  checkedIds: Set<string>;
+  onToggleChecked: (id: string) => void;
+  onToggleCheckAll: () => void;
+  onSelect: (id: string) => void;
+  onEdit: (id: string) => void;
+}) {
+  const localize = useLocalizedUiText();
+  const headerClass =
+    "px-3 py-2 text-left text-[0.625rem] font-semibold uppercase tracking-[0.18em] text-[var(--marinara-chat-chrome-panel-muted)]";
+
+  return (
+    <div className="overflow-x-auto rounded-[1.25rem] border border-[var(--marinara-chat-chrome-panel-border)] bg-[var(--card)]/60">
+      <table className="w-full min-w-[44rem] border-collapse text-sm">
+        <thead className="border-b border-[var(--marinara-chat-chrome-panel-divider)]">
+          <tr>
+            {selectionMode && (
+              <th scope="col" className={cn(headerClass, "w-10")}>
+                <button type="button" onClick={onToggleCheckAll} title={localize("Select all")}>
+                  <CheckSquare size="0.875rem" />
+                </button>
+              </th>
+            )}
+            <th scope="col" className={headerClass}>
+              {localize("Name")}
+            </th>
+            <th scope="col" className={headerClass}>
+              {localize("Summary")}
+            </th>
+            <th scope="col" className={headerClass}>
+              {localize("Tags")}
+            </th>
+            <th scope="col" className={cn(headerClass, "w-24 text-right")}>
+              {localize("Tokens")}
+            </th>
+            <th scope="col" className={cn(headerClass, "w-16")}>
+              <span className="sr-only">{localize("Actions")}</span>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {cards.map((card) => {
+            const isChecked = checkedIds.has(card.id);
+            return (
+              <tr
+                key={card.id}
+                onClick={() => (selectionMode ? onToggleChecked(card.id) : onSelect(card.id))}
+                className={cn(
+                  "cursor-pointer border-b border-[var(--marinara-chat-chrome-panel-divider)] last:border-b-0 hover:bg-[var(--marinara-chat-chrome-highlight-bg)]",
+                  (selectionMode ? isChecked : selectedId === card.id) &&
+                    "bg-[var(--marinara-chat-chrome-highlight-bg)]",
+                )}
+              >
+                {selectionMode && (
+                  <td className="px-3 py-2">
+                    <span
+                      className={cn(
+                        "flex h-5 w-5 items-center justify-center rounded border",
+                        isChecked
+                          ? "mari-chrome-accent-surface border-transparent"
+                          : "border-[var(--marinara-chat-chrome-panel-border)]",
+                      )}
+                    >
+                      {isChecked && <Check size="0.625rem" />}
+                    </span>
+                  </td>
+                )}
+                <td className="max-w-[14rem] px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    {card.favorite && (
+                      <Star size="0.75rem" className="shrink-0 fill-current text-[var(--marinara-chat-chrome-accent)]" />
+                    )}
+                    <span className="truncate font-medium text-[var(--marinara-chat-chrome-panel-title)]">
+                      {card.name}
+                    </span>
+                  </div>
+                  {card.meta && (
+                    <div className="truncate text-[0.625rem] uppercase tracking-[0.14em] text-[var(--marinara-chat-chrome-panel-muted)]">
+                      {card.meta}
+                    </div>
+                  )}
+                </td>
+                <td className="max-w-[24rem] px-3 py-2 text-[var(--marinara-chat-chrome-panel-muted)]">
+                  <span className="line-clamp-2 text-xs">{truncateText(card.summary, 220)}</span>
+                  {card.hasStoredSummary && (
+                    <span className="text-[0.5625rem] uppercase tracking-[0.18em] text-[var(--marinara-chat-chrome-accent)]">
+                      {localize("saved")}
+                    </span>
+                  )}
+                </td>
+                <td className="max-w-[12rem] px-3 py-2">
+                  <span className="line-clamp-2 text-[0.6875rem] text-[var(--marinara-chat-chrome-panel-muted)]">
+                    {card.tags.join(", ")}
+                  </span>
+                </td>
+                <td className="px-3 py-2 text-right text-xs tabular-nums text-[var(--marinara-chat-chrome-panel-muted)]">
+                  {formatEstimatedTokens(card.tokenEstimate)}
+                </td>
+                <td className="px-3 py-2">
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onEdit(card.id);
+                    }}
+                    className="mari-chrome-control h-8 w-8 rounded-lg p-0"
+                    title={localize("Edit")}
+                  >
+                    <Pencil size="0.75rem" />
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }

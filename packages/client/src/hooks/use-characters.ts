@@ -238,6 +238,25 @@ export function useUpdateCharacter() {
   });
 }
 
+export type BulkCharacterChanges = {
+  addTags?: string[];
+  removeTags?: string[];
+  favorite?: boolean;
+  /** Empty string clears the stored summary and restores the derived one. */
+  summary?: string;
+};
+
+export function useBulkUpdateCharacters() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ characterIds, changes }: { characterIds: string[]; changes: BulkCharacterChanges }) =>
+      api.patch<{ updated: number }>("/characters/bulk", { characterIds, changes }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: characterKeys.all });
+    },
+  });
+}
+
 export function useCharacterVersions(id: string | null) {
   return useQuery({
     queryKey: characterKeys.versions(id ?? ""),

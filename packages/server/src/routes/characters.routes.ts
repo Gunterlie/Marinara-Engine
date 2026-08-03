@@ -12,6 +12,7 @@ import {
   updatePersonaGroupSchema,
   PROFESSOR_MARI_ID,
   CONVERSATION_CALL_CHARACTER_VIDEO_CLIP_KINDS,
+  applyBulkCharacterTags,
 } from "@marinara-engine/shared";
 import type { CharacterData, ConversationCallCharacterVideoClipKind, ExportEnvelope } from "@marinara-engine/shared";
 import { createCharactersStorage } from "../services/storage/characters.storage.js";
@@ -92,6 +93,15 @@ const CALL_VIDEO_CLIP_LABELS = {
 const CALL_VIDEO_CLIP_UPLOAD_MAX_BYTES = 250 * 1024 * 1024;
 const ALLOWED_CALL_VIDEO_CLIP_UPLOAD_EXTS = new Set([".mp4"]);
 const renameCardVersionSchema = z.object({ version: z.string().trim().min(1).max(100) });
+const bulkUpdateCharactersSchema = z.object({
+  characterIds: z.array(z.string().min(1)).min(1).max(500),
+  changes: z.object({
+    addTags: z.array(z.string().trim().min(1).max(100)).max(50).optional(),
+    removeTags: z.array(z.string().trim().min(1).max(100)).max(50).optional(),
+    favorite: z.boolean().optional(),
+    summary: z.string().max(4000).optional(),
+  }),
+});
 type UploadedMultipartFile = NonNullable<Awaited<ReturnType<FastifyRequest["file"]>>>;
 
 function applyTrackerCardPaint(
@@ -1481,6 +1491,48 @@ export async function charactersRoutes(app: FastifyInstance) {
         `attachment; filename="${format === "compatible" ? "compatible-characters.zip" : "marinara-characters.zip"}"`,
       )
       .send(zip.toBuffer());
+  });
+
+  app.patch("/bulk", async (req, reply) => {
+    const { characterIds, changes } = bulkUpdateCharactersSchema.parse(req.body);
+    const addTags = changes.addTags ?? [];
+    const removeTags = changes.removeTags ?? [];
+
+    let updated = 0;
+    for (const id of characterIds) {
+      const result = await enqueueUpdate(characterUpdateQueues, id, async () => {
+        const char = await storage.getById(id);
+        if (!char) return null;
+        const currentData = parseCharacterDataRecord(char.data);
+        const data: Partial<CharacterData> = {};
+
+        if (addTags.length > 0 || removeTags.length > 0) {
+          const currentTags = Array.isArray(currentData.tags)
+            ? currentData.tags.filter((tag): tag is string => typeof tag === "string")
+            : [];
+          data.tags = applyBulkCharacterTags(currentTags, addTags, removeTags);
+        }
+
+        const extensions: Record<string, unknown> = {};
+        if (changes.favorite !== undefined) extensions.fav = changes.favorite;
+        // Empty string clears the stored summary so the library falls back to its derived one.
+        if (changes.summary !== undefined) extensions.marinaraSummary = changes.summary || undefined;
+        if (Object.keys(extensions).length > 0) {
+          (data as Record<string, unknown>).extensions = extensions;
+        }
+
+        if (Object.keys(data).length === 0) return null;
+        return storage.update(id, data, undefined, {
+          skipVersionSnapshot: true,
+          versionSource: "library-bulk-edit",
+          mergeExtensions: true,
+        });
+      });
+      if (result) updated++;
+    }
+
+    if (updated === 0) return reply.status(404).send({ error: "No characters were updated" });
+    return { updated };
   });
 
   app.post<{ Params: { id: string } }>("/:id/embedded-lorebook/import", async (req, reply) => {

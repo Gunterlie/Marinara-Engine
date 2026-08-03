@@ -113,6 +113,57 @@ While in selection mode you can also drag your selected characters into a folder
 
 For the full list of import and export file formats, see the guide below on importing and exporting.
 
+## The full library
+
+Click **Open Full Library** at the top of the Characters panel to open the full-page library. It shows the same characters as the panel, with more room and its own tools.
+
+### Grid view and table view
+
+The library opens in **grid view**, a wall of large cards with avatars. The button with the rows icon switches to **table view**, which lists your characters as compact rows showing the name, summary, tags and token estimate side by side. Click the button again to go back to the grid.
+
+Table view is the faster way to compare many characters at once. Grid view is the better way to browse by avatar.
+
+In either view, click a character to show its full details in the panel on the right. Click the pencil button to open it in the editor.
+
+### Summaries
+
+Each character shows a short summary so you can see at a glance what the card is about.
+
+By default this summary is put together from the character's own text, in this order: creator notes, then description, then personality. If you write your own summary, that is shown instead. In table view a small **saved** marker appears next to summaries you wrote yourself.
+
+Your summary is stored on the character and travels with it when you export and re-import the card. It does **not** overwrite the card author's creator notes.
+
+### Bulk operations
+
+Click the **Select** button (the checklist icon) in the library toolbar to turn on selection mode. Checkboxes appear on every character. Click characters to include them, then use the action bar at the bottom:
+
+- **Bulk edit** opens the bulk edit window (see below).
+- **Export** downloads the selected characters as a single zip file.
+- **Delete** removes the selected characters, after a confirmation.
+
+Click the **Select** button again to leave selection mode.
+
+In table view, the checkbox in the table header selects or deselects every character currently listed.
+
+### The bulk edit window
+
+The bulk edit window applies one set of changes to every selected character at once:
+
+- **Add tags** — type a tag and press Enter to queue it. Every selected character gets the tag. Characters that already have it are left alone, and their existing spelling is kept.
+- **Remove tags** — type a tag and press Enter. It is removed from every selected character that has it. Matching ignores upper and lower case.
+- **Favorite** — set every selected character to **Favorite** or **Unfavorite**, or leave the setting untouched.
+- **Summary** — write one summary and apply it to every selected character. Apply an empty summary to clear your own summaries and go back to the automatic ones.
+
+Click **Apply to selected** to save. Nothing is changed until you do.
+
+### Writing summaries with AI
+
+The bulk edit window also has a **Write summaries with AI** section. Pick a connection, then click **Generate**.
+
+This writes a **separate** summary for each selected character, based on that character's name, tags, description, personality and scenario. It saves each summary as soon as it is written, so it does not wait for the **Apply to selected** button. Characters that fail are skipped and reported in the notification at the end.
+
+Generating summaries sends one request per selected character, so a large selection uses a matching amount of your connection's quota.
+
 ## Folders double as group chat rosters
 
 The folders you build here have a second use. Each folder is also a saved roster you can drop into a group chat.
