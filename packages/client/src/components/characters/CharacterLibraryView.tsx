@@ -1,20 +1,35 @@
-import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type UIEvent } from "react";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+  type UIEvent,
+} from "react";
 import {
   ArrowLeft,
   ArrowUpDown,
   Check,
-  CheckSquare,
+  ChevronLeft,
+  ChevronRight,
   Download,
   Hash,
   LayoutGrid,
-  ListChecks,
   MessageCircle,
+  MoreHorizontal,
   Pencil,
   Plus,
   Rows3,
   Search,
   Star,
+  StarOff,
+  Tag,
   User,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { type CharacterData } from "@marinara-engine/shared";
@@ -22,6 +37,7 @@ import { useTranslation, useTranslation as useUiTranslation } from "react-i18nex
 import {
   flattenCharacterPages,
   flattenPersonaPages,
+  useBulkUpdateCharacters,
   useCharacterPages,
   useDeleteCharacter,
   useDeletePersona,
@@ -30,13 +46,16 @@ import {
 import { api } from "../../lib/api-client";
 import { showConfirmDialog } from "../../lib/app-dialogs";
 import { SelectionActionBar } from "../ui/SelectionActionBar";
+import { ActionDropdown } from "../game-assets/ActionDropdown";
 import { CharacterBulkEditModal, type BulkSummarySource } from "./CharacterBulkEditModal";
+import { CharacterTagManagerModal } from "./CharacterTagManagerModal";
 import { getCharacterTitle } from "../../lib/character-display";
 import {
   formatCardLibraryMeta,
   getCardLibrarySummary,
   matchesCardLibrarySearch,
   parseCardLibrarySearchQuery,
+  withCardLibraryTagFilters,
 } from "../../lib/card-library-search";
 import { estimateCharacterCardTokens, formatEstimatedTokens } from "../../lib/character-token-count";
 import { applyInlineMarkdown, renderMarkdownBlocks } from "../../lib/markdown";
@@ -52,6 +71,72 @@ import {
 const libraryToolbarButtonClass =
   "mari-chrome-control mari-chrome-control--primary h-10 min-h-10 min-w-0 px-3 text-[0.75rem]";
 const libraryToolbarFieldClass = "mari-chrome-field h-10 w-full text-[0.75rem] md:h-9";
+
+type LibraryDensity = "compact" | "comfortable" | "cover";
+
+/**
+ * Grid shape per density. `cover` drops the text body entirely and overlays the name on the
+ * avatar, which is what a browsing pass through a large character library actually wants.
+ */
+const DENSITY_CONFIG: Record<LibraryDensity, { label: string; grid: string; summaryLines: number }> = {
+  compact: {
+    label: "Compact",
+    grid: "grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6",
+    summaryLines: 0,
+  },
+  comfortable: {
+    label: "Comfortable",
+    grid: "grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4",
+    summaryLines: 3,
+  },
+  cover: {
+    label: "Cover",
+    grid: "grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-6",
+    summaryLines: 0,
+  },
+};
+
+const DENSITY_ORDER: LibraryDensity[] = ["compact", "comfortable", "cover"];
+
+/** Tag chip shared by the grid cards, the table rows and the active-filter row. */
+function TagChip({
+  tag,
+  state,
+  onToggle,
+  className,
+}: {
+  tag: string;
+  state: "off" | "included" | "excluded";
+  onToggle: (tag: string, exclude: boolean) => void;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={(event) => {
+        event.stopPropagation();
+        onToggle(tag, event.altKey);
+      }}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onToggle(tag, true);
+      }}
+      title={`Filter by "${tag}" — alt-click or right-click to exclude`}
+      className={cn(
+        "max-w-[10rem] truncate rounded-full px-1.5 py-0.5 text-[0.5625rem] font-medium transition-colors sm:px-2 sm:py-1 sm:text-[0.625rem]",
+        state === "included"
+          ? "mari-chrome-accent-surface"
+          : state === "excluded"
+            ? "bg-[var(--marinara-chat-chrome-button-bg)] text-[var(--marinara-chat-chrome-panel-muted)] line-through"
+            : "bg-[var(--marinara-chat-chrome-highlight-bg)] text-[var(--marinara-chat-chrome-panel-text)] hover:bg-[var(--marinara-chat-chrome-button-bg)]",
+        className,
+      )}
+    >
+      {tag}
+    </button>
+  );
+}
 
 type CharacterRow = {
   id: string;
@@ -274,11 +359,22 @@ function CardLibraryDetailCard({
   kind,
   onEdit,
   onChat,
+  onToggleFavorite,
+  onToggleTag,
+  tagState,
+  position,
+  onStep,
 }: {
   card: LibraryCard;
   kind: CardLibraryKind;
   onEdit: (id: string) => void;
   onChat?: (card: LibraryCard) => void;
+  onToggleFavorite?: (card: LibraryCard) => void;
+  onToggleTag: (tag: string, exclude: boolean) => void;
+  tagState: (tag: string) => "off" | "included" | "excluded";
+  /** 1-based position in the current result set, used for the prev/next stepper. */
+  position?: { index: number; total: number };
+  onStep?: (delta: number) => void;
 }) {
   const { t: localizeUi } = useUiTranslation();
   const copy = LIBRARY_COPY[kind];
@@ -287,6 +383,33 @@ function CardLibraryDetailCard({
 
   return (
     <div className="space-y-4">
+      {position && onStep && position.total > 1 && (
+        <div className="flex items-center justify-between gap-2">
+          <button
+            type="button"
+            onClick={() => onStep(-1)}
+            disabled={position.index <= 1}
+            className="mari-chrome-control h-9 w-9 rounded-xl p-0"
+            title={localizeUi("ui.characters.characterlibraryview.previous")}
+            aria-label={localizeUi("ui.characters.characterlibraryview.previous")}
+          >
+            <ChevronLeft size="0.875rem" />
+          </button>
+          <span className="text-[0.6875rem] tabular-nums text-[var(--marinara-chat-chrome-panel-muted)]">
+            {position.index} / {position.total}
+          </span>
+          <button
+            type="button"
+            onClick={() => onStep(1)}
+            disabled={position.index >= position.total}
+            className="mari-chrome-control h-9 w-9 rounded-xl p-0"
+            title={localizeUi("ui.characters.characterlibraryview.next")}
+            aria-label={localizeUi("ui.characters.characterlibraryview.next")}
+          >
+            <ChevronRight size="0.875rem" />
+          </button>
+        </div>
+      )}
       <div className="overflow-hidden rounded-[1.5rem] border border-[var(--marinara-chat-chrome-panel-border)] bg-[var(--background)]/70 shadow-[0_24px_70px_-40px_rgba(15,23,42,0.95)] sm:rounded-[2rem]">
         <div className={cn("mari-avatar-placeholder relative aspect-square overflow-hidden", placeholderClass)}>
           {card.avatarPath ? (
@@ -332,14 +455,32 @@ function CardLibraryDetailCard({
                   <Hash size="0.75rem" />
                   {formatEstimatedTokens(card.tokenEstimate)}
                 </span>
-                {card.favorite && (
-                  <span
-                    data-character-favorite-indicator="detail"
-                    className="mari-chrome-accent-surface mari-accent-animated inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[0.6875rem] font-medium"
+                {onToggleFavorite ? (
+                  <button
+                    type="button"
+                    onClick={() => onToggleFavorite(card)}
+                    data-character-favorite-indicator={card.favorite ? "detail" : undefined}
+                    aria-pressed={card.favorite}
+                    className={cn(
+                      "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[0.6875rem] font-medium transition-colors",
+                      card.favorite
+                        ? "mari-chrome-accent-surface mari-accent-animated"
+                        : "mari-chrome-muted-badge hover:text-[var(--marinara-chat-chrome-panel-title)]",
+                    )}
                   >
-                    <Star size="0.75rem" className="fill-current" />{" "}
+                    <Star size="0.75rem" className={cn(card.favorite && "fill-current")} />{" "}
                     {localizeUi("ui.characters.cardlibrarydetailcard.favorite")}
-                  </span>
+                  </button>
+                ) : (
+                  card.favorite && (
+                    <span
+                      data-character-favorite-indicator="detail"
+                      className="mari-chrome-accent-surface mari-accent-animated inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[0.6875rem] font-medium"
+                    >
+                      <Star size="0.75rem" className="fill-current" />{" "}
+                      {localizeUi("ui.characters.cardlibrarydetailcard.favorite")}
+                    </span>
+                  )
                 )}
                 {card.active && (
                   <span className="mari-chrome-muted-badge mari-chrome-accent-surface gap-1 px-2.5 py-1 text-[0.6875rem]">
@@ -348,6 +489,14 @@ function CardLibraryDetailCard({
                 )}
               </div>
             </div>
+
+            {card.tags.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {card.tags.map((tag) => (
+                  <TagChip key={tag} tag={tag} state={tagState(tag)} onToggle={onToggleTag} />
+                ))}
+              </div>
+            )}
 
             {card.creatorNotes && (
               <div className="mari-message-content mt-4 whitespace-pre-wrap rounded-[1.5rem] border border-[var(--marinara-chat-chrome-panel-border)] bg-[var(--marinara-chat-chrome-highlight-bg)] px-4 py-3 text-sm leading-6 text-[var(--marinara-chat-chrome-panel-text)]">
@@ -432,14 +581,31 @@ export function CharacterLibraryView() {
   const sort = isPersonaLibrary ? personaSort : characterSort;
   const [search, setSearch] = useState("");
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
-  const [selectionMode, setSelectionMode] = useState(false);
+  const [density, setDensity] = useState<LibraryDensity>("comfortable");
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
+  const [tagManagerOpen, setTagManagerOpen] = useState(false);
   const [exportingSelected, setExportingSelected] = useState(false);
+  const [favoriteFilter, setFavoriteFilter] = useState<"all" | "favorites" | "non-favorites">("all");
+  const [untaggedOnly, setUntaggedOnly] = useState(false);
+  const [includedTags, setIncludedTags] = useState<string[]>([]);
+  const [excludedTags, setExcludedTags] = useState<string[]>([]);
+  const [overflowMenu, setOverflowMenu] = useState<{ x: number; y: number } | null>(null);
   const deleteCharacter = useDeleteCharacter();
   const deletePersona = useDeletePersona();
+  const bulkUpdate = useBulkUpdateCharacters();
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const gridRef = useRef<HTMLDivElement | null>(null);
+  /** Anchor for shift-click range selection — the last card the user checked on purpose. */
+  const selectionAnchorRef = useRef<string | null>(null);
   const serverSearch = useMemo(() => parseCardLibrarySearchQuery(search).text, [search]);
-  const characterPages = useCharacterPages({ enabled: !isPersonaLibrary, search: serverSearch, sort: characterSort });
+  const serverFavoriteFilter = isPersonaLibrary || favoriteFilter === "all" ? "" : favoriteFilter;
+  const characterPages = useCharacterPages({
+    enabled: !isPersonaLibrary,
+    search: serverSearch,
+    sort: characterSort,
+    favoriteFilter: serverFavoriteFilter,
+  });
   const personaPages = usePersonaPages({ enabled: isPersonaLibrary, search: serverSearch, sort: personaSort });
   const characters = useMemo(() => flattenCharacterPages(characterPages.data), [characterPages.data]);
   const personas = useMemo(() => flattenPersonaPages(personaPages.data), [personaPages.data]);
@@ -457,9 +623,60 @@ export function CharacterLibraryView() {
   }, [characters, isPersonaLibrary, personas]);
 
   const filteredCards = useMemo(() => {
-    const query = parseCardLibrarySearchQuery(search);
-    return cards.filter((card) => matchesCardLibrarySearch(card, query));
-  }, [cards, search]);
+    const query = withCardLibraryTagFilters(parseCardLibrarySearchQuery(search), includedTags, excludedTags);
+    return cards.filter((card) => {
+      if (untaggedOnly && card.tags.length > 0) return false;
+      // Personas have no server-side favorite filter, so honour the chip client-side for them.
+      if (isPersonaLibrary && favoriteFilter !== "all") return card.favorite === (favoriteFilter === "favorites");
+      return true;
+    }).filter((card) => matchesCardLibrarySearch(card, query));
+  }, [cards, excludedTags, favoriteFilter, includedTags, isPersonaLibrary, search, untaggedOnly]);
+
+  const allTags = useMemo(() => {
+    const tagSet = new Set<string>();
+    for (const card of cards) for (const tag of card.tags) tagSet.add(tag);
+    return [...tagSet].sort((left, right) => left.localeCompare(right));
+  }, [cards]);
+
+  const tagState = useCallback(
+    (tag: string): "off" | "included" | "excluded" => {
+      const key = tag.toLowerCase();
+      if (includedTags.some((entry) => entry.toLowerCase() === key)) return "included";
+      if (excludedTags.some((entry) => entry.toLowerCase() === key)) return "excluded";
+      return "off";
+    },
+    [excludedTags, includedTags],
+  );
+
+  /** Clicking a tag toggles it into the filter; alt/right-click toggles it as an exclusion. */
+  const toggleTagFilter = useCallback(
+    (tag: string, exclude: boolean) => {
+      const key = tag.toLowerCase();
+      const drop = (list: string[]) => list.filter((entry) => entry.toLowerCase() !== key);
+      const [target, setTarget, other, setOther] = exclude
+        ? ([excludedTags, setExcludedTags, includedTags, setIncludedTags] as const)
+        : ([includedTags, setIncludedTags, excludedTags, setExcludedTags] as const);
+      const alreadyOn = target.some((entry) => entry.toLowerCase() === key);
+      setTarget(alreadyOn ? drop(target) : [...drop(target), tag]);
+      if (!alreadyOn) setOther(drop(other));
+    },
+    [excludedTags, includedTags],
+  );
+
+  const hasActiveFilters =
+    search.trim().length > 0 ||
+    includedTags.length > 0 ||
+    excludedTags.length > 0 ||
+    untaggedOnly ||
+    favoriteFilter !== "all";
+
+  const clearFilters = useCallback(() => {
+    setSearch("");
+    setIncludedTags([]);
+    setExcludedTags([]);
+    setUntaggedOnly(false);
+    setFavoriteFilter("all");
+  }, []);
 
   const sortedCards = useMemo(() => {
     const list = [...filteredCards];
@@ -692,6 +909,7 @@ export function CharacterLibraryView() {
           </div>
 
           <div className="grid w-full grid-cols-2 gap-1.5 sm:ml-auto sm:w-72 lg:w-80">
+            <div className="col-span-2 flex gap-1.5 [&>*]:min-w-0 [&>*]:flex-1">
             <button
               onClick={() => openModal(isPersonaLibrary ? "create-persona" : "create-character")}
               className={newCardButtonClass}
@@ -724,6 +942,17 @@ export function CharacterLibraryView() {
             >
               {viewMode === "grid" ? <Rows3 size="0.75rem" /> : <LayoutGrid size="0.75rem" />}
             </button>
+            {!isPersonaLibrary && (
+              <button
+                onClick={() => setTagManagerOpen(true)}
+                className={libraryToolbarButtonClass}
+                title={localize("Tag manager")}
+                aria-label={localize("Tag manager")}
+              >
+                <Tags size="0.75rem" />
+              </button>
+            )}
+            </div>
 
             <div className="relative min-w-0">
               <Search
@@ -1024,6 +1253,10 @@ export function CharacterLibraryView() {
           selected={checkedCards.map((card) => card.summarySource)}
           onApplied={exitSelectionMode}
         />
+      )}
+
+      {tagManagerOpen && (
+        <CharacterTagManagerModal open={tagManagerOpen} onClose={() => setTagManagerOpen(false)} />
       )}
     </div>
   );
