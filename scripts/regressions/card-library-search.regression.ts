@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
 import {
+  CARD_HEALTH_TOKEN_BLOAT,
+  estimateCharacterCardTokens,
+  getCardHealthIssues,
+} from "../../packages/shared/src/utils/character-card-health.js";
+import {
   formatCardLibraryMeta,
   getCardLibrarySummary,
   matchesCardLibrarySearch,
@@ -177,5 +182,40 @@ assert.deepEqual(computeGroupMembershipUpdates(groups, ["c"], null), [{ id: "g2"
 // A no-op move writes nothing.
 assert.deepEqual(computeGroupMembershipUpdates(groups, ["c"], "g2"), []);
 assert.deepEqual(computeGroupMembershipUpdates(groups, [], "g1"), []);
+
+// ──────────────────────────────────────────────
+// Card health
+// ──────────────────────────────────────────────
+// Feeds the library badge and Professor Mari's prompt digest, so a wrong answer here shows
+// up as her confidently misreporting the library.
+
+const completeCard = {
+  name: "Il Dottore",
+  first_mes: "You are late.",
+  alternate_greetings: ["Another door, another experiment."],
+  mes_example: "<START>\n{{user}}: Hello\n{{char}}: Fascinating.",
+  tags: ["scientist"],
+};
+
+assert.deepEqual(getCardHealthIssues(completeCard, { hasAvatar: true }), []);
+assert.deepEqual(getCardHealthIssues({ ...completeCard, first_mes: "" }, { hasAvatar: true }), ["no-first-mes"]);
+// A card with an opening line but no alternates is flagged for greetings, not for first_mes.
+assert.deepEqual(getCardHealthIssues({ ...completeCard, alternate_greetings: [] }, { hasAvatar: true }), [
+  "no-greetings",
+]);
+assert.deepEqual(getCardHealthIssues(completeCard, { hasAvatar: false }), ["no-avatar"]);
+assert.deepEqual(getCardHealthIssues({ ...completeCard, tags: [] }, { hasAvatar: true }), ["no-tags"]);
+assert.deepEqual(getCardHealthIssues({ ...completeCard, mes_example: "" }, { hasAvatar: true }), ["no-examples"]);
+assert.deepEqual(
+  getCardHealthIssues({ ...completeCard, description: "x".repeat(CARD_HEALTH_TOKEN_BLOAT * 4 + 8) }, {
+    hasAvatar: true,
+  }),
+  ["token-bloat"],
+);
+
+// Whitespace-only tags and greetings do not count as present.
+assert.deepEqual(getCardHealthIssues({ ...completeCard, tags: ["  "] }, { hasAvatar: true }), ["no-tags"]);
+
+assert.equal(estimateCharacterCardTokens({ description: "x".repeat(400) }), 100);
 
 console.info("Card library search regression checks passed.");

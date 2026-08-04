@@ -1,11 +1,33 @@
-import { PROFESSOR_MARI_ID } from "@marinara-engine/shared";
+import { PROFESSOR_MARI_ID, estimateCharacterCardTokens, getCardHealthIssues } from "@marinara-engine/shared";
 
 import { MARI_ASSISTANT_PROMPT } from "../../db/seed-mari.js";
 
 type ProfessorMariCharactersStore = {
-  list(): Promise<Array<{ id?: string | null; data?: unknown }>>;
+  list(): Promise<Array<{ id?: string | null; data?: unknown; avatarPath?: unknown }>>;
   listPersonas(): Promise<Array<{ name?: unknown }>>;
 };
+
+/**
+ * Above this many characters the per-card digest is dropped for a plain name list. A large
+ * library would otherwise spend most of the context window describing itself.
+ */
+const MAX_DIGESTED_CHARACTERS = 200;
+
+/**
+ * One line per card: name, tags, rough size, and any completeness gaps. Mari already has
+ * `update_character` (tags, favourite, every text field), so seeing this is the whole
+ * difference between her guessing and her actually curating the library.
+ */
+function describeCharacter(data: Record<string, any>, hasAvatar: boolean): string {
+  const name = typeof data?.name === "string" ? data.name : "";
+  if (!name) return "";
+  const tags = Array.isArray(data.tags) ? data.tags.filter((tag: unknown) => typeof tag === "string") : [];
+  const tokens = estimateCharacterCardTokens(data);
+  const issues = getCardHealthIssues(data, { hasAvatar, tokenEstimate: tokens });
+  const parts = [name, `[${tags.length > 0 ? tags.join(", ") : "untagged"}]`, `~${tokens}t`];
+  if (issues.length > 0) parts.push(`needs: ${issues.join(", ")}`);
+  return parts.join(" ");
+}
 
 type NamedListStore = {
   list(): Promise<unknown[]>;
@@ -33,12 +55,14 @@ export async function resolveProfessorMariPromptContext(args: {
     const allChats = await args.chats.list();
     const allPresets = await args.presets.list();
 
-    const charNames = allChars
-      .filter((c) => c.id !== PROFESSOR_MARI_ID)
+    const libraryCharacters = allChars.filter((c) => c.id !== PROFESSOR_MARI_ID);
+    const digestLibrary = libraryCharacters.length <= MAX_DIGESTED_CHARACTERS;
+    const charNames = libraryCharacters
       .map((c) => {
         try {
           const d = typeof c.data === "string" ? JSON.parse(c.data) : c.data;
-          return d?.name;
+          if (!digestLibrary) return d?.name;
+          return describeCharacter(d ?? {}, typeof c.avatarPath === "string" && c.avatarPath.length > 0) || d?.name;
         } catch {
           return null;
         }
@@ -55,7 +79,12 @@ export async function resolveProfessorMariPromptContext(args: {
 
     const namesSections: string[] = [];
     if (charNames.length > 0) {
-      namesSections.push(`<available_names type="character">\n${charNames.join(", ")}\n</available_names>`);
+      // Digest lines carry commas of their own, so they go one per line rather than inline.
+      namesSections.push(
+        digestLibrary
+          ? `<available_names type="character" format="name [tags] ~tokens needs: gaps">\n${charNames.join("\n")}\n</available_names>`
+          : `<available_names type="character">\n${charNames.join(", ")}\n</available_names>`,
+      );
     }
     if (personaNames.length > 0) {
       namesSections.push(`<available_names type="persona">\n${personaNames.join(", ")}\n</available_names>`);

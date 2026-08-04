@@ -132,6 +132,7 @@ export * from "./utils/rpg-stats.js";
 export * from "./utils/lorebook-folder-tree.js";
 export * from "./utils/text-matching.js";
 export * from "./utils/character-bulk-tags.js";
+export * from "./utils/character-card-health.js";
 export * from "./utils/speaker-segments.js";
 export * from "./utils/sprite-labels.js";
 export * from "./utils/managed-generation-parameters.js";
