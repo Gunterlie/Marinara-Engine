@@ -32,7 +32,6 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
-import { type CharacterData } from "@marinara-engine/shared";
 import { useTranslation, useTranslation as useUiTranslation } from "react-i18next";
 import {
   flattenCharacterPages,
@@ -47,17 +46,29 @@ import { api } from "../../lib/api-client";
 import { showConfirmDialog } from "../../lib/app-dialogs";
 import { SelectionActionBar } from "../ui/SelectionActionBar";
 import { ActionDropdown } from "../game-assets/ActionDropdown";
-import { CharacterBulkEditModal, type BulkSummarySource } from "./CharacterBulkEditModal";
+import { CharacterBulkEditModal } from "./CharacterBulkEditModal";
 import { CharacterTagManagerModal } from "./CharacterTagManagerModal";
-import { getCharacterTitle } from "../../lib/character-display";
 import {
   formatCardLibraryMeta,
   getCardLibrarySummary,
-  matchesCardLibrarySearch,
   parseCardLibrarySearchQuery,
-  withCardLibraryTagFilters,
 } from "../../lib/card-library-search";
-import { estimateCharacterCardTokens, formatEstimatedTokens } from "../../lib/character-token-count";
+import {
+  collectLibraryTags,
+  filterLibraryCards,
+  getLibraryTagState,
+  sortLibraryCards,
+  toggleLibraryTagFilter,
+} from "../../lib/card-library-filter";
+import {
+  getText,
+  parseCharacterRow,
+  toCharacterLibraryCard,
+  type CharacterRow,
+  type LibraryCard,
+  type LibrarySection,
+} from "../../lib/character-library-card";
+import { formatEstimatedTokens } from "../../lib/character-token-count";
 import { applyInlineMarkdown, renderMarkdownBlocks } from "../../lib/markdown";
 import { cn, getAvatarCropStyle, parseAvatarCropJson, type AvatarCropValue } from "../../lib/utils";
 import { useLocalizedUiText } from "../../localization/use-localized-ui-text";
@@ -139,21 +150,6 @@ function TagChip({
   );
 }
 
-type CharacterRow = {
-  id: string;
-  data: string;
-  comment?: string | null;
-  avatarPath: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
-
-type ParsedCharacterRow = CharacterRow & {
-  parsed: Partial<CharacterData> & {
-    extensions?: Record<string, unknown>;
-  };
-};
-
 type PersonaRow = {
   id: string;
   name: string;
@@ -172,30 +168,6 @@ type PersonaRow = {
   tags?: string | string[] | null;
   createdAt: string;
   updatedAt: string;
-};
-
-type LibrarySection = { title: string; content: string };
-
-type LibraryCard = {
-  id: string;
-  name: string;
-  title: string | null;
-  meta: string | null;
-  summary: string;
-  avatarPath: string | null;
-  avatarCrop?: AvatarCropValue;
-  createdAt: string;
-  updatedAt: string;
-  tags: string[];
-  tokenEstimate: number;
-  favorite: boolean;
-  active: boolean;
-  creatorNotes: string;
-  sections: LibrarySection[];
-  /** True when `summary` came from a saved `extensions.marinaraSummary` rather than being derived. */
-  hasStoredSummary: boolean;
-  /** Trimmed card text handed to the AI summariser. Empty for personas, which it does not cover. */
-  summarySource: BulkSummarySource;
 };
 
 type LibraryCopy = {
@@ -220,25 +192,6 @@ const LIBRARY_COPY: Record<CardLibraryKind, LibraryCopy> = {
   },
 };
 
-function parseCharacterRow(char: CharacterRow): ParsedCharacterRow {
-  try {
-    const parsed = typeof char.data === "string" ? JSON.parse(char.data) : char.data;
-    return { ...char, parsed: (parsed as ParsedCharacterRow["parsed"]) ?? {} };
-  } catch {
-    return { ...char, parsed: { name: "Unknown", description: "" } };
-  }
-}
-
-function getText(value: unknown) {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function getCharacterTags(char: ParsedCharacterRow): string[] {
-  return (Array.isArray(char.parsed.tags) ? char.parsed.tags : []).filter(
-    (tag): tag is string => typeof tag === "string" && tag.trim().length > 0,
-  );
-}
-
 function getPersonaTags(persona: PersonaRow): string[] {
   if (Array.isArray(persona.tags)) {
     return persona.tags.filter((tag): tag is string => typeof tag === "string" && tag.trim().length > 0);
@@ -254,10 +207,6 @@ function getPersonaTags(persona: PersonaRow): string[] {
   }
 }
 
-function getCharacterSummary(char: ParsedCharacterRow) {
-  return getCardLibrarySummary([char.parsed.creator_notes, char.parsed.description, char.parsed.personality]);
-}
-
 function getPersonaSummary(persona: PersonaRow) {
   return getCardLibrarySummary([persona.creatorNotes, persona.description, persona.personality, persona.backstory]);
 }
@@ -265,15 +214,6 @@ function getPersonaSummary(persona: PersonaRow) {
 function truncateText(content: string, maxLength: number) {
   if (content.length <= maxLength) return content;
   return `${content.slice(0, maxLength - 3).trimEnd()}...`;
-}
-
-function getCharacterSections(char: ParsedCharacterRow): LibrarySection[] {
-  return [
-    { title: "Description", content: getText(char.parsed.description) },
-    { title: "Personality", content: getText(char.parsed.personality) },
-    { title: "Scenario", content: getText(char.parsed.scenario) },
-    { title: "Opening Message", content: getText(char.parsed.first_mes) },
-  ].filter((section) => section.content);
 }
 
 function getPersonaSections(persona: PersonaRow): LibrarySection[] {
@@ -298,38 +238,6 @@ function parsePersonaAvatarCrop(value: PersonaRow["avatarCrop"]): AvatarCropValu
   if (!value) return undefined;
   if (typeof value === "string") return parseAvatarCropJson(value) ?? undefined;
   return value;
-}
-
-function toCharacterLibraryCard(char: ParsedCharacterRow): LibraryCard {
-  const name = getText(char.parsed.name) || "Unnamed";
-  const tags = getCharacterTags(char);
-  const storedSummary = getText(char.parsed.extensions?.marinaraSummary);
-  return {
-    id: char.id,
-    name,
-    title: getCharacterTitle({ name, comment: char.comment }),
-    meta: formatCardLibraryMeta(char.parsed.creator, char.parsed.character_version),
-    summary: storedSummary || getCharacterSummary(char),
-    hasStoredSummary: !!storedSummary,
-    summarySource: {
-      id: char.id,
-      name,
-      description: getText(char.parsed.description),
-      personality: getText(char.parsed.personality),
-      scenario: getText(char.parsed.scenario),
-      tags,
-    },
-    avatarPath: char.avatarPath,
-    avatarCrop: char.parsed.extensions?.avatarCrop as AvatarCropValue | undefined,
-    createdAt: char.createdAt,
-    updatedAt: char.updatedAt,
-    tags,
-    tokenEstimate: estimateCharacterCardTokens(char.parsed),
-    favorite: !!char.parsed.extensions?.fav,
-    active: false,
-    creatorNotes: getText(char.parsed.creator_notes),
-    sections: getCharacterSections(char),
-  };
 }
 
 function toPersonaLibraryCard(persona: PersonaRow): LibraryCard {
@@ -623,43 +531,32 @@ export function CharacterLibraryView() {
     return (characters as CharacterRow[]).map(parseCharacterRow).map(toCharacterLibraryCard);
   }, [characters, isPersonaLibrary, personas]);
 
-  const filteredCards = useMemo(() => {
-    const query = withCardLibraryTagFilters(parseCardLibrarySearchQuery(search), includedTags, excludedTags);
-    return cards.filter((card) => {
-      if (untaggedOnly && card.tags.length > 0) return false;
-      // Personas have no server-side favorite filter, so honour the chip client-side for them.
-      if (isPersonaLibrary && favoriteFilter !== "all") return card.favorite === (favoriteFilter === "favorites");
-      return true;
-    }).filter((card) => matchesCardLibrarySearch(card, query));
-  }, [cards, excludedTags, favoriteFilter, includedTags, isPersonaLibrary, search, untaggedOnly]);
+  const filteredCards = useMemo(
+    () =>
+      filterLibraryCards(cards, {
+        search,
+        includedTags,
+        excludedTags,
+        untaggedOnly,
+        // Characters filter favorites server-side; personas have no such query, so the chip
+        // has to be honoured client-side for them.
+        favorite: isPersonaLibrary ? favoriteFilter : "all",
+      }),
+    [cards, excludedTags, favoriteFilter, includedTags, isPersonaLibrary, search, untaggedOnly],
+  );
 
-  const allTags = useMemo(() => {
-    const tagSet = new Set<string>();
-    for (const card of cards) for (const tag of card.tags) tagSet.add(tag);
-    return [...tagSet].sort((left, right) => left.localeCompare(right));
-  }, [cards]);
+  const allTags = useMemo(() => collectLibraryTags(cards), [cards]);
 
   const tagState = useCallback(
-    (tag: string): "off" | "included" | "excluded" => {
-      const key = tag.toLowerCase();
-      if (includedTags.some((entry) => entry.toLowerCase() === key)) return "included";
-      if (excludedTags.some((entry) => entry.toLowerCase() === key)) return "excluded";
-      return "off";
-    },
+    (tag: string) => getLibraryTagState(tag, includedTags, excludedTags),
     [excludedTags, includedTags],
   );
 
-  /** Clicking a tag toggles it into the filter; alt/right-click toggles it as an exclusion. */
   const toggleTagFilter = useCallback(
     (tag: string, exclude: boolean) => {
-      const key = tag.toLowerCase();
-      const drop = (list: string[]) => list.filter((entry) => entry.toLowerCase() !== key);
-      const [target, setTarget, other, setOther] = exclude
-        ? ([excludedTags, setExcludedTags, includedTags, setIncludedTags] as const)
-        : ([includedTags, setIncludedTags, excludedTags, setExcludedTags] as const);
-      const alreadyOn = target.some((entry) => entry.toLowerCase() === key);
-      setTarget(alreadyOn ? drop(target) : [...drop(target), tag]);
-      if (!alreadyOn) setOther(drop(other));
+      const next = toggleLibraryTagFilter(tag, exclude, includedTags, excludedTags);
+      setIncludedTags(next.included);
+      setExcludedTags(next.excluded);
     },
     [excludedTags, includedTags],
   );
@@ -679,25 +576,10 @@ export function CharacterLibraryView() {
     setFavoriteFilter("all");
   }, []);
 
-  const sortedCards = useMemo(() => {
-    const list = [...filteredCards];
-    switch (sort) {
-      case "name-asc":
-        return list.sort((left, right) => left.name.localeCompare(right.name));
-      case "name-desc":
-        return list.sort((left, right) => right.name.localeCompare(left.name));
-      case "newest":
-        return list.sort((left, right) => (right.createdAt ?? "").localeCompare(left.createdAt ?? ""));
-      case "oldest":
-        return list.sort((left, right) => (left.createdAt ?? "").localeCompare(right.createdAt ?? ""));
-      case "favorites":
-        return list.sort(
-          (left, right) => Number(right.favorite) - Number(left.favorite) || left.name.localeCompare(right.name),
-        );
-      default:
-        return list;
-    }
-  }, [filteredCards, sort]);
+  const sortedCards = useMemo(
+    () => sortLibraryCards(filteredCards, sort, includedTags),
+    [filteredCards, includedTags, sort],
+  );
 
   const setSelectedId = useCallback(
     (id: string | null) => {

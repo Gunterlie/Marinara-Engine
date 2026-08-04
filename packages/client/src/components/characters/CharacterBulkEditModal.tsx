@@ -6,6 +6,7 @@ import { api } from "../../lib/api-client";
 import { useBulkUpdateCharacters, type BulkCharacterChanges } from "../../hooks/use-characters";
 import { useConnections } from "../../hooks/use-connections";
 import { cn } from "../../lib/utils";
+import type { LibraryCardSummarySource } from "../../lib/character-library-card";
 import { useLocalizedUiText } from "../../localization/use-localized-ui-text";
 import { useTranslation as useUiTranslation } from "react-i18next";
 
@@ -13,14 +14,7 @@ import { useTranslation as useUiTranslation } from "react-i18next";
  * Card fields the summariser is allowed to see. Keeping this explicit stops a huge
  * card (greetings, embedded lorebook) from blowing the connection's context window.
  */
-export type BulkSummarySource = {
-  id: string;
-  name: string;
-  description: string;
-  personality: string;
-  scenario: string;
-  tags: string[];
-};
+export type BulkSummarySource = LibraryCardSummarySource;
 
 const SUMMARY_SYSTEM_PROMPT =
   "You write one-line library blurbs for roleplay character cards. " +

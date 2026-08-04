@@ -40,12 +40,20 @@ import {
   MessageCircle,
 } from "lucide-react";
 import { getCharacterTitle } from "../../lib/character-display";
+import { parseCardLibrarySearchQuery } from "../../lib/card-library-search";
+import { collectLibraryTags, filterLibraryCards, sortLibraryCards } from "../../lib/card-library-filter";
 import {
-  formatCardLibraryMeta,
-  getCardLibrarySummary,
-  matchesCardLibrarySearch,
-  parseCardLibrarySearchQuery,
-} from "../../lib/card-library-search";
+  collectGroupedCharacterIds,
+  computeGroupMembershipUpdates,
+  getCharacterPreviewMetadata,
+  getCharacterTags,
+  parseCharacterGroups,
+  parseCharacterRow,
+  toCharacterLibraryCard,
+  type CharacterRow,
+  type ParsedCharacterGroup,
+  type ParsedCharacterRow,
+} from "../../lib/character-library-card";
 import { useUIStore, type CharacterLibrarySort } from "../../stores/ui.store";
 import { handleFolderRenameKeyDown, useFolderRenameGesture } from "../../hooks/use-folder-rename-gesture";
 import { useTouchFolderDrag } from "../../hooks/use-touch-folder-drag";
@@ -58,17 +66,7 @@ import { PanelLoadMoreBar } from "./PanelLoadMoreBar";
 import { clearActiveChatResourceDrag, writeChatResourceDragPayload } from "../../lib/chat-resource-drag";
 import { ChatResourceActionButton } from "../chat/ChatResourceActionButton";
 
-type CharacterRow = {
-  id: string;
-  data: string;
-  comment?: string | null;
-  avatarPath: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
-type GroupRow = { id: string; name: string; description: string; characterIds: string; avatarPath: string | null };
-type ParsedCharacterRow = CharacterRow & { parsed: Record<string, any> };
-type ParsedGroupRow = GroupRow & { memberIds: string[] };
+type ParsedGroupRow = ParsedCharacterGroup;
 
 function getNextUnnamedFolderName(folders: Array<{ name: string }>) {
   const names = new Set(folders.map((folder) => folder.name.toLowerCase()));
@@ -85,44 +83,6 @@ function parseDroppedCharacterIds(payload: string): unknown {
   } catch {
     return undefined;
   }
-}
-
-function getCharacterTags(char: ParsedCharacterRow): string[] {
-  return Array.isArray(char.parsed.tags) ? (char.parsed.tags as string[]).filter(Boolean) : [];
-}
-
-function parseCharacterRow(char: CharacterRow): ParsedCharacterRow {
-  try {
-    const parsed = typeof char.data === "string" ? JSON.parse(char.data) : char.data;
-    return { ...char, parsed: (parsed as ParsedCharacterRow["parsed"]) ?? {} };
-  } catch {
-    return { ...char, parsed: { name: "Unknown", description: "" } };
-  }
-}
-
-function getCharacterPreviewMetadata(char: ParsedCharacterRow): string | null {
-  const parts: string[] = [];
-  const creator = typeof char.parsed.creator === "string" ? char.parsed.creator.trim() : "";
-  const version = typeof char.parsed.character_version === "string" ? char.parsed.character_version.trim() : "";
-  const importMetadata =
-    char.parsed.extensions?.importMetadata && typeof char.parsed.extensions.importMetadata === "object"
-      ? (char.parsed.extensions.importMetadata as Record<string, unknown>)
-      : {};
-  const cardMetadata =
-    importMetadata.card && typeof importMetadata.card === "object"
-      ? (importMetadata.card as Record<string, unknown>)
-      : {};
-  const spec = typeof cardMetadata.spec === "string" ? cardMetadata.spec.trim() : "";
-  const specVersion = typeof cardMetadata.specVersion === "string" ? cardMetadata.specVersion.trim() : "";
-  const tags = getCharacterTags(char);
-
-  if (creator) parts.push(`by ${creator}`);
-  if (version) parts.push(`v${version}`);
-  if (spec) parts.push(spec);
-  if (specVersion) parts.push(`spec ${specVersion}`);
-  if (parts.length > 0) return parts.join(", ");
-  if (tags.length > 0) return tags.slice(0, 3).join(", ");
-  return null;
 }
 
 function usePanelMobileOverlay() {
@@ -218,69 +178,10 @@ export function CharactersPanel() {
     [parsedCharacters],
   );
 
-  const filteredCharacters = useMemo(() => {
-    let list = parsedCharacters;
-    const query = parseCardLibrarySearchQuery(search);
-    // Filter by favorites
-    if (favFilter === "favorites") {
-      list = list.filter((c) => c.parsed.extensions?.fav);
-    } else if (favFilter === "non-favorites") {
-      list = list.filter((c) => !c.parsed.extensions?.fav);
-    }
-    // Filter by included tags (OR logic)
-    if (includedTags.size > 0) {
-      const lowerIncludedTags = new Set([...includedTags].map((t) => t.toLowerCase()));
-      list = list.filter((c) => {
-        const tags = new Set(getCharacterTags(c).map((t) => t.toLowerCase()));
-        return [...lowerIncludedTags].some((tag) => tags.has(tag));
-      });
-    }
-    const excludedTagFilters = new Set(Array.from(excludedTags, (tag) => tag.toLowerCase()));
-    if (excludedTagFilters.size > 0) {
-      list = list.filter((c) => {
-        const tags = new Set(getCharacterTags(c).map((tag) => tag.toLowerCase()));
-        for (const tag of excludedTagFilters) {
-          if (tags.has(tag)) return false;
-        }
-        return true;
-      });
-    }
-    list = list.filter((c) => {
-      const tags = getCharacterTags(c);
-      return matchesCardLibrarySearch(
-        {
-          name: c.parsed.name,
-          title: getCharacterTitle({ name: c.parsed.name ?? "", comment: c.comment }),
-          meta: formatCardLibraryMeta(c.parsed.creator, c.parsed.character_version),
-          summary: getCardLibrarySummary([
-            c.parsed.creator_notes,
-            c.parsed.description,
-            c.parsed.personality,
-          ]),
-          tags,
-          sections: [
-            { content: c.parsed.description },
-            { content: c.parsed.personality },
-            { content: c.parsed.scenario },
-            { content: c.parsed.first_mes },
-          ],
-        },
-        query,
-      );
-    });
-    return list;
-  }, [parsedCharacters, search, includedTags, excludedTags, favFilter]);
+  const libraryCards = useMemo(() => parsedCharacters.map(toCharacterLibraryCard), [parsedCharacters]);
 
   // Collect all unique tags across characters for the filter bar
-  const allTags = useMemo(() => {
-    const tagSet = new Set<string>();
-    for (const c of parsedCharacters) {
-      for (const t of getCharacterTags(c)) {
-        tagSet.add(t);
-      }
-    }
-    return [...tagSet].sort((a, b) => a.localeCompare(b));
-  }, [parsedCharacters]);
+  const allTags = useMemo(() => collectLibraryTags(libraryCards), [libraryCards]);
 
   const handleDeleteTag = useCallback(
     async (tag: string) => {
@@ -353,96 +254,34 @@ export function CharactersPanel() {
   }, [setCharacterPanelExcludedTags, setCharacterPanelIncludedTags]);
 
   const sortedCharacters = useMemo(() => {
-    const list = [...filteredCharacters];
-    const hasIncludedTags = includedTags.size > 0;
-    const matchCounts = hasIncludedTags
-      ? new Map(
-          list.map((c) => {
-            const tags = new Set(getCharacterTags(c).map((t) => t.toLowerCase()));
-            return [c.id, [...includedTags].filter((tag) => tags.has(tag.toLowerCase())).length];
-          }),
-        )
-      : null;
-    switch (sort) {
-      case "name-asc":
-        return list.sort((a, b) => {
-          if (hasIncludedTags) {
-            const countDiff = (matchCounts!.get(b.id) ?? 0) - (matchCounts!.get(a.id) ?? 0);
-            if (countDiff !== 0) return countDiff;
-          }
-          return (a.parsed.name ?? "").localeCompare(b.parsed.name ?? "");
-        });
-      case "name-desc":
-        return list.sort((a, b) => {
-          if (hasIncludedTags) {
-            const countDiff = (matchCounts!.get(b.id) ?? 0) - (matchCounts!.get(a.id) ?? 0);
-            if (countDiff !== 0) return countDiff;
-          }
-          return (b.parsed.name ?? "").localeCompare(a.parsed.name ?? "");
-        });
-      case "newest":
-        return list.sort((a, b) => {
-          if (hasIncludedTags) {
-            const countDiff = (matchCounts!.get(b.id) ?? 0) - (matchCounts!.get(a.id) ?? 0);
-            if (countDiff !== 0) return countDiff;
-          }
-          return (b.createdAt ?? "").localeCompare(a.createdAt ?? "");
-        });
-      case "oldest":
-        return list.sort((a, b) => {
-          if (hasIncludedTags) {
-            const countDiff = (matchCounts!.get(b.id) ?? 0) - (matchCounts!.get(a.id) ?? 0);
-            if (countDiff !== 0) return countDiff;
-          }
-          return (a.createdAt ?? "").localeCompare(b.createdAt ?? "");
-        });
-      case "favorites":
-        return list.sort((a, b) => {
-          const aFav = a.parsed.extensions?.fav ? 1 : 0;
-          const bFav = b.parsed.extensions?.fav ? 1 : 0;
-          if (bFav !== aFav) return bFav - aFav;
-          if (hasIncludedTags) {
-            const countDiff = (matchCounts!.get(b.id) ?? 0) - (matchCounts!.get(a.id) ?? 0);
-            if (countDiff !== 0) return countDiff;
-          }
-          return (a.parsed.name ?? "").localeCompare(b.parsed.name ?? "");
-        });
-      default:
-        if (hasIncludedTags) {
-          return list.sort((a, b) => {
-            const countDiff = (matchCounts!.get(b.id) ?? 0) - (matchCounts!.get(a.id) ?? 0);
-            if (countDiff !== 0) return countDiff;
-            return (a.parsed.name ?? "").localeCompare(b.parsed.name ?? "");
-          });
-        }
-        return list;
-    }
-  }, [filteredCharacters, sort, includedTags]);
-
-  const parsedGroups = useMemo<ParsedGroupRow[]>(() => {
-    if (!groups) return [];
-    return (groups as GroupRow[]).map((g) => {
-      const memberIds = (() => {
-        try {
-          return JSON.parse(g.characterIds);
-        } catch {
-          return [];
-        }
-      })() as string[];
-      return {
-        ...g,
-        memberIds,
-      };
+    const matched = filterLibraryCards(libraryCards, {
+      search,
+      includedTags: includedTagValues,
+      excludedTags: excludedTagValues,
+      favorite: favFilter,
+      // The sidebar widens on multiple included tags where the full library narrows. A
+      // long-standing difference between the two surfaces, preserved on purpose.
+      tagMatch: "any",
     });
-  }, [groups]);
+    return sortLibraryCards(matched, sort, includedTagValues)
+      .map((card) => parsedCharacterMap.get(card.id))
+      .filter((char): char is ParsedCharacterRow => Boolean(char));
+  }, [
+    libraryCards,
+    parsedCharacterMap,
+    search,
+    includedTagValues,
+    excludedTagValues,
+    favFilter,
+    sort,
+  ]);
 
-  const folderedCharacterIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (const folder of parsedGroups) {
-      for (const id of folder.memberIds) ids.add(id);
-    }
-    return ids;
-  }, [parsedGroups]);
+  /** Same set as `sortedCharacters` — kept as a name for the result-count copy. */
+  const filteredCharacters = sortedCharacters;
+
+  const parsedGroups = useMemo<ParsedGroupRow[]>(() => parseCharacterGroups(groups), [groups]);
+
+  const folderedCharacterIds = useMemo(() => collectGroupedCharacterIds(parsedGroups), [parsedGroups]);
   const visibleCharacterById = useMemo(
     () => new Map(sortedCharacters.map((character) => [character.id, character])),
     [sortedCharacters],
@@ -547,25 +386,8 @@ export function CharactersPanel() {
     async (charIds: string[], folderId: string | null) => {
       const ids = Array.from(new Set(charIds.filter(Boolean)));
       if (ids.length === 0) return;
-      const idSet = new Set(ids);
-      const targetFolder = folderId ? parsedGroups.find((folder) => folder.id === folderId) : null;
-      const updates = parsedGroups
-        .map((folder) => {
-          const withoutCharacter = folder.memberIds.filter((id) => !idSet.has(id));
-          const nextMembers =
-            targetFolder && folder.id === targetFolder.id
-              ? [...withoutCharacter, ...ids.filter((id) => !withoutCharacter.includes(id))]
-              : withoutCharacter;
-          if (
-            nextMembers.length === folder.memberIds.length &&
-            nextMembers.every((id, index) => id === folder.memberIds[index])
-          ) {
-            return null;
-          }
-          return updateGroup.mutateAsync({ id: folder.id, characterIds: nextMembers });
-        })
-        .filter((promise): promise is Promise<unknown> => promise !== null);
-      if (updates.length > 0) await Promise.all(updates);
+      const updates = computeGroupMembershipUpdates(parsedGroups, ids, folderId);
+      if (updates.length > 0) await Promise.all(updates.map((update) => updateGroup.mutateAsync(update)));
     },
     [parsedGroups, updateGroup],
   );
@@ -1411,6 +1233,19 @@ export function CharactersPanel() {
                 } else {
                   openCharacterDetailFromPanel(char.id);
                 }
+              }}
+              // Root rows were reachable by mouse only; folder members already had this.
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.target !== e.currentTarget) return;
+                if (e.key !== "Enter" && e.key !== " ") return;
+                e.preventDefault();
+                if (selectionMode) {
+                  toggleSelection(char.id);
+                  return;
+                }
+                openCharacterDetailFromPanel(char.id);
               }}
               draggable
               onDragStart={(event) => {
