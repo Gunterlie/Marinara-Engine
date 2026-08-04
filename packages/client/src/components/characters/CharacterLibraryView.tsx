@@ -16,6 +16,7 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  Copy,
   Download,
   Hash,
   LayoutGrid,
@@ -28,7 +29,10 @@ import {
   Star,
   StarOff,
   Tag,
+  Trash2,
   User,
+  UserMinus,
+  Users,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -37,14 +41,18 @@ import {
   flattenCharacterPages,
   flattenPersonaPages,
   useBulkUpdateCharacters,
+  useCharacterGroups,
   useCharacterPages,
   useDeleteCharacter,
   useDeletePersona,
+  useDuplicateCharacter,
   usePersonaPages,
+  useUpdateGroup,
 } from "../../hooks/use-characters";
 import { api } from "../../lib/api-client";
 import { showConfirmDialog } from "../../lib/app-dialogs";
 import { SelectionActionBar } from "../ui/SelectionActionBar";
+import { ContextMenu, type ContextMenuItem } from "../ui/ContextMenu";
 import { ActionDropdown } from "../game-assets/ActionDropdown";
 import { CharacterBulkEditModal } from "./CharacterBulkEditModal";
 import { CharacterTagManagerModal } from "./CharacterTagManagerModal";
@@ -61,7 +69,10 @@ import {
   toggleLibraryTagFilter,
 } from "../../lib/card-library-filter";
 import {
+  collectGroupedCharacterIds,
+  computeGroupMembershipUpdates,
   getText,
+  parseCharacterGroups,
   parseCharacterRow,
   toCharacterLibraryCard,
   type CharacterRow,
@@ -73,7 +84,9 @@ import { applyInlineMarkdown, renderMarkdownBlocks } from "../../lib/markdown";
 import { cn, getAvatarCropStyle, parseAvatarCropJson, type AvatarCropValue } from "../../lib/utils";
 import { useLocalizedUiText } from "../../localization/use-localized-ui-text";
 import {
+  CARD_LIBRARY_DENSITIES,
   useUIStore,
+  type CardLibraryDensity,
   type CardLibraryKind,
   type CharacterLibrarySort,
   type ResourcePanelSort,
@@ -83,7 +96,7 @@ const libraryToolbarButtonClass =
   "mari-chrome-control mari-chrome-control--primary h-10 min-h-10 min-w-0 px-3 text-[0.75rem]";
 const libraryToolbarFieldClass = "mari-chrome-field h-10 w-full text-[0.75rem] md:h-9";
 
-type LibraryDensity = "compact" | "comfortable" | "cover";
+type LibraryDensity = CardLibraryDensity;
 
 /**
  * Grid shape per density. `cover` drops the text body entirely and overlays the name on the
@@ -107,7 +120,7 @@ const DENSITY_CONFIG: Record<LibraryDensity, { label: string; grid: string; summ
   },
 };
 
-const DENSITY_ORDER: LibraryDensity[] = ["compact", "comfortable", "cover"];
+const DENSITY_ORDER = CARD_LIBRARY_DENSITIES;
 
 /** Tag chip shared by the grid cards, the table rows and the active-filter row. */
 function TagChip({
@@ -489,20 +502,28 @@ export function CharacterLibraryView() {
   const selectedId = isPersonaLibrary ? personaSelectedId : characterSelectedId;
   const sort = isPersonaLibrary ? personaSort : characterSort;
   const [search, setSearch] = useState("");
-  const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
-  const [density, setDensity] = useState<LibraryDensity>("comfortable");
+  const viewMode = useUIStore((s) => s.characterLibraryViewMode);
+  const setViewMode = useUIStore((s) => s.setCharacterLibraryViewMode);
+  const density = useUIStore((s) => s.characterLibraryDensity);
+  const setDensity = useUIStore((s) => s.setCharacterLibraryDensity);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [tagManagerOpen, setTagManagerOpen] = useState(false);
   const [exportingSelected, setExportingSelected] = useState(false);
   const [favoriteFilter, setFavoriteFilter] = useState<"all" | "favorites" | "non-favorites">("all");
   const [untaggedOnly, setUntaggedOnly] = useState(false);
+  /** `null` shows every card; `"ungrouped"` shows the ones no group claims. */
+  const [groupFilter, setGroupFilter] = useState<string | null | "ungrouped">(null);
+  const [cardMenu, setCardMenu] = useState<{ x: number; y: number; card: LibraryCard } | null>(null);
   const [includedTags, setIncludedTags] = useState<string[]>([]);
   const [excludedTags, setExcludedTags] = useState<string[]>([]);
   const [overflowMenu, setOverflowMenu] = useState<{ x: number; y: number } | null>(null);
   const deleteCharacter = useDeleteCharacter();
   const deletePersona = useDeletePersona();
+  const duplicateCharacter = useDuplicateCharacter();
   const bulkUpdate = useBulkUpdateCharacters();
+  const { data: groups } = useCharacterGroups();
+  const updateGroup = useUpdateGroup();
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const gridRef = useRef<HTMLDivElement | null>(null);
   /** Anchor for shift-click range selection — the last card the user checked on purpose. */
@@ -526,12 +547,15 @@ export function CharacterLibraryView() {
   const pendingLibraryScrollTopRef = useRef(0);
   const libraryScrollFrameRef = useRef<number | null>(null);
 
+  const parsedGroups = useMemo(() => parseCharacterGroups(groups), [groups]);
+  const groupedCharacterIds = useMemo(() => collectGroupedCharacterIds(parsedGroups), [parsedGroups]);
+
   const cards = useMemo<LibraryCard[]>(() => {
     if (isPersonaLibrary) return (personas as PersonaRow[]).map(toPersonaLibraryCard);
     return (characters as CharacterRow[]).map(parseCharacterRow).map(toCharacterLibraryCard);
   }, [characters, isPersonaLibrary, personas]);
 
-  const filteredCards = useMemo(
+  const matchedCards = useMemo(
     () =>
       filterLibraryCards(cards, {
         search,
@@ -544,6 +568,13 @@ export function CharacterLibraryView() {
       }),
     [cards, excludedTags, favoriteFilter, includedTags, isPersonaLibrary, search, untaggedOnly],
   );
+
+  const filteredCards = useMemo(() => {
+    if (isPersonaLibrary || groupFilter === null) return matchedCards;
+    if (groupFilter === "ungrouped") return matchedCards.filter((card) => !groupedCharacterIds.has(card.id));
+    const members = new Set(parsedGroups.find((group) => group.id === groupFilter)?.memberIds ?? []);
+    return matchedCards.filter((card) => members.has(card.id));
+  }, [groupFilter, groupedCharacterIds, isPersonaLibrary, matchedCards, parsedGroups]);
 
   const allTags = useMemo(() => collectLibraryTags(cards), [cards]);
 
@@ -566,6 +597,7 @@ export function CharacterLibraryView() {
     includedTags.length > 0 ||
     excludedTags.length > 0 ||
     untaggedOnly ||
+    groupFilter !== null ||
     favoriteFilter !== "all";
 
   const clearFilters = useCallback(() => {
@@ -573,6 +605,7 @@ export function CharacterLibraryView() {
     setIncludedTags([]);
     setExcludedTags([]);
     setUntaggedOnly(false);
+    setGroupFilter(null);
     setFavoriteFilter("all");
   }, []);
 
@@ -775,6 +808,123 @@ export function CharacterLibraryView() {
       setExportingSelected(false);
     }
   }, [checkedIds, copy.plural, isPersonaLibrary, localize]);
+
+  const handleExportCard = useCallback(
+    async (card: LibraryCard) => {
+      try {
+        await api.downloadPost(
+          isPersonaLibrary ? "/characters/personas/export-bulk" : "/characters/export-bulk",
+          { ids: [card.id], format: "native" },
+          `${card.name.replace(/[^\w.-]+/g, "_") || "card"}.zip`,
+        );
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : localize("Export failed"));
+      }
+    },
+    [isPersonaLibrary, localize],
+  );
+
+  const handleDeleteCard = useCallback(
+    async (card: LibraryCard) => {
+      const confirmed = await showConfirmDialog({
+        title: localize(`Delete ${copy.singular}`),
+        message: localize(`Delete ${card.name}? This cannot be undone.`),
+        confirmLabel: localize("Delete"),
+        tone: "destructive",
+      });
+      if (!confirmed) return;
+      if (isPersonaLibrary) deletePersona.mutate(card.id);
+      else deleteCharacter.mutate(card.id);
+    },
+    [copy.singular, deleteCharacter, deletePersona, isPersonaLibrary, localize],
+  );
+
+  /** Moves a card between groups. Membership is exclusive, so this rewrites only what changes. */
+  const handleMoveCardToGroup = useCallback(
+    async (cardId: string, targetGroupId: string | null) => {
+      const updates = computeGroupMembershipUpdates(parsedGroups, [cardId], targetGroupId);
+      if (updates.length === 0) return;
+      try {
+        await Promise.all(updates.map((update) => updateGroup.mutateAsync(update)));
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : localize("Could not update the group"));
+      }
+    },
+    [localize, parsedGroups, updateGroup],
+  );
+
+  const buildCardMenuItems = useCallback(
+    (card: LibraryCard): ContextMenuItem[] => {
+      const items: ContextMenuItem[] = [
+        { label: localize("Edit"), icon: <Pencil size="0.75rem" />, onSelect: () => openDetailFromLibrary(card.id) },
+      ];
+      if (!isPersonaLibrary) {
+        items.push(
+          {
+            label: localizeUi("ui.characters.characterlibraryview.chatNow"),
+            icon: <MessageCircle size="0.75rem" />,
+            onSelect: () => openCharacterChat(card),
+          },
+          {
+            label: localize(card.favorite ? "Unfavorite" : "Favorite"),
+            icon: card.favorite ? <StarOff size="0.75rem" /> : <Star size="0.75rem" />,
+            onSelect: () => void applyFavorite([card.id], !card.favorite),
+          },
+          {
+            label: localize("Duplicate"),
+            icon: <Copy size="0.75rem" />,
+            onSelect: () =>
+              duplicateCharacter.mutate(card.id, {
+                onSuccess: () => toast.success(localize(`Duplicated ${card.name}`)),
+              }),
+          },
+        );
+      }
+      items.push({
+        label: localize("Export"),
+        icon: <Download size="0.75rem" />,
+        onSelect: () => void handleExportCard(card),
+      });
+      if (!isPersonaLibrary) {
+        for (const group of parsedGroups) {
+          if (group.memberIds.includes(card.id)) continue;
+          items.push({
+            label: localize(`Move to ${group.name}`),
+            icon: <Users size="0.75rem" />,
+            onSelect: () => void handleMoveCardToGroup(card.id, group.id),
+          });
+        }
+        if (groupedCharacterIds.has(card.id)) {
+          items.push({
+            label: localize("Remove from group"),
+            icon: <UserMinus size="0.75rem" />,
+            onSelect: () => void handleMoveCardToGroup(card.id, null),
+          });
+        }
+      }
+      items.push({
+        label: localize("Delete"),
+        icon: <Trash2 size="0.75rem" />,
+        destructive: true,
+        onSelect: () => void handleDeleteCard(card),
+      });
+      return items;
+    },
+    [
+      applyFavorite,
+      duplicateCharacter,
+      groupedCharacterIds,
+      handleDeleteCard,
+      handleExportCard,
+      handleMoveCardToGroup,
+      isPersonaLibrary,
+      localize,
+      localizeUi,
+      openCharacterChat,
+      openDetailFromLibrary,
+      parsedGroups,
+    ],
+  );
 
   const handleDeleteSelected = useCallback(async () => {
     const ids = [...checkedIds];
@@ -1085,6 +1235,31 @@ export function CharacterLibraryView() {
             {localize("Untagged")}
           </button>
 
+          {!isPersonaLibrary && parsedGroups.length > 0 && (
+            <>
+              <span aria-hidden="true" className="mx-1 h-4 w-px bg-[var(--border)]" />
+              {[
+                { value: null, label: localize("All groups") },
+                ...parsedGroups.map((group) => ({ value: group.id, label: group.name })),
+                { value: "ungrouped" as const, label: localize("Ungrouped") },
+              ].map((option) => (
+                <button
+                  key={option.value ?? "all-groups"}
+                  type="button"
+                  onClick={() => setGroupFilter(option.value)}
+                  aria-pressed={groupFilter === option.value}
+                  className={cn(
+                    "mari-chrome-control mari-chrome-control--compact",
+                    groupFilter === option.value && "mari-chrome-control--selected",
+                  )}
+                >
+                  <Users size="0.625rem" />
+                  {option.label}
+                </button>
+              ))}
+            </>
+          )}
+
           {[...includedTags, ...excludedTags].map((tag) => (
             <button
               key={`${tagState(tag)}-${tag}`}
@@ -1250,6 +1425,10 @@ export function CharacterLibraryView() {
                       data-checked={isChecked || undefined}
                       onClick={(event: ReactMouseEvent) => handleCardActivate(card, event)}
                       onDoubleClick={() => openDetailFromLibrary(card.id)}
+                      onContextMenu={(event: ReactMouseEvent) => {
+                        event.preventDefault();
+                        setCardMenu({ x: event.clientX, y: event.clientY, card });
+                      }}
                       className={cn(
                         "group relative flex h-full cursor-pointer items-stretch overflow-hidden rounded-[1.25rem] border bg-[var(--card)]/70 text-left shadow-[0_20px_50px_-32px_rgba(15,23,42,0.75)] transition-all hover:border-[var(--marinara-chat-chrome-button-border-hover)] hover:shadow-[0_24px_60px_-32px_color-mix(in_srgb,var(--marinara-chat-chrome-accent)_35%,transparent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--marinara-chat-chrome-focus-ring)] sm:flex-col sm:rounded-[1.75rem] sm:hover:-translate-y-0.5",
                         isChecked
@@ -1548,6 +1727,15 @@ export function CharacterLibraryView() {
 
       {tagManagerOpen && (
         <CharacterTagManagerModal open={tagManagerOpen} onClose={() => setTagManagerOpen(false)} />
+      )}
+
+      {cardMenu && (
+        <ContextMenu
+          x={cardMenu.x}
+          y={cardMenu.y}
+          items={buildCardMenuItems(cardMenu.card)}
+          onClose={() => setCardMenu(null)}
+        />
       )}
     </div>
   );

@@ -36,6 +36,12 @@ export type ChatModeShortcut = "conversation" | "roleplay" | "game";
 export const CHARACTER_LIBRARY_SORT_OPTIONS = ["name-asc", "name-desc", "newest", "oldest", "favorites"] as const;
 export type CharacterLibrarySort = (typeof CHARACTER_LIBRARY_SORT_OPTIONS)[number];
 export type CardLibraryKind = "characters" | "personas";
+export type CardLibraryViewMode = "grid" | "table";
+/** `cover` drops the text body and overlays the name on the avatar for fast browsing. */
+export type CardLibraryDensity = "compact" | "comfortable" | "cover";
+
+export const CARD_LIBRARY_VIEW_MODES: CardLibraryViewMode[] = ["grid", "table"];
+export const CARD_LIBRARY_DENSITIES: CardLibraryDensity[] = ["compact", "comfortable", "cover"];
 export const CHARACTER_PANEL_FAVORITE_FILTER_OPTIONS = ["all", "favorites", "non-favorites"] as const;
 export type CharacterPanelFavoriteFilter = (typeof CHARACTER_PANEL_FAVORITE_FILTER_OPTIONS)[number];
 export const LOREBOOK_PANEL_CATEGORY_OPTIONS = [
@@ -276,6 +282,16 @@ export function normalizeCharacterLibrarySort(value: unknown): CharacterLibraryS
   return CHARACTER_LIBRARY_SORT_OPTIONS.includes(value as CharacterLibrarySort)
     ? (value as CharacterLibrarySort)
     : "name-asc";
+}
+
+export function normalizeCardLibraryViewMode(value: unknown): CardLibraryViewMode {
+  return CARD_LIBRARY_VIEW_MODES.includes(value as CardLibraryViewMode) ? (value as CardLibraryViewMode) : "grid";
+}
+
+export function normalizeCardLibraryDensity(value: unknown): CardLibraryDensity {
+  return CARD_LIBRARY_DENSITIES.includes(value as CardLibraryDensity)
+    ? (value as CardLibraryDensity)
+    : "comfortable";
 }
 
 function normalizeCharacterPanelFavoriteFilter(value: unknown): CharacterPanelFavoriteFilter {
@@ -591,6 +607,10 @@ interface UIState {
   characterLibrarySelectedId: string | null;
   /** Last selected persona card inside the full-page card library */
   personaLibrarySelectedId: string | null;
+  /** Grid or table layout for the full-page card library */
+  characterLibraryViewMode: CardLibraryViewMode;
+  /** Card size for the full-page card library grid */
+  characterLibraryDensity: CardLibraryDensity;
   /** Last selected sort order for character lists and the full-page character library */
   characterLibrarySort: CharacterLibrarySort;
   /** Last selected sort order for the full-page persona library */
@@ -912,6 +932,8 @@ interface UIState {
   setChatBackgroundBlur: (v: number) => void;
   setCharacterLibrarySelectedId: (id: string | null) => void;
   setPersonaLibrarySelectedId: (id: string | null) => void;
+  setCharacterLibraryViewMode: (mode: CardLibraryViewMode) => void;
+  setCharacterLibraryDensity: (density: CardLibraryDensity) => void;
   setCharacterLibrarySort: (sort: CharacterLibrarySort) => void;
   setPersonaLibrarySort: (sort: ResourcePanelSort) => void;
   setCharacterPanelSearch: (search: string) => void;
@@ -1352,6 +1374,8 @@ export const useUIStore = create<UIState>()(
       agentCatalogOpen: false,
       characterLibrarySelectedId: null,
       personaLibrarySelectedId: null,
+      characterLibraryViewMode: "grid" as CardLibraryViewMode,
+      characterLibraryDensity: "comfortable" as CardLibraryDensity,
       characterLibrarySort: "name-asc" as CharacterLibrarySort,
       personaLibrarySort: "name-asc" as ResourcePanelSort,
       characterPanelSearch: "",
@@ -1626,6 +1650,8 @@ export const useUIStore = create<UIState>()(
       setChatBackgroundBlur: (v) => set({ chatBackgroundBlur: Math.max(0, Math.min(24, Math.round(v))) }),
       setCharacterLibrarySelectedId: (id) => set({ characterLibrarySelectedId: id }),
       setPersonaLibrarySelectedId: (id) => set({ personaLibrarySelectedId: id }),
+      setCharacterLibraryViewMode: (mode) => set({ characterLibraryViewMode: normalizeCardLibraryViewMode(mode) }),
+      setCharacterLibraryDensity: (density) => set({ characterLibraryDensity: normalizeCardLibraryDensity(density) }),
       setCharacterLibrarySort: (sort) => set({ characterLibrarySort: normalizeCharacterLibrarySort(sort) }),
       setPersonaLibrarySort: (sort) => set({ personaLibrarySort: normalizeBasicPanelSort(sort) }),
       setCharacterPanelSearch: (search) => set({ characterPanelSearch: normalizePanelText(search) }),
@@ -2872,6 +2898,8 @@ export const useUIStore = create<UIState>()(
         }
         delete persisted.appAccentColorBeforeRgbMode;
         persisted.characterLibrarySort = normalizeCharacterLibrarySort(persisted.characterLibrarySort);
+        persisted.characterLibraryViewMode = normalizeCardLibraryViewMode(persisted.characterLibraryViewMode);
+        persisted.characterLibraryDensity = normalizeCardLibraryDensity(persisted.characterLibraryDensity);
         persisted.cardLibraryKind = persisted.cardLibraryKind === "personas" ? "personas" : "characters";
         persisted.personaLibrarySort = normalizeBasicPanelSort(persisted.personaLibrarySort);
         persisted.characterPanelSearch = normalizePanelText(persisted.characterPanelSearch);
@@ -3046,6 +3074,8 @@ export const useUIStore = create<UIState>()(
         agentCatalogOpen: state.agentCatalogOpen,
         characterLibrarySelectedId: state.characterLibrarySelectedId,
         personaLibrarySelectedId: state.personaLibrarySelectedId,
+        characterLibraryViewMode: state.characterLibraryViewMode,
+        characterLibraryDensity: state.characterLibraryDensity,
         characterLibrarySort: state.characterLibrarySort,
         personaLibrarySort: state.personaLibrarySort,
         characterLibraryScrollTop: state.characterLibraryScrollTop,
