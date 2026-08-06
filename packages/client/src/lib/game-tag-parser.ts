@@ -364,6 +364,31 @@ function parseSkillCheckTagBody(body: string): SkillCheckTag | null {
   const criticalFailure = normalizedResult === "critical_failure";
   const success = criticalSuccess ? true : criticalFailure ? false : normalizedResult === "success";
 
+  // Dice notation the GM declared. Only trusted as a label; a non-d20 value is
+  // how a pool system (V20 and friends) tells the card what to draw.
+  const declaredDice = values.get("dice")?.trim().toLowerCase();
+  const diceMatch = declaredDice?.match(/^(\d*)d(\d+)$/);
+  const declaredCount = Number.parseInt(diceMatch?.[1] || "1", 10);
+  const declaredSides = Number.parseInt(diceMatch?.[2] ?? "", 10);
+  const dice =
+    diceMatch &&
+    declaredCount === rolls.length &&
+    declaredSides >= 1 &&
+    rolls.every((roll) => roll >= 1 && roll <= declaredSides)
+      ? declaredDice
+      : undefined;
+
+  // A plain single-die d20 check is the one shape whose rules we know, so it is
+  // the one shape we can audit. If the GM's own arithmetic disagrees, drop the
+  // resolved result and let the server resolver roll it properly. Pool systems
+  // are left alone — we cannot second-guess rules the engine does not implement.
+  const isPlainD20Check = rolls.length === 1 && normalizedMode === "normal" && (dice ?? "1d20") === "1d20";
+  if (isPlainD20Check) {
+    const arithmeticHolds = usedRoll + modifier === total;
+    const outcomeHolds = criticalSuccess || criticalFailure || success === total >= dc;
+    if (!arithmeticHolds || !outcomeHolds) return tag;
+  }
+
   tag.resolvedResult = {
     skill,
     dc,
@@ -375,6 +400,7 @@ function parseSkillCheckTagBody(body: string): SkillCheckTag | null {
     criticalSuccess,
     criticalFailure,
     rollMode: normalizedMode,
+    dice,
   };
 
   return tag;

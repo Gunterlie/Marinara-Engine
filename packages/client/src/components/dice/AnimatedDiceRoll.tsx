@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { X } from "lucide-react";
-import type { DiceRollResult } from "@marinara-engine/shared";
+import { skillCheckDiceSumToTotal, type DiceRollResult } from "@marinara-engine/shared";
 import { cn } from "../../lib/utils";
 import { DiceGlyph, type DiceGlyphPhase, type DiceGlyphSize } from "./DiceGlyph";
 import { getFaceLabel } from "./dice-shapes";
@@ -115,6 +115,7 @@ export function AnimatedDiceRoll({
 
   const style = accentColor ? ({ "--dice-accent": accentColor } as CSSProperties) : undefined;
   const modifierText = modifier !== 0 ? `${modifier > 0 ? "+" : ""}${modifier}` : "";
+  const sumsToTotal = skillCheckDiceSumToTotal({ rolls, modifier, total });
   const rollText = useMemo(() => rolls.map((roll) => getFaceLabel(sides, roll)).join(", "), [rolls, sides]);
   const totalVisible = phase === "impact" || phase === "settled";
 
@@ -158,9 +159,20 @@ export function AnimatedDiceRoll({
 
       <div className="dice-roll-footer">
         <span className="dice-roll-breakdown">
-          {rolls.join(" + ")}{modifierText && ` ${modifierText}`}
+          {/* Only show the addition when the dice genuinely add up to the total.
+              They do not under advantage/disadvantage (one die is discarded) or
+              in pool systems that count successes, and printing "4 + 1 + 9 = 1"
+              makes correct results look like broken arithmetic. */}
+          {sumsToTotal ? (
+            <>{rolls.join(" + ")}{modifierText && ` ${modifierText}`}</>
+          ) : (
+            <>{rolls.join(" · ")}{modifierText && ` ${modifierText}`}</>
+          )}
         </span>
-        <span className={cn("dice-roll-total", totalVisible && "is-visible")}> = {total}</span>
+        <span className={cn("dice-roll-total", totalVisible && "is-visible")}>
+          {sumsToTotal ? " = " : " → "}
+          {total}
+        </span>
       </div>
 
       {onDismiss && (

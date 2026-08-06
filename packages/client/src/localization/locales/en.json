@@ -4084,6 +4084,7 @@
   "ui.dice.animateddiceroll.dismissDiceRollResult": "Dismiss dice roll result",
   "ui.dice.animateddiceroll.rolledValue1Value2": "Rolled {{value1}}: {{value2}}",
   "ui.dice.animatedskillcheckresult.dc": "DC",
+  "ui.dice.animatedskillcheckresult.resultValue1": "Result {{value1}}",
   "ui.dice.animatedskillcheckresult.rolledValue1": "Rolled {{value1}}",
   "ui.dice.animatedskillcheckresult.usingValue1": "Using {{value1}}",
   "ui.dice.diceglyph.d2": "d2",
