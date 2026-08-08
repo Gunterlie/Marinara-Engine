@@ -15,6 +15,7 @@ interface AnimatedDiceRollProps extends DiceRollResult {
   onDismiss?: () => void;
   hero?: boolean;
   highlightValue?: number;
+  resolution?: "sum" | "successes";
 }
 
 function parseDiceSides(notation: string): number {
@@ -72,6 +73,7 @@ export function AnimatedDiceRoll({
   onDismiss,
   hero,
   highlightValue,
+  resolution = "sum",
 }: AnimatedDiceRollProps) {
   const { t: localizeUi } = useUiTranslation();
   const sides = parseDiceSides(notation);
@@ -115,7 +117,7 @@ export function AnimatedDiceRoll({
 
   const style = accentColor ? ({ "--dice-accent": accentColor } as CSSProperties) : undefined;
   const modifierText = modifier !== 0 ? `${modifier > 0 ? "+" : ""}${modifier}` : "";
-  const sumsToTotal = skillCheckDiceSumToTotal({ rolls, modifier, total });
+  const sumsToTotal = resolution === "sum" && skillCheckDiceSumToTotal({ rolls, modifier, total, resolution });
   const rollText = useMemo(() => rolls.map((roll) => getFaceLabel(sides, roll)).join(", "), [rolls, sides]);
   const totalVisible = phase === "impact" || phase === "settled";
 
@@ -166,12 +168,15 @@ export function AnimatedDiceRoll({
           {sumsToTotal ? (
             <>{rolls.join(" + ")}{modifierText && ` ${modifierText}`}</>
           ) : (
-            <>{rolls.join(" · ")}{modifierText && ` ${modifierText}`}</>
+            <>{rolls.join(" · ")}{resolution === "sum" && modifierText && ` ${modifierText}`}</>
           )}
         </span>
         <span className={cn("dice-roll-total", totalVisible && "is-visible")}>
           {sumsToTotal ? " = " : " → "}
           {total}
+          {resolution === "successes" ? (
+            <> {localizeUi("ui.dice.animateddiceroll.successCount", { count: total })}</>
+          ) : null}
         </span>
       </div>
 

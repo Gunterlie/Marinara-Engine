@@ -327,6 +327,8 @@ export interface SkillCheckResult {
   criticalSuccess: boolean;
   criticalFailure: boolean;
   rollMode: "advantage" | "disadvantage" | "normal";
+  /** How the reported total was calculated from the dice. */
+  resolution: "sum" | "successes";
   /**
    * Dice notation actually rolled (e.g. "1d20", "6d10"). Absent on results from
    * before this field existed, and on the built-in resolver's own output where

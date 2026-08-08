@@ -23,6 +23,7 @@ const base: SkillCheckResult = {
   criticalSuccess: false,
   criticalFailure: false,
   rollMode: "normal",
+  resolution: "sum",
   dice: "1d20",
 };
 
@@ -37,6 +38,7 @@ const advantage: SkillCheckResult = {
   usedRoll: 19,
   total: 22,
   rollMode: "advantage",
+  resolution: "sum",
   dice: "2d20",
 };
 assert.equal(skillCheckDiceSumToTotal(advantage), false, "3 + 19 + 3 is 25, not the total of 22");
@@ -50,10 +52,13 @@ const pool: SkillCheckResult = {
   usedRoll: 1,
   modifier: 0,
   total: 1,
+  resolution: "successes",
   dice: "6d10",
 };
 assert.equal(skillCheckDiceSumToTotal(pool), false);
 assert.doesNotMatch(formatSkillCheckResultSummary(pool), /= 1\./);
+assert.match(formatSkillCheckResultSummary(pool), /→ 1 success\./);
+assert.doesNotMatch(formatSkillCheckResultSummary({ ...pool, total: 2 }), /\+ 2/);
 // The declared dice survive serialization, so the card can draw d10s.
 assert.match(serializeResolvedSkillCheckTag(pool), /dice="6d10"/);
 
@@ -72,6 +77,7 @@ const withAdvantage = resolveSkillCheck({
   advantage: true,
 });
 assert.equal(withAdvantage.dice, "2d20", "advantage throws two dice and must say so");
+assert.equal(withAdvantage.resolution, "sum");
 assert.equal(withAdvantage.usedRoll, Math.max(...withAdvantage.rolls));
 
 // A pre-rolled d20 still gets modifiers applied on top, and still adds up.

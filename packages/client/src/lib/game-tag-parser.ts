@@ -323,6 +323,7 @@ function parseSkillCheckTagBody(body: string): SkillCheckTag | null {
   const total = Number.parseInt(values.get("total") ?? "", 10);
   const resultValue = values.get("result")?.trim().toLowerCase();
   const modeValue = values.get("mode")?.trim().toLowerCase();
+  const resolution: SkillCheckResult["resolution"] = values.get("resolution")?.trim().toLowerCase() === "successes" ? "successes" : "sum";
 
   if (!rollsValue || Number.isNaN(modifier) || Number.isNaN(total) || !resultValue) {
     // Sparse tag — server resolver will roll + apply modifier. If the GM echoed
@@ -382,7 +383,7 @@ function parseSkillCheckTagBody(body: string): SkillCheckTag | null {
   // the one shape we can audit. If the GM's own arithmetic disagrees, drop the
   // resolved result and let the server resolver roll it properly. Pool systems
   // are left alone — we cannot second-guess rules the engine does not implement.
-  const isPlainD20Check = rolls.length === 1 && normalizedMode === "normal" && (dice ?? "1d20") === "1d20";
+  const isPlainD20Check = resolution === "sum" && rolls.length === 1 && normalizedMode === "normal" && (dice ?? "1d20") === "1d20";
   if (isPlainD20Check) {
     const arithmeticHolds = usedRoll + modifier === total;
     const outcomeHolds = criticalSuccess || criticalFailure || success === total >= dc;
@@ -400,6 +401,7 @@ function parseSkillCheckTagBody(body: string): SkillCheckTag | null {
     criticalSuccess,
     criticalFailure,
     rollMode: normalizedMode,
+    resolution,
     dice,
   };
 

@@ -4083,6 +4083,8 @@
   "ui.diagnostics.csrforiginwarningbanner.tailscaleCgnat": "), Tailscale CGNAT (",
   "ui.dice.animateddiceroll.dismissDiceRollResult": "Dismiss dice roll result",
   "ui.dice.animateddiceroll.rolledValue1Value2": "Rolled {{value1}}: {{value2}}",
+  "ui.dice.animateddiceroll.successCount_one": "{{count}} success",
+  "ui.dice.animateddiceroll.successCount_other": "{{count}} successes",
   "ui.dice.animatedskillcheckresult.dc": "DC",
   "ui.dice.animatedskillcheckresult.resultValue1": "Result {{value1}}",
   "ui.dice.animatedskillcheckresult.rolledValue1": "Rolled {{value1}}",

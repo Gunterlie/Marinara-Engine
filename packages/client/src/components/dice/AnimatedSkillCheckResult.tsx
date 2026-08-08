@@ -58,6 +58,7 @@ export function AnimatedSkillCheckResult({ result, accentColor, animate = false,
         onDismiss={onDismiss}
         hero
         highlightValue={result.rollMode !== "normal" ? result.usedRoll : undefined}
+        resolution={result.resolution}
       />
       <div className="skill-check-roll-result">
         <span>

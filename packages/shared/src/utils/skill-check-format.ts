@@ -28,9 +28,9 @@ export function getSkillCheckOutcomeKey(
  * of still display honestly.
  */
 export function skillCheckDiceSumToTotal(
-  result: Pick<SkillCheckResult, "rolls" | "modifier" | "total">,
+  result: Pick<SkillCheckResult, "rolls" | "modifier" | "total" | "resolution">,
 ): boolean {
-  return result.rolls.reduce((sum, roll) => sum + roll, 0) + result.modifier === result.total;
+  return result.resolution === "sum" && result.rolls.reduce((sum, roll) => sum + roll, 0) + result.modifier === result.total;
 }
 
 export function formatSkillCheckResultSummary(result: SkillCheckResult): string {
@@ -40,7 +40,7 @@ export function formatSkillCheckResultSummary(result: SkillCheckResult): string 
   // report the total on its own so the GM reads back what the player saw.
   const arithmetic = skillCheckDiceSumToTotal(result)
     ? `[${result.rolls.join(", ")}]${modifier}${rollMode} = ${result.total}`
-    : `[${result.rolls.join(", ")}]${modifier}${rollMode} → ${result.total}`;
+    : `[${result.rolls.join(", ")}]${result.resolution === "successes" ? "" : modifier}${rollMode} → ${result.total}${result.resolution === "successes" ? ` ${result.total === 1 ? "success" : "successes"}` : ""}`;
   return `${result.skill} check (DC ${result.dc}): ${arithmetic}. ${getSkillCheckOutcomeLabel(result)}.`;
 }
 
@@ -58,6 +58,7 @@ export function serializeResolvedSkillCheckTag(result: SkillCheckResult): string
     `total="${result.total}"`,
     `result="${getSkillCheckOutcomeKey(result)}"`,
     `mode="${result.rollMode}"`,
+    `resolution="${result.resolution}"`,
     `dice="${serializeSkillCheckAttribute(result.dice ?? "1d20")}"]`,
   ].join(" ");
 }
