@@ -350,7 +350,8 @@ function parseSkillCheckTagBody(body: string): SkillCheckTag | null {
 
   const explicitUsedRoll = Number.parseInt(values.get("used") ?? "", 10);
   const inferredRollFromTotal = total - modifier;
-  const rolls = parseSkillCheckRolls(rollsValue, inferredRollFromTotal);
+  const parsedRolls = parseSkillCheckRolls(rollsValue, inferredRollFromTotal);
+  const rolls = parsedRolls.rolls;
   if (rolls.length === 0) return tag;
 
   const usedRoll = Number.isFinite(explicitUsedRoll)
@@ -375,7 +376,7 @@ function parseSkillCheckTagBody(body: string): SkillCheckTag | null {
   const diceMatch = declaredDice?.match(/^(\d*)d(\d+)$/);
   const declaredCount = Number.parseInt(diceMatch?.[1] || "1", 10);
   const declaredSides = Number.parseInt(diceMatch?.[2] ?? "", 10);
-  const dice =
+  const declaredDiceValue =
     diceMatch &&
     Number.isSafeInteger(declaredCount) &&
     Number.isSafeInteger(declaredSides) &&
@@ -393,16 +394,24 @@ function parseSkillCheckTagBody(body: string): SkillCheckTag | null {
   // resolved result and let the server resolver roll it properly. Pool systems
   // are left alone — we cannot second-guess rules the engine does not implement.
   const declaredD20 = !!diceMatch && declaredCount === 1 && declaredSides === 20;
-  const implicitD20 = !hasDeclaredDice;
-  if (hasDeclaredDice && !dice) return tag;
+  const isImplicitD20Notation = parsedRolls.notation
+    ? parsedRolls.notation.count === 1 && parsedRolls.notation.sides === 20
+    : rolls.length === 1;
+  const implicitD20 = !hasDeclaredDice && isImplicitD20Notation;
+  if (hasDeclaredDice && !declaredDiceValue) return tag;
+  if (!hasDeclaredDice && !isImplicitD20Notation) return tag;
+
+  const dice = declaredDiceValue ?? parsedRolls.notation?.dice;
 
   const isPlainD20Check =
     resolution === "sum" && rolls.length === 1 && normalizedMode === "normal" && (implicitD20 || declaredD20);
   if (isPlainD20Check) {
-    const rollIsD20 = rolls[0]! >= 1 && rolls[0]! <= 20;
-    const arithmeticHolds = usedRoll + modifier === total;
+    const actualRoll = rolls[0]!;
+    const rollIsD20 = actualRoll >= 1 && actualRoll <= 20;
+    const usedRollHolds = usedRoll === actualRoll;
+    const arithmeticHolds = actualRoll + modifier === total;
     const outcomeHolds = criticalSuccess || criticalFailure || success === total >= dc;
-    if (!rollIsD20 || !arithmeticHolds || !outcomeHolds) return tag;
+    if (!rollIsD20 || !usedRollHolds || !arithmeticHolds || !outcomeHolds) return tag;
   }
 
   tag.resolvedResult = {
@@ -423,23 +432,32 @@ function parseSkillCheckTagBody(body: string): SkillCheckTag | null {
   return tag;
 }
 
-function parseSkillCheckRolls(rollsValue: string, inferredRollFromTotal: number): number[] {
-  const diceNotationMatch = rollsValue.trim().match(/^(?:(\d+)?d(\d+))(?:[+-]\d+)?$/i);
+function parseSkillCheckRolls(
+  rollsValue: string,
+  inferredRollFromTotal: number,
+): { rolls: number[]; notation?: { dice: string; count: number; sides: number } } {
+  const trimmed = rollsValue.trim();
+  const diceNotationMatch = trimmed.match(/^((\d+)?d(\d+))(?:[+-]\d+)?$/i);
   if (diceNotationMatch) {
-    const count = Number.parseInt(diceNotationMatch[1] ?? "1", 10);
-    const sides = Number.parseInt(diceNotationMatch[2] ?? "", 10);
+    const count = Number.parseInt(diceNotationMatch[2] ?? "1", 10);
+    const sides = Number.parseInt(diceNotationMatch[3] ?? "", 10);
     if (count === 1 && inferredRollFromTotal >= 1 && inferredRollFromTotal <= sides) {
-      return [inferredRollFromTotal];
+      return {
+        rolls: [inferredRollFromTotal],
+        notation: { dice: diceNotationMatch[1]!.toLowerCase(), count, sides },
+      };
     }
-    return [];
+    return { rolls: [] };
   }
 
-  return rollsValue
-    .split(/[|,]/)
-    .map((entry) => entry.trim())
-    .filter((entry) => /^-?\d+$/.test(entry))
-    .map((entry) => Number.parseInt(entry, 10))
-    .filter((entry) => Number.isFinite(entry));
+  return {
+    rolls: rollsValue
+      .split(/[|,]/)
+      .map((entry) => entry.trim())
+      .filter((entry) => /^-?\d+$/.test(entry))
+      .map((entry) => Number.parseInt(entry, 10))
+      .filter((entry) => Number.isFinite(entry)),
+  };
 }
 
 function splitQuotedParams(text: string): string[] {

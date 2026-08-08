@@ -94,21 +94,41 @@ assert.equal(preRolled.total, 15);
 assert.equal(preRolled.success, true);
 assert.equal(skillCheckDiceSumToTotal(preRolled), true);
 
-function parseSkillCheck(attributes: string) {
-  return parseGmTags(`[skill_check: skill="Stealth" dc="10" modifier="0" total="12" result="success" ${attributes}]`)
+function parseSkillCheck(attributes: string, total = 12) {
+  return parseGmTags(`[skill_check: skill="Stealth" dc="10" modifier="0" total="${total}" result="success" ${attributes}]`)
     .skillChecks[0];
 }
 
 // Explicit invalid notation must not silently become an implicit d20.
-assert.equal(parseSkillCheck('rolls="12" dice="1d1001"')?.resolvedResult, undefined);
-assert.equal(parseSkillCheck('rolls="12" dice="101d20"')?.resolvedResult, undefined);
+const oversizedSides = parseSkillCheck('rolls="12" dice="1d1001"');
+assert.ok(oversizedSides);
+assert.equal(oversizedSides.resolvedResult, undefined);
+const oversizedCount = parseSkillCheck('rolls="12" dice="101d20"');
+assert.ok(oversizedCount);
+assert.equal(oversizedCount.resolvedResult, undefined);
 
 // Omitted notation remains a legacy implicit d20, but only for valid d20 faces.
-assert.equal(parseSkillCheck('rolls="12"')?.resolvedResult?.dice, undefined);
-assert.equal(parseSkillCheck('rolls="21" total="21"')?.resolvedResult, undefined);
+const implicitD20 = parseSkillCheck('rolls="12"');
+assert.ok(implicitD20);
+assert.equal(implicitD20.resolvedResult?.dice, undefined);
+const outOfRangeImplicitD20 = parseSkillCheck('rolls="21"', 21);
+assert.ok(outOfRangeImplicitD20);
+assert.equal(outOfRangeImplicitD20.resolvedResult, undefined);
+
+const multiRollImplicitD20 = parseSkillCheck('rolls="6|6"');
+assert.ok(multiRollImplicitD20);
+assert.equal(multiRollImplicitD20.resolvedResult, undefined);
+const implicitD100 = parseSkillCheck('rolls="1d100"');
+assert.ok(implicitD100);
+assert.equal(implicitD100.resolvedResult, undefined);
+
+const mismatchedUsedRoll = parseSkillCheck('rolls="10" used="12"');
+assert.ok(mismatchedUsedRoll);
+assert.equal(mismatchedUsedRoll.resolvedResult, undefined);
 
 // Equivalent d20 aliases are validated by parsed count/sides, not exact text.
 assert.equal(parseSkillCheck('rolls="12" dice="d20"')?.resolvedResult?.dice, "d20");
 assert.equal(parseSkillCheck('rolls="12" dice="1d020"')?.resolvedResult?.dice, "1d020");
+assert.equal(parseSkillCheck('rolls="d20"')?.resolvedResult?.dice, "d20");
 
 process.stdout.write("Dice display regression passed.\n");
