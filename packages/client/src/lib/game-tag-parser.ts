@@ -10,6 +10,9 @@
 
 import type { DirectionCommand, DirectionEffect, SkillCheckResult, WidgetUpdate } from "@marinara-engine/shared";
 
+const MAX_DICE_COUNT = 100;
+const MAX_DICE_SIDES = 1000;
+
 export interface CombatEncounterTag {
   enemies: Array<{
     name: string;
@@ -373,8 +376,13 @@ function parseSkillCheckTagBody(body: string): SkillCheckTag | null {
   const declaredSides = Number.parseInt(diceMatch?.[2] ?? "", 10);
   const dice =
     diceMatch &&
-    declaredCount === rolls.length &&
+    Number.isSafeInteger(declaredCount) &&
+    Number.isSafeInteger(declaredSides) &&
+    declaredCount >= 1 &&
+    declaredCount <= MAX_DICE_COUNT &&
     declaredSides >= 1 &&
+    declaredSides <= MAX_DICE_SIDES &&
+    declaredCount === rolls.length &&
     rolls.every((roll) => roll >= 1 && roll <= declaredSides)
       ? declaredDice
       : undefined;

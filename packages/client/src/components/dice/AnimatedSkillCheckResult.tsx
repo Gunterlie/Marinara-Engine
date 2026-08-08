@@ -64,7 +64,10 @@ export function AnimatedSkillCheckResult({ result, accentColor, animate = false,
         <span>
           {result.rollMode !== "normal"
             ? localizeUi("ui.dice.animatedskillcheckresult.usingValue1", { value1: result.usedRoll })
-            : result.rolls.length === 1 && result.usedRoll === result.rolls[0] && result.total === result.usedRoll + result.modifier
+            : result.resolution === "sum" &&
+                result.rolls.length === 1 &&
+                result.usedRoll === result.rolls[0] &&
+                result.total === result.usedRoll + result.modifier
               ? localizeUi("ui.dice.animatedskillcheckresult.rolledValue1", { value1: result.usedRoll })
               : localizeUi("ui.dice.animatedskillcheckresult.resultValue1", { value1: result.total })}
         </span>
