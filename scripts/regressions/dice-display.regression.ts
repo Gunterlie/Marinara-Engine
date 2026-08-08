@@ -110,7 +110,9 @@ assert.equal(oversizedCount.resolvedResult, undefined);
 // Omitted notation remains a legacy implicit d20, but only for valid d20 faces.
 const implicitD20 = parseSkillCheck('rolls="12"');
 assert.ok(implicitD20);
-assert.equal(implicitD20.resolvedResult?.dice, undefined);
+const implicitD20Result = implicitD20.resolvedResult;
+assert.ok(implicitD20Result);
+assert.equal(implicitD20Result.dice, undefined);
 const outOfRangeImplicitD20 = parseSkillCheck('rolls="21"', 21);
 assert.ok(outOfRangeImplicitD20);
 assert.equal(outOfRangeImplicitD20.resolvedResult, undefined);
@@ -121,6 +123,9 @@ assert.equal(multiRollImplicitD20.resolvedResult, undefined);
 const implicitD100 = parseSkillCheck('rolls="1d100"');
 assert.ok(implicitD100);
 assert.equal(implicitD100.resolvedResult, undefined);
+const conflictingNotation = parseSkillCheck('rolls="1d100" dice="1d20"');
+assert.ok(conflictingNotation);
+assert.equal(conflictingNotation.resolvedResult, undefined);
 
 const mismatchedUsedRoll = parseSkillCheck('rolls="10" used="12"');
 assert.ok(mismatchedUsedRoll);

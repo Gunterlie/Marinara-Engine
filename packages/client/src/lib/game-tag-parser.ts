@@ -400,6 +400,13 @@ function parseSkillCheckTagBody(body: string): SkillCheckTag | null {
   const implicitD20 = !hasDeclaredDice && isImplicitD20Notation;
   if (hasDeclaredDice && !declaredDiceValue) return tag;
   if (!hasDeclaredDice && !isImplicitD20Notation) return tag;
+  if (
+    hasDeclaredDice &&
+    parsedRolls.notation &&
+    (declaredCount !== parsedRolls.notation.count || declaredSides !== parsedRolls.notation.sides)
+  ) {
+    return tag;
+  }
 
   const dice = declaredDiceValue ?? parsedRolls.notation?.dice;
 
