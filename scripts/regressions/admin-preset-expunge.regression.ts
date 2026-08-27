@@ -108,10 +108,18 @@ try {
     payload: { confirm: true, scopes: ["presets"] },
   });
   assert.equal(scopedResponse.statusCode, 200, "scoped preset expunge must succeed");
-  assert.deepEqual(
-    await stockSnapshot(),
-    stockBeforeScopedExpunge,
-    "scoped preset expunge must preserve the stock preset and every owned child row",
+  const stockAfterScopedExpunge = await stockSnapshot();
+  assert.deepEqual(stockAfterScopedExpunge.groups, stockBeforeScopedExpunge.groups);
+  assert.deepEqual(stockAfterScopedExpunge.sections, stockBeforeScopedExpunge.sections);
+  assert.deepEqual(stockAfterScopedExpunge.choiceBlocks, stockBeforeScopedExpunge.choiceBlocks);
+  assert.deepEqual(stockAfterScopedExpunge.preset, {
+    ...stockBeforeScopedExpunge.preset,
+    isDefault: "true",
+  });
+  assert.equal(
+    (await presets.getDefault())?.id,
+    stockBeforeScopedExpunge.preset.id,
+    "scoped preset expunge must restore the stock preset as default",
   );
   await assertEditableFixtureDeleted(scopedEditablePresetId);
 
@@ -123,10 +131,18 @@ try {
     payload: { confirm: true },
   });
   assert.equal(clearAllResponse.statusCode, 200, "clear-all compatibility route must succeed");
-  assert.deepEqual(
-    await stockSnapshot(),
-    stockBeforeClearAll,
-    "clear-all must preserve the stock preset and every owned child row",
+  const stockAfterClearAll = await stockSnapshot();
+  assert.deepEqual(stockAfterClearAll.groups, stockBeforeClearAll.groups);
+  assert.deepEqual(stockAfterClearAll.sections, stockBeforeClearAll.sections);
+  assert.deepEqual(stockAfterClearAll.choiceBlocks, stockBeforeClearAll.choiceBlocks);
+  assert.deepEqual(stockAfterClearAll.preset, {
+    ...stockBeforeClearAll.preset,
+    isDefault: "true",
+  });
+  assert.equal(
+    (await presets.getDefault())?.id,
+    stockBeforeClearAll.preset.id,
+    "clear-all must preserve a valid stock preset default",
   );
   await assertEditableFixtureDeleted(clearAllEditablePresetId);
   assert.deepEqual(

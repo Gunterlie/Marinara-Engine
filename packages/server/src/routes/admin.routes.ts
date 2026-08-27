@@ -225,6 +225,12 @@ export async function adminRoutes(app: FastifyInstance) {
     }
 
     if (requestedScopes.includes("presets")) {
+      const defaultPreset = (
+        await db
+          .select({ id: schema.promptPresets.id })
+          .from(schema.promptPresets)
+          .where(eq(schema.promptPresets.isDefault, "true"))
+      )[0];
       const stockPreset = (
         await db
           .select({ id: schema.promptPresets.id })
@@ -254,6 +260,12 @@ export async function adminRoutes(app: FastifyInstance) {
           ? db.delete(schema.promptPresets).where(ne(schema.promptPresets.id, stockPresetId)).run()
           : db.delete(schema.promptPresets).run(),
       );
+      if (stockPresetId && defaultPreset && defaultPreset.id !== stockPresetId) {
+        await db
+          .update(schema.promptPresets)
+          .set({ isDefault: "true" })
+          .where(eq(schema.promptPresets.id, stockPresetId));
+      }
       await runDelete("library_folders:presets", () =>
         db.delete(schema.libraryFolders).where(eq(schema.libraryFolders.scope, "presets")).run(),
       );
