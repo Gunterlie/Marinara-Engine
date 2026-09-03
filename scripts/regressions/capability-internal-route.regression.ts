@@ -58,7 +58,7 @@ try {
 
   const internal = await runCapabilityInternalRoute(app, "test-package", {
     method: "POST",
-    url: "/api/test-package/probe",
+    url: "/api/test-package/probe?source=scheduler",
     payload: {},
   });
   assert.equal(internal.statusCode, 200, "trusted internal route execution does not require the browser secret");
@@ -71,6 +71,21 @@ try {
   });
   assert.equal(nested.statusCode, 200, "nested package route prefixes support internal execution");
   assert.deepEqual(nested.json(), { nested: true });
+
+  const releaseNested = await registerCapabilityPrivilegedRoutes(app, nestedInstalled, async () => {}, {
+    prefix: "/api/nested-package/scheduler",
+  });
+  releaseNested();
+  const nestedAfterSharedCleanup = await runCapabilityInternalRoute(app, "nested-package", {
+    method: "POST",
+    url: "/api/nested-package/scheduler/probe?source=after-cleanup",
+    payload: {},
+  });
+  assert.equal(
+    nestedAfterSharedCleanup.statusCode,
+    200,
+    "one registration cleanup does not disable another registration",
+  );
 
   await assert.rejects(
     () => runCapabilityInternalRoute(app, "test-package", { method: "GET", url: "/api/chats" }),

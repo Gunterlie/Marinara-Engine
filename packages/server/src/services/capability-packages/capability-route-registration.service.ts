@@ -19,9 +19,15 @@ type RouteDefinition = {
   options: Record<string, unknown>;
   handler: RouteHandlerMethod;
 };
-type RouteSlot = { packageId: string; active: boolean; handler: RouteHandlerMethod };
+type RouteSlot = {
+  packageId: string;
+  active: boolean;
+  handler: RouteHandlerMethod;
+  internalRouteState: InternalRouteState;
+  registrations: number;
+};
 type PreparedRoute = RouteDefinition & { key: string; path: string; existing?: RouteSlot };
-type InternalRouteState = { packageId: string; active: boolean; token: string };
+type InternalRouteState = { packageId: string; active: boolean; registrations: number; token: string };
 
 const slotsByApp = new WeakMap<FastifyInstance, Map<string, RouteSlot>>();
 const internalRoutesByApp = new WeakMap<FastifyInstance, Map<string, InternalRouteState>>();
@@ -106,10 +112,15 @@ export async function registerCapabilityPrivilegedRoutes(
   const internalRouteState = internalRoutes.get(options.prefix) ?? {
     packageId: installed.id,
     active: false,
+    registrations: 0,
     token: randomUUID(),
   };
-  const previousSlots = new Map<RouteSlot, Pick<RouteSlot, "active" | "handler">>();
+  const previousSlots = new Map<
+    RouteSlot,
+    Pick<RouteSlot, "active" | "handler" | "internalRouteState" | "registrations">
+  >();
   try {
+    internalRouteState.registrations += 1;
     internalRouteState.active = true;
     internalRoutes.set(options.prefix, internalRouteState);
     for (const definition of prepared) {
@@ -117,18 +128,29 @@ export async function registerCapabilityPrivilegedRoutes(
         previousSlots.set(definition.existing, {
           active: definition.existing.active,
           handler: definition.existing.handler,
+          internalRouteState: definition.existing.internalRouteState,
+          registrations: definition.existing.registrations,
         });
         definition.existing.active = true;
         definition.existing.handler = definition.handler;
+        definition.existing.internalRouteState = internalRouteState;
+        definition.existing.registrations += 1;
         ownedSlots.push(definition.existing);
         continue;
       }
-      const slot: RouteSlot = { packageId: installed.id, active: true, handler: definition.handler };
+      const slot: RouteSlot = {
+        packageId: installed.id,
+        active: true,
+        handler: definition.handler,
+        internalRouteState,
+        registrations: 1,
+      };
       slots.set(definition.key, slot);
       ownedSlots.push(slot);
       const onRequest = async (request: FastifyRequest, reply: FastifyReply) => {
         if (!slot.active) return reply.status(404).send({ error: "Capability routes are not active" });
-        if (internalRouteState.active && request.headers[INTERNAL_ROUTE_HEADER] === internalRouteState.token) return;
+        if (slot.internalRouteState.active && request.headers[INTERNAL_ROUTE_HEADER] === slot.internalRouteState.token)
+          return;
         if (!requirePrivilegedAccess(request, reply, { feature: `${installed.manifest.name} package routes` }))
           return reply;
       };
@@ -141,18 +163,28 @@ export async function registerCapabilityPrivilegedRoutes(
       } as RouteOptions);
     }
   } catch (error) {
-    internalRouteState.active = false;
+    internalRouteState.registrations = Math.max(0, internalRouteState.registrations - 1);
+    internalRouteState.active = internalRouteState.registrations > 0;
     for (const slot of ownedSlots) {
       const previous = previousSlots.get(slot);
       if (previous) Object.assign(slot, previous);
-      else slot.active = false;
+      else {
+        slot.registrations = Math.max(0, slot.registrations - 1);
+        if (slot.registrations === 0) slot.active = false;
+      }
     }
     throw error;
   }
 
   return () => {
-    for (const slot of ownedSlots) slot.active = false;
-    if (internalRoutes.get(options.prefix) === internalRouteState) internalRouteState.active = false;
+    for (const slot of ownedSlots) {
+      slot.registrations = Math.max(0, slot.registrations - 1);
+      if (slot.registrations === 0) slot.active = false;
+    }
+    if (internalRoutes.get(options.prefix) === internalRouteState) {
+      internalRouteState.registrations = Math.max(0, internalRouteState.registrations - 1);
+      internalRouteState.active = internalRouteState.registrations > 0;
+    }
   };
 }
 
@@ -162,14 +194,20 @@ export async function runCapabilityInternalRoute(
   options: InjectOptions | string,
 ) {
   const url = typeof options === "string" ? options : options.url;
-  if (typeof url !== "string" || (url !== `/api/${packageId}` && !url.startsWith(`/api/${packageId}/`))) {
+  if (typeof url !== "string") {
+    throw new Error(`Internal route must remain under /api/${packageId}`);
+  }
+  const pathname = new URL(url, "http://marinara.internal").pathname;
+  if (pathname !== `/api/${packageId}` && !pathname.startsWith(`/api/${packageId}/`)) {
     throw new Error(`Internal route must remain under /api/${packageId}`);
   }
   const internalRoutes = internalRoutesByApp.get(app);
   const state = [...(internalRoutes?.entries() ?? [])]
     .filter(
       ([prefix, candidate]) =>
-        candidate.active && candidate.packageId === packageId && (url === prefix || url.startsWith(`${prefix}/`)),
+        candidate.active &&
+        candidate.packageId === packageId &&
+        (pathname === prefix || pathname.startsWith(`${prefix}/`)),
     )
     .sort(([left], [right]) => right.length - left.length)[0]?.[1];
   if (!state?.active || state.packageId !== packageId) {
