@@ -6,6 +6,8 @@ import type {
   RouteHandlerMethod,
   RouteOptions,
 } from "fastify";
+import { randomUUID } from "node:crypto";
+import type { InjectOptions } from "fastify";
 import type { InstalledCapabilityPackage } from "@marinara-engine/shared";
 import { requirePrivilegedAccess } from "../../middleware/privileged-gate.js";
 
@@ -19,8 +21,11 @@ type RouteDefinition = {
 };
 type RouteSlot = { packageId: string; active: boolean; handler: RouteHandlerMethod };
 type PreparedRoute = RouteDefinition & { key: string; path: string; existing?: RouteSlot };
+type InternalRouteState = { packageId: string; active: boolean; token: string };
 
 const slotsByApp = new WeakMap<FastifyInstance, Map<string, RouteSlot>>();
+const internalRoutesByApp = new WeakMap<FastifyInstance, Map<string, InternalRouteState>>();
+const INTERNAL_ROUTE_HEADER = "x-marinara-internal-route";
 
 function routeKey(method: RouteMethod, path: string) {
   return `${method} ${path}`;
@@ -69,6 +74,8 @@ export async function registerCapabilityPrivilegedRoutes(
   await routes(createRouteCollector(definitions) as unknown as FastifyInstance, {});
   const slots = slotsByApp.get(app) ?? new Map<string, RouteSlot>();
   slotsByApp.set(app, slots);
+  const internalRoutes = internalRoutesByApp.get(app) ?? new Map<string, InternalRouteState>();
+  internalRoutesByApp.set(app, internalRoutes);
   const prepared: PreparedRoute[] = definitions.map((definition) => {
     const suffix =
       definition.path === "/" ? "" : definition.path.startsWith("/") ? definition.path : `/${definition.path}`;
@@ -96,8 +103,15 @@ export async function registerCapabilityPrivilegedRoutes(
   }
 
   const ownedSlots: RouteSlot[] = [];
+  const internalRouteState = internalRoutes.get(options.prefix) ?? {
+    packageId: installed.id,
+    active: false,
+    token: randomUUID(),
+  };
   const previousSlots = new Map<RouteSlot, Pick<RouteSlot, "active" | "handler">>();
   try {
+    internalRouteState.active = true;
+    internalRoutes.set(options.prefix, internalRouteState);
     for (const definition of prepared) {
       if (definition.existing) {
         previousSlots.set(definition.existing, {
@@ -114,6 +128,7 @@ export async function registerCapabilityPrivilegedRoutes(
       ownedSlots.push(slot);
       const onRequest = async (request: FastifyRequest, reply: FastifyReply) => {
         if (!slot.active) return reply.status(404).send({ error: "Capability routes are not active" });
+        if (request.headers[INTERNAL_ROUTE_HEADER] === internalRouteState.token) return;
         if (!requirePrivilegedAccess(request, reply, { feature: `${installed.manifest.name} package routes` }))
           return reply;
       };
@@ -126,6 +141,8 @@ export async function registerCapabilityPrivilegedRoutes(
       } as RouteOptions);
     }
   } catch (error) {
+    internalRouteState.active = false;
+    if (internalRoutes.get(options.prefix) === internalRouteState) internalRoutes.delete(options.prefix);
     for (const slot of ownedSlots) {
       const previous = previousSlots.get(slot);
       if (previous) Object.assign(slot, previous);
@@ -136,5 +153,27 @@ export async function registerCapabilityPrivilegedRoutes(
 
   return () => {
     for (const slot of ownedSlots) slot.active = false;
+    if (internalRoutes.get(options.prefix) === internalRouteState) internalRouteState.active = false;
   };
+}
+
+export async function runCapabilityInternalRoute(
+  app: FastifyInstance,
+  packageId: string,
+  options: InjectOptions | string,
+) {
+  const url = typeof options === "string" ? options : options.url;
+  if (typeof url !== "string" || (url !== `/api/${packageId}` && !url.startsWith(`/api/${packageId}/`))) {
+    throw new Error(`Internal route must remain under /api/${packageId}`);
+  }
+  const internalRoutes = internalRoutesByApp.get(app);
+  const state = internalRoutes?.get(`/api/${packageId}`);
+  if (!state?.active || state.packageId !== packageId) {
+    throw new Error(`Capability package ${packageId} has no active internal route registration`);
+  }
+  const request = typeof options === "string" ? { url: options } : options;
+  return app.inject({
+    ...request,
+    headers: { ...request.headers, [INTERNAL_ROUTE_HEADER]: state.token },
+  });
 }
