@@ -167,7 +167,10 @@ export async function runCapabilityInternalRoute(
     throw new Error(`Internal route must remain under /api/${packageId}`);
   }
   const internalRoutes = internalRoutesByApp.get(app);
-  const state = internalRoutes?.get(`/api/${packageId}`);
+  const state = [...(internalRoutes?.entries() ?? [])].find(
+    ([prefix, candidate]) =>
+      candidate.active && candidate.packageId === packageId && (url === prefix || url.startsWith(`${prefix}/`)),
+  )?.[1];
   if (!state?.active || state.packageId !== packageId) {
     throw new Error(`Capability package ${packageId} has no active internal route registration`);
   }
