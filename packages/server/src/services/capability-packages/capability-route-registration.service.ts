@@ -128,7 +128,7 @@ export async function registerCapabilityPrivilegedRoutes(
       ownedSlots.push(slot);
       const onRequest = async (request: FastifyRequest, reply: FastifyReply) => {
         if (!slot.active) return reply.status(404).send({ error: "Capability routes are not active" });
-        if (request.headers[INTERNAL_ROUTE_HEADER] === internalRouteState.token) return;
+        if (internalRouteState.active && request.headers[INTERNAL_ROUTE_HEADER] === internalRouteState.token) return;
         if (!requirePrivilegedAccess(request, reply, { feature: `${installed.manifest.name} package routes` }))
           return reply;
       };
@@ -142,7 +142,6 @@ export async function registerCapabilityPrivilegedRoutes(
     }
   } catch (error) {
     internalRouteState.active = false;
-    if (internalRoutes.get(options.prefix) === internalRouteState) internalRoutes.delete(options.prefix);
     for (const slot of ownedSlots) {
       const previous = previousSlots.get(slot);
       if (previous) Object.assign(slot, previous);
@@ -167,10 +166,12 @@ export async function runCapabilityInternalRoute(
     throw new Error(`Internal route must remain under /api/${packageId}`);
   }
   const internalRoutes = internalRoutesByApp.get(app);
-  const state = [...(internalRoutes?.entries() ?? [])].find(
-    ([prefix, candidate]) =>
-      candidate.active && candidate.packageId === packageId && (url === prefix || url.startsWith(`${prefix}/`)),
-  )?.[1];
+  const state = [...(internalRoutes?.entries() ?? [])]
+    .filter(
+      ([prefix, candidate]) =>
+        candidate.active && candidate.packageId === packageId && (url === prefix || url.startsWith(`${prefix}/`)),
+    )
+    .sort(([left], [right]) => right.length - left.length)[0]?.[1];
   if (!state?.active || state.packageId !== packageId) {
     throw new Error(`Capability package ${packageId} has no active internal route registration`);
   }
