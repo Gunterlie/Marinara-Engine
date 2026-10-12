@@ -621,7 +621,7 @@ export function OmnibarSettingsSheet({
                   onClick={() => setSearchWindowHeightRem(null)}
                   className="omnibar-settings-size__fit"
                 >
-                  {t("omnibar.settings.windowSize.fit", "Fit to results")}
+                  {t("omnibar.settings.windowSize.automatic", "Automatic")}
                 </button>
               }
             />

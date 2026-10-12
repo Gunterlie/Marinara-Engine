@@ -3241,7 +3241,7 @@
   "omnibar.settings.suggestions.label": "Offer to improve a field",
   "omnibar.settings.windowHeight.description": "Set the height of her window on larger screens.",
   "omnibar.settings.windowHeight.label": "Professor Mari window height",
-  "omnibar.settings.windowSize.fit": "Fit to results",
+  "omnibar.settings.windowSize.automatic": "Automatic",
   "omnibar.settings.windowSize.height": "Height",
   "omnibar.settings.windowSize.width": "Width",
   "omnibar.settings.windowWidth.label": "Professor Mari window width",

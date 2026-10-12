@@ -35,6 +35,13 @@ let cachedDestinations: readonly OmnibarSettingsDestination[] | null = null;
  * Strings are the registry's English. The caller localizes them the same way
  * the Settings panel's own search does, through `useLocalizedUiText`.
  */
+const WINDOW_SIZE_CONTROL_IDS = new Set([
+  "mari-window-height",
+  "mari-window-width",
+  "omnibar-window-height",
+  "omnibar-window-width",
+]);
+
 export function getOmnibarSettingsDestinations(): readonly OmnibarSettingsDestination[] {
   // The registry is static, so this is built once. The caller localizes the
   // strings, which is the only part that varies.
@@ -68,7 +75,10 @@ function buildDestinations(): OmnibarSettingsDestination[] {
     });
   }
 
+  // The window-size sliders sit in sections hidden below `sm`, so on a phone their results would open nowhere.
+  const phone = typeof window !== "undefined" && !window.matchMedia("(min-width: 640px)").matches;
   for (const control of SETTINGS_SEARCHABLE_CONTROLS) {
+    if (phone && WINDOW_SIZE_CONTROL_IDS.has(control.id)) continue;
     const section = SETTINGS_SECTION_BY_ID.get(control.sectionId);
     // Unreachable while the registry is self-consistent, and `omnibar-settings`
     // asserts that it is. Logged rather than thrown: this runs during render, so

@@ -258,7 +258,7 @@ export const SETTINGS_SEARCHABLE_CONTROLS: readonly SettingsSearchableControlMet
     id: "omnibar-window-height",
     sectionId: "omnibar",
     label: "Search window height",
-    description: "Set the height of the search window on larger screens. Fit to results keeps it sized to its results.",
+    description: "Set the height of the search window on larger screens. Automatic sizes it to the results.",
     aliases: ["search", "window size", "taller", "resize"],
     kind: "Slider",
   },
