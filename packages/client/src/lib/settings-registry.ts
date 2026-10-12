@@ -255,6 +255,22 @@ export const SETTINGS_SEARCHABLE_CONTROLS: readonly SettingsSearchableControlMet
     kind: "Slider",
   },
   {
+    id: "omnibar-window-height",
+    sectionId: "omnibar",
+    label: "Search window height",
+    description: "Set the height of the search window on larger screens. Fit to results keeps it sized to its results.",
+    aliases: ["search", "window size", "taller", "resize"],
+    kind: "Slider",
+  },
+  {
+    id: "omnibar-window-width",
+    sectionId: "omnibar",
+    label: "Search window width",
+    description: "Set the width of the search window on larger screens.",
+    aliases: ["search", "window size", "wider", "resize"],
+    kind: "Slider",
+  },
+  {
     id: "mari-edit-view",
     sectionId: "omnibar",
     label: "Change cards open in",

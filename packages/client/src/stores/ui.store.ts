@@ -140,6 +140,24 @@ export function normalizeMariWindowHeightRem(value: unknown): number {
     : MARI_WINDOW_HEIGHT_DEFAULT_REM;
 }
 
+export const OMNIBAR_WINDOW_WIDTH_MIN_REM = 44;
+export const OMNIBAR_WINDOW_WIDTH_DEFAULT_REM = 44;
+export const OMNIBAR_WINDOW_WIDTH_MAX_REM = 96;
+export const OMNIBAR_WINDOW_HEIGHT_MIN_REM = 36;
+export const OMNIBAR_WINDOW_HEIGHT_MAX_REM = 96;
+
+export function normalizeOmnibarWindowWidthRem(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.max(OMNIBAR_WINDOW_WIDTH_MIN_REM, Math.min(OMNIBAR_WINDOW_WIDTH_MAX_REM, Math.round(value)))
+    : OMNIBAR_WINDOW_WIDTH_DEFAULT_REM;
+}
+
+export function normalizeOmnibarWindowHeightRem(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.max(OMNIBAR_WINDOW_HEIGHT_MIN_REM, Math.min(OMNIBAR_WINDOW_HEIGHT_MAX_REM, Math.round(value)))
+    : null;
+}
+
 export function normalizeMariWindowWidthRem(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value)
     ? Math.max(MARI_WINDOW_WIDTH_MIN_REM, Math.min(MARI_WINDOW_WIDTH_MAX_REM, Math.round(value)))
@@ -702,6 +720,9 @@ interface UIState {
   mariWindowHeightRem: number;
   /** Desktop window width, in rem. Only Professor Mari's window uses it. */
   mariWindowWidthRem: number;
+  omnibarWindowWidthRem: number;
+  /** Search window height in rem; null sizes it to its results, as before. */
+  omnibarWindowHeightRem: number | null;
   /** One complete appearance, shared by every Professor Mari surface. */
   mariAppearancePackId: string;
   /** R12: packs whose play-time rule was met once; the one-time "unlocked" toast has been shown for them. */
@@ -1204,6 +1225,8 @@ interface UIState {
   setMariEditViewMode: (mode: MariEditViewMode) => void;
   setMariWindowHeightRem: (height: number) => void;
   setMariWindowWidthRem: (width: number) => void;
+  setOmnibarWindowWidthRem: (width: number) => void;
+  setOmnibarWindowHeightRem: (height: number | null) => void;
   setMariAppearancePack: (packId: string) => void;
   markMariPackUnlocked: (packId: string) => void;
   setChatBackground: (url: string | null) => void;
@@ -1624,6 +1647,8 @@ export function pickSyncedSettings(state: UIState) {
     mariEditViewMode: state.mariEditViewMode,
     mariWindowHeightRem: normalizeMariWindowHeightRem(state.mariWindowHeightRem),
     mariWindowWidthRem: normalizeMariWindowWidthRem(state.mariWindowWidthRem),
+    omnibarWindowWidthRem: normalizeOmnibarWindowWidthRem(state.omnibarWindowWidthRem),
+    omnibarWindowHeightRem: normalizeOmnibarWindowHeightRem(state.omnibarWindowHeightRem),
     mariAppearancePackId: getMariAppearancePack(state.mariAppearancePackId).id,
     mariUnlockedPackIds: state.mariUnlockedPackIds,
     mariConnectionId: state.mariConnectionId,
@@ -1778,6 +1803,8 @@ export function pickPersistedUIState(state: UIState) {
     mariEditViewMode: state.mariEditViewMode,
     mariWindowHeightRem: normalizeMariWindowHeightRem(state.mariWindowHeightRem),
     mariWindowWidthRem: normalizeMariWindowWidthRem(state.mariWindowWidthRem),
+    omnibarWindowWidthRem: normalizeOmnibarWindowWidthRem(state.omnibarWindowWidthRem),
+    omnibarWindowHeightRem: normalizeOmnibarWindowHeightRem(state.omnibarWindowHeightRem),
     mariAppearancePackId: getMariAppearancePack(state.mariAppearancePackId).id,
     mariUnlockedPackIds: state.mariUnlockedPackIds,
     mariConnectionId: state.mariConnectionId,
@@ -2007,6 +2034,8 @@ export const useUIStore = create<UIState>()(
         mariEditViewMode: "easy",
         mariWindowHeightRem: MARI_WINDOW_HEIGHT_DEFAULT_REM,
         mariWindowWidthRem: MARI_WINDOW_WIDTH_DEFAULT_REM,
+        omnibarWindowWidthRem: OMNIBAR_WINDOW_WIDTH_DEFAULT_REM,
+        omnibarWindowHeightRem: null,
         mariAppearancePackId: "basic",
         mariUnlockedPackIds: [],
         mariConnectionId: null,
@@ -2377,6 +2406,8 @@ export const useUIStore = create<UIState>()(
         setMariEditViewMode: (mode) => set({ mariEditViewMode: mode }),
         setMariWindowHeightRem: (height) => set({ mariWindowHeightRem: normalizeMariWindowHeightRem(height) }),
         setMariWindowWidthRem: (width) => set({ mariWindowWidthRem: normalizeMariWindowWidthRem(width) }),
+        setOmnibarWindowWidthRem: (width) => set({ omnibarWindowWidthRem: normalizeOmnibarWindowWidthRem(width) }),
+        setOmnibarWindowHeightRem: (height) => set({ omnibarWindowHeightRem: normalizeOmnibarWindowHeightRem(height) }),
         setMariAppearancePack: (packId) => set({ mariAppearancePackId: getMariAppearancePack(packId).id }),
         markMariPackUnlocked: (packId) =>
           set((state) =>
@@ -3145,6 +3176,8 @@ export const useUIStore = create<UIState>()(
             mariEditViewMode: "easy",
             mariWindowHeightRem: MARI_WINDOW_HEIGHT_DEFAULT_REM,
             mariWindowWidthRem: MARI_WINDOW_WIDTH_DEFAULT_REM,
+            omnibarWindowWidthRem: OMNIBAR_WINDOW_WIDTH_DEFAULT_REM,
+            omnibarWindowHeightRem: null,
             mariAppearancePackId: "basic",
             chatBackground: null,
             defaultRoleplayBackground: DEFAULT_ROLEPLAY_BACKGROUND_URL,
@@ -3979,6 +4012,8 @@ export const useUIStore = create<UIState>()(
           ...persisted,
           mariWindowHeightRem: normalizeMariWindowHeightRem(persisted.mariWindowHeightRem),
           mariWindowWidthRem: normalizeMariWindowWidthRem(persisted.mariWindowWidthRem),
+          omnibarWindowWidthRem: normalizeOmnibarWindowWidthRem(persisted.omnibarWindowWidthRem),
+          omnibarWindowHeightRem: normalizeOmnibarWindowHeightRem(persisted.omnibarWindowHeightRem),
           mariAppearancePackId: getMariAppearancePack(persisted.mariAppearancePackId).id,
           mariUnlockedPackIds: Array.isArray(persisted.mariUnlockedPackIds)
             ? persisted.mariUnlockedPackIds.filter((id): id is string => typeof id === "string")
