@@ -8,7 +8,7 @@
 // dialog, focus and Escape handling stay in one place. Open/closed lives in `ui.store`
 // (`omnibarSettings`) so the Settings panel and navigation targets can open it too.
 
-import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type FocusEvent, type KeyboardEvent, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, ChevronLeft, Lock, Settings2 } from "lucide-react";
 import { toast } from "sonner";
@@ -86,7 +86,6 @@ function WindowSizeSlider({
   max,
   value,
   onChange,
-  onActiveChange,
   anchor,
   action,
   unset = false,
@@ -97,7 +96,6 @@ function WindowSizeSlider({
   max: number;
   value: number;
   onChange: (value: number) => void;
-  onActiveChange: (active: boolean) => void;
   anchor: string;
   action?: ReactNode;
   /** The size is "fit to results": the slider shows its last value, dimmed, until the reader sets one. */
@@ -124,8 +122,6 @@ function WindowSizeSlider({
           "min-h-11 w-full accent-[var(--primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)]",
           unset && "opacity-40",
         )}
-        onFocus={() => onActiveChange(true)}
-        onBlur={() => onActiveChange(false)}
         onChange={(event) => onChange(Number(event.target.value))}
       />
     </div>
@@ -400,6 +396,13 @@ export function OmnibarSettingsSheet({
   const setSearchWindowWidthRem = useUIStore((state) => state.setOmnibarWindowWidthRem);
   // Which window's sliders have focus. While one does, the sheet shrinks to that slider and the window resizes behind it.
   const [sizingGroup, setSizingGroup] = useState<"search" | "mari" | null>(null);
+  // Focus can move between a group's sliders and its Automatic button; the group stays active until focus leaves it.
+  const sizingFocus = (group: "search" | "mari") => ({
+    onFocus: () => setSizingGroup(group),
+    onBlur: (event: FocusEvent<HTMLDivElement>) => {
+      if (!event.currentTarget.contains(event.relatedTarget)) setSizingGroup(null);
+    },
+  });
 
   const mariEnabled = useUIStore((state) => state.commandCenterMariEnabled);
   const setMariEnabled = useUIStore((state) => state.setCommandCenterMariEnabled);
@@ -603,7 +606,7 @@ export function OmnibarSettingsSheet({
         </Section>
 
         <Section title={t("omnibar.settings.searchWindow.heading", "Search window")} className="hidden sm:block">
-          <div className="omnibar-settings-size-row" data-size-group="search">
+          <div className="omnibar-settings-size-row" data-size-group="search" {...sizingFocus("search")}>
             <WindowSizeSlider
               anchor={anchorId("omnibar-window-height")}
               label={t("omnibar.settings.searchWindowHeight.label", "Search window height")}
@@ -612,7 +615,6 @@ export function OmnibarSettingsSheet({
               max={OMNIBAR_WINDOW_HEIGHT_MAX_REM}
               value={searchWindowHeightRem ?? OMNIBAR_WINDOW_HEIGHT_MIN_REM}
               onChange={setSearchWindowHeightRem}
-              onActiveChange={(active) => setSizingGroup(active ? "search" : null)}
               unset={searchWindowHeightRem === null}
               action={
                 <button
@@ -633,13 +635,12 @@ export function OmnibarSettingsSheet({
               max={OMNIBAR_WINDOW_WIDTH_MAX_REM}
               value={searchWindowWidthRem}
               onChange={setSearchWindowWidthRem}
-              onActiveChange={(active) => setSizingGroup(active ? "search" : null)}
             />
           </div>
         </Section>
 
         <Section title={t("omnibar.settings.mariWindow.heading", "Professor Mari window")} className="hidden sm:block">
-          <div className="omnibar-settings-size-row" data-size-group="mari">
+          <div className="omnibar-settings-size-row" data-size-group="mari" {...sizingFocus("mari")}>
             <WindowSizeSlider
               anchor={anchorId("mari-window-height")}
               label={t("omnibar.settings.windowHeight.label", "Professor Mari window height")}
@@ -648,7 +649,6 @@ export function OmnibarSettingsSheet({
               max={MARI_WINDOW_HEIGHT_MAX_REM}
               value={windowHeightRem}
               onChange={setWindowHeightRem}
-              onActiveChange={(active) => setSizingGroup(active ? "mari" : null)}
             />
             <WindowSizeSlider
               anchor={anchorId("mari-window-width")}
@@ -658,7 +658,6 @@ export function OmnibarSettingsSheet({
               max={MARI_WINDOW_WIDTH_MAX_REM}
               value={windowWidthRem}
               onChange={setWindowWidthRem}
-              onActiveChange={(active) => setSizingGroup(active ? "mari" : null)}
             />
           </div>
         </Section>
