@@ -36,6 +36,7 @@ import {
   normalizeScenePromptPreferences,
   normalizeConversationBackgroundImageOpacity,
   normalizeMariWindowHeightRem,
+  normalizeMariWindowWidthRem,
   pickSyncedSettings,
   useUIStore,
 } from "../stores/ui.store";
@@ -71,6 +72,9 @@ export function omitLocalOnlySettings(settings: ParsedSettings): ParsedSettings 
   }
   if ("mariWindowHeightRem" in sanitized) {
     sanitized.mariWindowHeightRem = normalizeMariWindowHeightRem(sanitized.mariWindowHeightRem);
+  }
+  if ("mariWindowWidthRem" in sanitized) {
+    sanitized.mariWindowWidthRem = normalizeMariWindowWidthRem(sanitized.mariWindowWidthRem);
   }
   return sanitized;
 }

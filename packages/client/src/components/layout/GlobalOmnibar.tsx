@@ -190,6 +190,7 @@ export function GlobalOmnibarDialog({ onClose }: { onClose: () => void }) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const mariWindowHeightRem = useUIStore((state) => state.mariWindowHeightRem);
   const mariWindowViewportHeight = Math.min(88, (80 * mariWindowHeightRem) / MARI_WINDOW_HEIGHT_MIN_REM);
+  const mariWindowWidthRem = useUIStore((state) => state.mariWindowWidthRem);
   const firstResultPaintMarked = useRef(false);
   // Opened by the pull-to-open gesture, whose circle pops the panel open: skip the
   // pop-in and hand the panel over before the first paint, so it can be clipped.
@@ -1967,9 +1968,10 @@ export function GlobalOmnibarDialog({ onClose }: { onClose: () => void }) {
           {
             "--mari-window-height": `${mariWindowHeightRem}rem`,
             "--mari-window-viewport-height": `${mariWindowViewportHeight}dvh`,
+            "--mari-window-width": `${mariWindowWidthRem}rem`,
           } as React.CSSProperties
         }
-        className={`relative isolate flex h-[100dvh] w-full flex-col overflow-hidden bg-[var(--card)] shadow-2xl ${fromPull ? "" : "motion-safe:animate-omnibar-in"} sm:max-w-[44rem] sm:rounded-2xl sm:shadow-[0_24px_60px_-12px_rgba(0,0,0,0.55)] sm:ring-1 sm:ring-[var(--border)]/60 sm:motion-safe:transition-[height,max-height,max-width] sm:motion-safe:duration-300 sm:motion-safe:ease-out motion-reduce:transition-none ${
+        className={`relative isolate flex h-[100dvh] w-full flex-col overflow-hidden bg-[var(--card)] shadow-2xl ${fromPull ? "" : "motion-safe:animate-omnibar-in"} ${pane === "mari" ? "sm:max-w-[min(var(--mari-window-width),92vw)]" : "sm:max-w-[44rem]"} sm:rounded-2xl sm:shadow-[0_24px_60px_-12px_rgba(0,0,0,0.55)] sm:ring-1 sm:ring-[var(--border)]/60 sm:motion-safe:transition-[height,max-height,max-width] sm:motion-safe:duration-300 sm:motion-safe:ease-out motion-reduce:transition-none ${
           pane === "mari"
             ? "mari-workspace-shell sm:h-[min(var(--mari-window-height),var(--mari-window-viewport-height))] sm:max-h-[min(var(--mari-window-height),var(--mari-window-viewport-height))]"
             : idle && !settingsOpen

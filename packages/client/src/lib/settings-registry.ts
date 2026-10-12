@@ -247,6 +247,14 @@ export const SETTINGS_SEARCHABLE_CONTROLS: readonly SettingsSearchableControlMet
     kind: "Slider",
   },
   {
+    id: "mari-window-width",
+    sectionId: "omnibar",
+    label: "Professor Mari window width",
+    description: "Set the width of her window on larger screens.",
+    aliases: ["mari", "window size", "wider", "resize"],
+    kind: "Slider",
+  },
+  {
     id: "mari-edit-view",
     sectionId: "omnibar",
     label: "Change cards open in",

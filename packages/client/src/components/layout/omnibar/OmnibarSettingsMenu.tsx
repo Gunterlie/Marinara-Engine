@@ -22,7 +22,13 @@ import {
 
 import { useInDialogFocusScope } from "../../../hooks/use-in-dialog-focus-scope";
 import { useSidecarStore } from "../../../stores/sidecar.store";
-import { MARI_WINDOW_HEIGHT_MIN_REM, MARI_WINDOW_HEIGHT_MAX_REM, useUIStore } from "../../../stores/ui.store";
+import {
+  MARI_WINDOW_HEIGHT_MIN_REM,
+  MARI_WINDOW_HEIGHT_MAX_REM,
+  MARI_WINDOW_WIDTH_MIN_REM,
+  MARI_WINDOW_WIDTH_MAX_REM,
+  useUIStore,
+} from "../../../stores/ui.store";
 import { api } from "../../../lib/api-client";
 import { enqueueMariPermissionsModeWrite } from "../../../lib/mari-permissions-write-chain";
 import {
@@ -327,6 +333,9 @@ export function OmnibarSettingsSheet({
   const windowHeightId = useId();
   const windowHeightRem = useUIStore((state) => state.mariWindowHeightRem);
   const setWindowHeightRem = useUIStore((state) => state.setMariWindowHeightRem);
+  const windowWidthId = useId();
+  const windowWidthRem = useUIStore((state) => state.mariWindowWidthRem);
+  const setWindowWidthRem = useUIStore((state) => state.setMariWindowWidthRem);
 
   const mariEnabled = useUIStore((state) => state.commandCenterMariEnabled);
   const setMariEnabled = useUIStore((state) => state.setCommandCenterMariEnabled);
@@ -551,6 +560,24 @@ export function OmnibarSettingsSheet({
               value={windowHeightRem}
               className="min-h-11 w-full accent-[var(--primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)]"
               onChange={(event) => setWindowHeightRem(Number(event.target.value))}
+            />
+          </div>
+          <div
+            id={anchorId("mari-window-width")}
+            className="omnibar-settings-menu__row omnibar-settings-menu__row--stacked"
+          >
+            <label htmlFor={windowWidthId} className="omnibar-settings-menu__label">
+              {t("omnibar.settings.windowWidth.label")}
+            </label>
+            <input
+              id={windowWidthId}
+              type="range"
+              min={MARI_WINDOW_WIDTH_MIN_REM}
+              max={MARI_WINDOW_WIDTH_MAX_REM}
+              step={1}
+              value={windowWidthRem}
+              className="min-h-11 w-full accent-[var(--primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)]"
+              onChange={(event) => setWindowWidthRem(Number(event.target.value))}
             />
           </div>
           <PermissionsModeRow />
