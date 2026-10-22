@@ -3,11 +3,16 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { VitePWA } from "vite-plugin-pwa";
 import { execFileSync } from "node:child_process";
+import { statSync } from "node:fs";
 import path from "path";
 import { delegateDirectAndroidBuild } from "./scripts/build-heap.mjs";
 
 const ENABLE_SOURCE_MAPS = process.env.VITE_ENABLE_SOURCEMAP === "true";
-const PWA_DISABLED = Boolean(process.env.SKIP_PWA);
+const DEMO_BUILD = process.env.VITE_MARINARA_DEMO === "1";
+const DEMO_BASE = process.env.MARINARA_DEMO_BASE ?? "/Marinara-Engine/";
+const CLIENT_SOURCE_ROOT = path.resolve(import.meta.dirname, "src").replaceAll("\\", "/") + "/";
+const CLIENT_PUBLIC_ROOT = path.resolve(import.meta.dirname, "public");
+const PWA_DISABLED = Boolean(process.env.SKIP_PWA) || DEMO_BUILD;
 const DEV_SERVER_PORT = Number.parseInt(process.env.VITE_PORT ?? "5173", 10);
 const DEV_SERVER_HOST = process.env.VITE_HOST?.trim() || undefined;
 const DEV_SERVER_OPEN = process.env.VITE_OPEN_BROWSER !== "false" && process.env.AUTO_OPEN_BROWSER !== "false";
@@ -166,10 +171,47 @@ function pwaStub(): Plugin {
 }
 
 export default defineConfig({
+  base: DEMO_BUILD ? DEMO_BASE : "/",
   define: {
     __MARINARA_BUILD_COMMIT__: JSON.stringify(BUILD_COMMIT),
   },
   plugins: [
+    !DEMO_BUILD && {
+      name: "exclude-demo-runtime",
+      enforce: "pre",
+      load(id) {
+        // Rolldown can retain an orphan dynamic chunk even after its caller is removed.
+        if (id === `${CLIENT_SOURCE_ROOT}demo/boot.ts`) return "";
+        if (id === `${CLIENT_SOURCE_ROOT}demo/DemoBanner.tsx`) return "export const DemoBanner = () => null;";
+      },
+    },
+    // The installed app serves public assets at /. Pages serves them below a project/version path.
+    DEMO_BUILD && {
+      name: "demo-public-asset-paths",
+      enforce: "pre",
+      transform(code, id) {
+        if (!id.startsWith(CLIENT_SOURCE_ROOT) || id.includes("/node_modules/") || !/\.[jt]sx?$/.test(id)) return;
+        return code.replace(/(["'`])(\/[^"'`\r\n]*)\1/g, (literal, quote: string, url: string) => {
+          const asset = path.resolve(CLIENT_PUBLIC_ROOT, url.slice(1).split(/[?#]/)[0]!);
+          const dynamicMariAsset =
+            id === `${CLIENT_SOURCE_ROOT}lib/mari-work-animations.ts` && url.startsWith("/sprites/mari/");
+          if (
+            !dynamicMariAsset &&
+            !(asset.startsWith(CLIENT_PUBLIC_ROOT + path.sep) && statSync(asset, { throwIfNoEntry: false })?.isFile())
+          )
+            return literal;
+          return `${quote}${DEMO_BASE}${url.slice(1)}${quote}`;
+        });
+      },
+      transformIndexHtml(html) {
+        return html
+          .replace(/\s*<link rel="manifest"[^>]*>/, "")
+          .replace(
+            "<head>",
+            `<head>\n<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' data: blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'">`,
+          );
+      },
+    },
     androidBuildHeap(),
     react(),
     tailwindcss(),
@@ -241,7 +283,7 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: "dist",
+    outDir: DEMO_BUILD ? "dist-demo" : "dist",
     manifest: true,
     target: "es2020",
     cssTarget: "safari14",

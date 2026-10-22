@@ -9,6 +9,7 @@ node_modules/
 
 # Build output
 dist/
+dist-demo/
 *.tsbuildinfo
 
 # Database (contains all user data: chats, characters, lorebooks, presets, connections, agents, etc.)

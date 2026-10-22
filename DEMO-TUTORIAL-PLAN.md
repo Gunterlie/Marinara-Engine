@@ -1,6 +1,6 @@
 # Static Marinara demo and tutorial plan
 
-Status: proposal; implementation and deployment have not started.
+Status: the browser demo is implemented on `feat/static-demo-tutorial` in the user's fork. The first delivery is a working fork Pages trial; official stable-release publishing remains a separate rollout stage.
 
 ## Goal
 
@@ -51,7 +51,7 @@ Disable demo service-worker registration initially to simplify cache and release
 - Persist tutorial completion and preferences locally where useful.
 - Namespace persistent keys by demo identity and release version.
 - Reload may restore example content while retaining tutorial completion; document that behavior.
-- Reset cancels active scripts, clears the demo's own state and query caches, and restores its seed content.
+- Reset cancels active scripts, clears the demo's own preferences and lesson progress, and reloads its seed content and query caches.
 - Never clear unrelated local storage. Account for multiple Pages projects sharing the same origin.
 - Treat separate tabs as independent active sessions; avoid synchronizing mutable chat data through local storage.
 - No shared writes, database, server-side session store, or per-visitor backend processes.
@@ -149,3 +149,35 @@ Before implementation, confirm existing fork Pages usage, first-release scope, a
 ## Completion criterion
 
 Two people can open the same public demo URL, take different actions, and complete tutorials independently, with only static hosting running. The version displayed matches the release used to build it, and an installation link takes visitors to the real application.
+
+## Trial development commands
+
+```sh
+heavy pnpm install --frozen-lockfile
+heavy pnpm build:demo
+heavy pnpm smoke:demo
+```
+
+The build writes `packages/client/dist-demo`, leaving normal `dist` output separate. `smoke:demo` serves that output with a temporary static server, opens independent browser contexts, exercises real chat controls and local edits, checks reset isolation, and captures screenshots under ignored `pr-evidence/static-demo`. It closes its server and browser on success or failure.
+
+To prove nested release paths, build and run the same smoke with a different base:
+
+```sh
+MARINARA_DEMO_BASE=/Marinara-Engine/versions/v2.5.1/ heavy pnpm build:demo
+heavy pnpm smoke:demo
+```
+
+The fork-only `demo-pages.yml` workflow builds and tests the trial branch before deployment. Pages must be configured for GitHub Actions in the fork. This trial workflow publishes one current demo; it does not yet implement release retention or claim to publish every stable release. Those remain stage 5 work.
+
+The initial lessons are replayable orientation tours. A viewed indicator means the visitor reached the end of the lesson; it does not attest that an editing or chat task was completed. Task-validated lessons remain part of the later tutorial expansion.
+
+
+## Trial implementation and proof
+
+The trial includes a per-tab in-memory API adapter, deterministic streaming replies, curated lighthouse content, supported local character/chat/lorebook edits, three replayable lessons, and reset. Preferences and viewed lessons use storage namespaced by app version and hosting base; unavailable storage falls back to page memory. Reset clears that namespace on the next startup, after the outgoing document finishes saving preferences.
+
+Local validation completed: full `pnpm check`, the seven normal `smoke:ui` cases, `version:check`, and the dedicated static-demo smoke. The demo smoke exercises simultaneous independent visitors, real composer sends and PATCH requests through the CSRF shim, cancellation, pagination, same-browser tab isolation, reset without clearing unrelated storage, keyboard lesson navigation, and denied browser storage. Screenshots cover 390, 768, and 1440 px, both visual styles, and light/dark appearance. The normal build contains no `demo-message` seed marker. The same smoke also passed under `/Marinara-Engine/versions/v2.5.1/`. The final focused CodeRabbit rerun found no additional findings after the reset and focus fixes.
+
+Review fixes included request-body preservation, correct typing events, cursor pagination, normal-build module exclusion, public-asset prefixing, storage fallback, keyboard focus, mobile drawer positioning, and reset persistence. Review suggestions to remove the static runtime import were rejected after tracing the import graph: it loads no persisted stores before storage isolation. Suggestions to rewrite all dynamic sprite paths were rejected because those paths are API assets; the public Mari animation helper is handled explicitly. Reset copy deliberately distinguishes per-tab chats from preferences shared across tabs.
+
+Real iOS keyboard panning and notch safe areas still need device verification. Optional server-backed features return an explicit unsupported error. The initial lessons show orientation and record viewing; they do not validate a visitor's editing task. This fork trial does not provide automatic stable-release publication, retained snapshots, or a latest-version index yet.

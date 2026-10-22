@@ -26,7 +26,7 @@ import { LanguagePicker } from "../ui/LanguagePicker";
 
 type TourPanel = "characters" | "lorebooks" | "presets" | "connections" | "agents" | "personas" | "settings";
 
-interface TourStep {
+export interface TourStep {
   /** data-tour attribute value of the element to highlight, or null for centered modal */
   target: string | null;
   /** Additional data-tour targets highlighted alongside the primary target */
@@ -52,6 +52,8 @@ interface TourStep {
   settingsTab?: string;
   /** Render the documentation-language picker inside this step's card */
   docsLanguagePicker?: boolean;
+  /** Runs instead of the built-in panel/sidebar navigation when this step opens */
+  enter?: () => void;
   /** Professor Mari sprite to display */
   sprite?: { pose: MariPose; flip?: boolean };
   /** Body used instead of bodyKey on a phone-width screen, where this step's control is not on screen */
@@ -452,8 +454,10 @@ function TourCardContent({
   onNext,
   onSkip,
   pickerSlot,
+  stepCount,
 }: {
   step: number;
+  stepCount: number;
   currentStep: TourStep;
   isLast: boolean;
   onNext: () => void;
@@ -514,7 +518,7 @@ function TourCardContent({
 
       {/* Progress dots */}
       <div className="mb-3 flex items-center justify-center gap-1.5">
-        {STEPS.map((_, i) => (
+        {Array.from({ length: stepCount }, (_, i) => (
           <div
             key={i}
             className={`h-1.5 rounded-full transition-all duration-300 ${
@@ -550,7 +554,14 @@ export function OnboardingTutorial() {
   return <OnboardingTutorialInner />;
 }
 
-function OnboardingTutorialInner() {
+export function OnboardingTutorialInner({
+  steps = STEPS,
+  onDone,
+}: {
+  steps?: TourStep[];
+  /** Replaces the first-run completion bookkeeping, for replayable lessons */
+  onDone?: (completed: boolean) => void;
+} = {}) {
   const setCompleted = useUIStore((s) => s.setHasCompletedOnboarding);
   const openRightPanel = useUIStore((s) => s.openRightPanel);
   const closeRightPanel = useUIStore((s) => s.closeRightPanel);
@@ -571,12 +582,12 @@ function OnboardingTutorialInner() {
   const rafRef = useRef<number>(0);
   const cardRef = useRef<HTMLDivElement>(null);
 
-  const currentStep = STEPS[step];
-  const isLast = step === STEPS.length - 1;
+  const currentStep = steps[step];
+  const isLast = step === steps.length - 1;
   const targetRect = spotlightRects.find((rect) => rect.target === currentStep.target) ?? null;
 
   // ── Documentation-language picker (final step) ──
-  const { data: docsLanguageStatus } = useDocsLanguage();
+  const { data: docsLanguageStatus } = useDocsLanguage(!onDone);
   const queryClient = useQueryClient();
   const [docsLanguagePick, setDocsLanguagePick] = useState<string | null>(null);
   const docsLanguageOptions = useMemo(() => docsLanguageStatus?.available ?? [], [docsLanguageStatus?.available]);
@@ -640,6 +651,10 @@ function OnboardingTutorialInner() {
 
   // ── Side-effects when step changes ──
   useEffect(() => {
+    if (currentStep.enter) {
+      currentStep.enter();
+      return;
+    }
     if (currentStep.openHome) {
       closeAllDetails();
       setActiveChatId(null);
@@ -704,6 +719,10 @@ function OnboardingTutorialInner() {
   }, [updateRect]);
 
   const finish = useCallback(() => {
+    if (onDone) {
+      onDone(false);
+      return;
+    }
     // A new user has just met this release in the tour, so What's New must not open right after it.
     try {
       window.localStorage.setItem(WHATS_NEW_SEEN_VERSION_KEY, APP_VERSION);
@@ -712,7 +731,7 @@ function OnboardingTutorialInner() {
     }
     setCompleted(true);
     trackAchievement.mutate("tutorial_completed");
-  }, [setCompleted, trackAchievement]);
+  }, [onDone, setCompleted, trackAchievement]);
 
   const handleTutorialKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLElement>) => {
@@ -724,13 +743,15 @@ function OnboardingTutorialInner() {
 
   // "Get Started" on the final step commits the docs-language pick; Skip never does.
   const next = useCallback(() => {
-    if (isLast) {
+    if (isLast && onDone) {
+      onDone(true);
+    } else if (isLast) {
       commitDocsLanguage();
       finish();
     } else {
       setStep((s) => s + 1);
     }
-  }, [isLast, commitDocsLanguage, finish]);
+  }, [isLast, onDone, commitDocsLanguage, finish]);
 
   const isCentered = isMobileViewport || currentStep.centerCard || !currentStep.target || !targetRect;
   const centeredTopOffset = getTutorialTopOffset();
@@ -808,6 +829,7 @@ function OnboardingTutorialInner() {
             >
               <TourCardContent
                 step={step}
+                stepCount={steps.length}
                 currentStep={currentStep}
                 isLast={isLast}
                 onNext={next}
@@ -835,6 +857,7 @@ function OnboardingTutorialInner() {
           >
             <TourCardContent
               step={step}
+              stepCount={steps.length}
               currentStep={currentStep}
               isLast={isLast}
               onNext={next}
