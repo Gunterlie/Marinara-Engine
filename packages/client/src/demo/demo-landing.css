@@ -107,3 +107,36 @@
     scale: 0 1;
   }
 }
+
+/* Website page scrollers keep their scrollbar space, so a short or loading page does not shift sideways. */
+[data-demo-site] .flex-1.overflow-y-auto {
+  scrollbar-gutter: stable;
+}
+
+/* Stars sit at a percentage of their field. Sized to the long page, they moved whenever the page height changed. */
+[data-demo-site] .mari-home-browser-starfield {
+  bottom: auto;
+  height: 100svh;
+}
+
+/* Route change between website and workspace: fade the old page out before the new one fades in.
+   The default cross-fade shows both pages on top of each other for a moment. */
+::view-transition-old(root) {
+  animation: 90ms ease-in both demo-route-out;
+}
+
+::view-transition-new(root) {
+  animation: 160ms ease-out 90ms both demo-route-in;
+}
+
+@keyframes demo-route-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes demo-route-in {
+  from {
+    opacity: 0;
+  }
+}

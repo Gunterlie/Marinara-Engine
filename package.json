@@ -18,7 +18,8 @@
     "build:client": "pnpm build:shared && pnpm --filter @marinara-engine/client build",
     "build:demo": "node scripts/build-demo.mjs",
     "website:refresh": "node scripts/demo/refresh.mjs prepare",
-    "smoke:demo": "node scripts/demo/smoke.mjs"
+    "smoke:demo": "node scripts/demo/smoke.mjs",
+    "smoke:demo-layout": "node scripts/demo/layout-shift.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.64.1",

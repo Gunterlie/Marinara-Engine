@@ -872,7 +872,8 @@ function HeroTeaser() {
   return (
     <div
       aria-hidden="true"
-      className="relative flex min-h-[22rem] flex-col justify-end gap-3 p-4 pb-12 sm:min-h-[25rem] sm:p-5 sm:pb-16"
+      // Fixed height and top-aligned: the typing reply grows into reserved space instead of moving the page or the bubbles.
+      className="relative flex h-[22rem] flex-col gap-3 overflow-hidden p-4 pb-12 sm:h-[25rem] sm:p-5 sm:pb-16"
     >
       <div className="flex items-end gap-2.5">
         <img

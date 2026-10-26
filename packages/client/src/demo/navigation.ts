@@ -9,9 +9,29 @@ import { docHref } from "./docs";
 export function useDemoNavigation() {
   useEffect(() => {
     let firstRoute = true;
+    // Website pages scroll inside an element, which browser scroll restoration does not cover.
+    // A new link opens at the top; back and forward return to the offset the visitor left.
+    const offsets = new Map<number, number>();
+    let entry = 0;
+    const pageScroller = () => document.querySelector<HTMLElement>("[data-demo-site] .flex-1.overflow-y-auto");
+    const remember = (event: Event) => {
+      const scroller = pageScroller();
+      if (scroller && event.target === scroller) offsets.set(entry, scroller.scrollTop);
+    };
     const followRoute = () => {
       const hash = window.location.hash;
       if (hash && !hash.startsWith("#/")) return;
+      const known = window.history.state?.demoEntry;
+      entry = typeof known === "number" ? known : Date.now();
+      if (entry !== known) window.history.replaceState({ ...window.history.state, demoEntry: entry }, "");
+      const offset = offsets.get(entry) ?? 0;
+      // Guides place themselves: top of the guide, or the linked section.
+      if (!hash.startsWith("#/docs")) {
+        requestAnimationFrame(() => {
+          const scroller = pageScroller();
+          if (scroller) scroller.scrollTop = offset;
+        });
+      }
       // Website and workspace cross-fade; not on first load and not with reduced motion.
       const fade =
         !firstRoute &&
@@ -36,6 +56,7 @@ export function useDemoNavigation() {
     };
     followRoute();
     window.addEventListener("hashchange", followRoute);
+    document.addEventListener("scroll", remember, { capture: true, passive: true });
     const unsubscribe = useChatStore.subscribe((state, previous) => {
       if (state.activeChatId === previous.activeChatId) return;
       const hash = state.activeChatId ? "#/demo" : "#/";
@@ -55,6 +76,7 @@ export function useDemoNavigation() {
     return () => {
       unsubscribeDocs();
       window.removeEventListener("hashchange", followRoute);
+      document.removeEventListener("scroll", remember, { capture: true });
       unsubscribe();
     };
   }, []);
