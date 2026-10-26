@@ -152,7 +152,7 @@ export function DemoLanding() {
       {/* Ambient light, behind every section */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[56rem] bg-[radial-gradient(55%_45%_at_78%_18%,color-mix(in_srgb,var(--primary)_22%,transparent),transparent_70%),radial-gradient(40%_35%_at_8%_8%,color-mix(in_srgb,var(--primary)_10%,transparent),transparent_70%)]"
+        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[56rem] [[data-demo-site]_&]:-top-12 bg-[radial-gradient(55%_45%_at_78%_18%,color-mix(in_srgb,var(--primary)_22%,transparent),transparent_70%),radial-gradient(40%_35%_at_8%_8%,color-mix(in_srgb,var(--primary)_10%,transparent),transparent_70%)]"
       />
 
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-24 px-4 pb-20 pt-10 sm:gap-28 sm:px-8 sm:pt-16">
@@ -235,7 +235,7 @@ export function DemoLanding() {
         <section aria-labelledby="demo-product-modes" className="flex flex-col gap-8">
           <div className="flex max-w-2xl flex-col gap-3">
             <span className={EYEBROW}>{t("demo.product.modesEyebrow")}</span>
-            <h2 id="demo-product-modes" className={SECTION_TITLE}>
+            <h2 id="demo-product-modes" className={`${SECTION_TITLE} scroll-mt-20`}>
               {t("demo.landing.modes.title")}
             </h2>
             <p className="text-pretty text-base leading-relaxed text-[var(--muted-foreground)]">

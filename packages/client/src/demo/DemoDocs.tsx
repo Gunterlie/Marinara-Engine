@@ -216,7 +216,7 @@ export function DemoDocs({ path, section }: { path: string; section: string }) {
   return (
     <section
       data-testid="demo-docs"
-      className="min-h-0 flex-1 overflow-y-auto bg-[var(--background)] text-[var(--foreground)]"
+      className="min-h-0 flex-1 overflow-y-auto bg-[var(--background)] [[data-demo-site]_&]:pt-12 text-[var(--foreground)]"
     >
       <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 sm:py-8 lg:px-8">
         {!path ? (
@@ -301,7 +301,7 @@ export function DemoDocs({ path, section }: { path: string; section: string }) {
           <div className="grid min-w-0 gap-8 lg:grid-cols-[15rem_minmax(0,1fr)] xl:grid-cols-[15rem_minmax(0,1fr)_13rem]">
             <aside
               aria-label={t("demo.docs.guides")}
-              className="hidden lg:sticky lg:top-0 lg:block lg:max-h-[calc(100dvh-8rem)] lg:overflow-y-auto"
+              className="hidden lg:sticky lg:top-0 lg:[[data-demo-site]_&]:top-12 lg:block lg:max-h-[calc(100dvh-8rem)] lg:overflow-y-auto"
             >
               <SearchBox value={query} onChange={setQuery} />
               {status}
@@ -438,7 +438,7 @@ export function DemoDocs({ path, section }: { path: string; section: string }) {
             {contents.length > 1 ? (
               <aside
                 aria-label={t("demo.docs.onThisPage")}
-                className="hidden xl:sticky xl:top-0 xl:block xl:max-h-[calc(100dvh-8rem)] xl:overflow-y-auto"
+                className="hidden xl:sticky xl:top-0 xl:[[data-demo-site]_&]:top-12 xl:block xl:max-h-[calc(100dvh-8rem)] xl:overflow-y-auto"
               >
                 <h2 className="px-2 pb-2 text-xs font-semibold uppercase tracking-wide text-[var(--muted-foreground)]">
                   {t("demo.docs.onThisPage")}

@@ -27,13 +27,13 @@ export function DemoHome() {
   let page: ReactNode;
   if (hash === "#/download") {
     page = (
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto [[data-demo-site]_&]:pt-12">
         <DemoDownload />
       </div>
     );
   } else if (hash === "#/about") {
     page = (
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto [[data-demo-site]_&]:pt-12">
         <DemoLanding />
       </div>
     );

@@ -61,10 +61,6 @@ const DemoSiteStart =
   import.meta.env.VITE_MARINARA_DEMO === "1"
     ? lazy(() => import("../../demo/DemoBanner").then((module) => ({ default: module.DemoSiteStart })))
     : null;
-const DemoSiteTry =
-  import.meta.env.VITE_MARINARA_DEMO === "1"
-    ? lazy(() => import("../../demo/DemoBanner").then((module) => ({ default: module.DemoSiteTry })))
-    : null;
 
 // English source text for `localize()` - the lookup matches on the literal string, not the key.
 const MARI_EDGE_GLOW_LABEL: Record<Exclude<MariEdgeGlow, null>, string> = {
@@ -474,12 +470,16 @@ export function TopBar({
       onPointerLeave={clearTopbarHover}
       onPointerOver={handleTopbarPointerOver}
       className={cn(
-        "mari-topbar relative z-10 flex h-12 flex-shrink-0 items-center justify-between bg-[var(--marinara-topbar-surface)] px-3 backdrop-blur-sm",
+        "mari-topbar flex h-12 flex-shrink-0 items-center justify-between px-3",
+        // Website pages scroll under a see-through bar; under [data-demo-site] they pad themselves by its height.
+        demoSite
+          ? "absolute inset-x-0 top-[env(safe-area-inset-top)] z-30 bg-[color-mix(in_srgb,var(--background)_35%,transparent)]! backdrop-blur-xl sm:px-4"
+          : "relative z-10 bg-[var(--marinara-topbar-surface)] backdrop-blur-sm",
         mobileTopbarNavigation ? "touch-none" : "select-none",
       )}
     >
       {/* Subtle bottom border only */}
-      <div className="absolute inset-x-0 bottom-0 h-px bg-[var(--marinara-topbar-border)]" />
+      {!demoSite && <div className="absolute inset-x-0 bottom-0 h-px bg-[var(--marinara-topbar-border)]" />}
       {/* Mari is busy or has a result you have not seen: a thin line in her state colour (P2). */}
       {mariEdgeGlow ? (
         <span
@@ -616,11 +616,6 @@ export function TopBar({
         <PersonalExtensionContributionsMenu />
         <TopbarMoreMenu items={overflowItems} headerRef={headerRef} phoneTopbar={phoneTopbar} />
       </nav>
-      {DemoSiteTry && (
-        <Suspense fallback={null}>
-          <DemoSiteTry site={demoSite} />
-        </Suspense>
-      )}
     </header>
   );
 

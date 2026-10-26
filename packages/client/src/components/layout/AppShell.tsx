@@ -1399,6 +1399,7 @@ export function AppShell({
         ref={mainRef}
         data-tour="chat-area"
         data-component="CenterContent"
+        data-demo-site={demoSite ? "" : undefined}
         data-center-compact={centerCompact ? "true" : undefined}
         data-shell-overlay-mode={shellOverlayMode ? "true" : undefined}
         aria-label={localizeUi("ui.layout.appshell.mainContent")}

@@ -7,12 +7,13 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type KeyboardEvent as ReactKeyboardEvent,
-  type ReactNode,
+  type MouseEvent as ReactMouseEvent,
 } from "react";
 import { createPortal } from "react-dom";
 import { APP_VERSION } from "@marinara-engine/shared";
-import { BookOpen, Check, Code, Download, GraduationCap, Home, RotateCcw } from "lucide-react";
+import { BookOpen, Check, Code, Download, GitBranch, Home, Menu, RotateCcw } from "lucide-react";
 import { useTranslation as useUiTranslation } from "react-i18next";
 import { OnboardingTutorialInner, type TourStep } from "../components/onboarding/OnboardingTutorial";
 import { showConfirmDialog } from "../lib/app-dialogs";
@@ -24,7 +25,6 @@ import { useDemoNavigation } from "./navigation";
 import { MarinaraWordmark } from "../components/chat/HomeBrowserHub";
 import { DISCORD_URL, GITHUB_URL, asset } from "./DemoLanding";
 
-const INSTALL_URL = "https://github.com/Pasta-Devs/Marinara-Engine#installation";
 // ponytail: fork trial branch; point at the release tag once demos publish from stable tags.
 const SOURCE_URL = "https://github.com/Gunterlie/Marinara-Engine/tree/feat/static-demo-tutorial";
 const DONE_KEY = `marinara-demo:lessons-done:${APP_VERSION}`;
@@ -103,63 +103,85 @@ const BUTTON_CLASS =
   "flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs font-medium text-[var(--marinara-chat-chrome-panel-text)] transition-colors hover:bg-[var(--marinara-chat-chrome-highlight-bg)] focus-visible:outline-2 focus-visible:outline-[var(--marinara-chat-chrome-focus-ring)]";
 
 const NAV_LINK =
-  "inline-flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-[var(--muted-foreground)] transition-colors hover:bg-[var(--accent)] hover:text-[var(--foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--marinara-app-accent-solid)] sm:px-2.5";
+  "relative inline-flex h-9 items-center rounded-md px-2.5 text-[0.8125rem] font-medium text-[var(--muted-foreground)] transition-colors [@media(pointer:coarse)]:h-11 hover:text-[var(--foreground)] aria-[current=page]:text-[var(--foreground)] after:absolute after:inset-x-2.5 after:bottom-1.5 after:h-px after:origin-left after:scale-x-0 after:rounded-full after:bg-current after:transition-transform hover:after:scale-x-100 aria-[current=page]:after:scale-x-100 aria-[current=page]:after:bg-[var(--primary)] motion-reduce:after:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--marinara-app-accent-solid)]";
 
-// The website part of the one shared bar: TopBar puts it first, and in the demo workspace its Engine controls follow.
-export function DemoSiteStart({ site }: { site: boolean }) {
-  const { t } = useUiTranslation();
-  // In the workspace the Engine icons need the room, so labels wait for wide screens and phones use the lessons menu.
-  const labelClass = site ? "max-sm:sr-only" : "max-lg:sr-only";
-  const link = (href: string, icon: ReactNode, label: string, className = "") => (
-    <a
-      href={href}
-      className={`${NAV_LINK} ${className}`}
-      {...(href.startsWith("http") ? { target: "_blank", rel: "noreferrer" } : {})}
-    >
-      {icon}
-      <span className={labelClass}>{label}</span>
-    </a>
-  );
-  return (
-    <div data-testid="demo-site-header" className="flex min-w-0 shrink-0 items-center gap-0.5 sm:gap-1">
-      <a href="#/" className={`${NAV_LINK} !px-1`} aria-label={t("demo.docs.home")}>
-        <img src={asset("logo.png")} alt="" width={32} height={32} className="h-7 w-7 object-contain" />
-        <MarinaraWordmark className="hidden text-sm lg:block" />
-      </a>
-      <nav
-        aria-label={t("demo.site.navigation")}
-        className={`items-center gap-0.5 ${site ? "flex" : "hidden sm:flex"}`}
-      >
-        {link("#/docs", <BookOpen className="h-4 w-4" aria-hidden="true" />, t("demo.site.docs"))}
-        {link("#/download", <Download className="h-4 w-4" aria-hidden="true" />, t("demo.site.download"))}
-        {link(
-          DISCORD_URL,
-          <img src={asset("home/tab-icons/discord.svg")} alt="" className="h-4 w-4 [[data-theme=light]_&]:invert" />,
-          t("demo.landing.community.discord"),
-          "max-lg:hidden",
-        )}
-        {link(
-          GITHUB_URL,
-          <Code className="h-4 w-4" aria-hidden="true" />,
-          t("demo.landing.community.github"),
-          "max-lg:hidden",
-        )}
-      </nav>
-      <DemoBanner />
-    </div>
-  );
+const subscribeHash = (notify: () => void) => {
+  window.addEventListener("hashchange", notify);
+  return () => window.removeEventListener("hashchange", notify);
+};
+
+// Features is a section of the home page, so the link scrolls there once home shows.
+function showFeatures(event: ReactMouseEvent<HTMLAnchorElement>) {
+  const scroll = () =>
+    requestAnimationFrame(() =>
+      document.getElementById("demo-product-modes")?.scrollIntoView({
+        block: "start",
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+      }),
+    );
+  if (window.location.hash !== "#/") return window.addEventListener("hashchange", scroll, { once: true });
+  event.preventDefault();
+  scroll();
 }
 
-export function DemoSiteTry({ site }: { site: boolean }) {
+// The website part of the one shared bar. Website pages give it the whole bar; in the demo workspace the Engine
+// controls follow it, so its links wait for wide screens and the demo menu carries them.
+export function DemoSiteStart({ site }: { site: boolean }) {
   const { t } = useUiTranslation();
+  const hash = useSyncExternalStore(subscribeHash, () => window.location.hash);
+  const external = { target: "_blank", rel: "noreferrer" };
   return (
-    <a
-      href="#/demo"
-      data-testid="demo-site-try"
-      className={`ml-2 min-h-9 shrink-0 items-center rounded-full [@media(pointer:coarse)]:min-h-11 bg-[var(--primary)] px-3.5 text-xs font-semibold text-[var(--primary-foreground)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--marinara-app-accent-solid)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)] ${site ? "inline-flex" : "hidden"}`}
-    >
-      {t("demo.site.try")}
-    </a>
+    <div data-testid="demo-site-header" className={`flex min-w-0 items-center gap-1 ${site ? "flex-1" : "shrink-0"}`}>
+      <a
+        href="#/"
+        aria-label={t("demo.docs.home")}
+        className="flex shrink-0 items-center gap-2 rounded-md pr-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--marinara-app-accent-solid)]"
+      >
+        <img src={asset("logo.png")} alt="" width={32} height={32} className="h-7 w-7 object-contain" />
+        <MarinaraWordmark className={`text-sm ${site ? "block" : "hidden lg:block"}`} />
+      </a>
+      <DemoBanner site={site} />
+      <nav
+        aria-label={t("demo.site.navigation")}
+        className={`items-center gap-0.5 ${site ? "mx-auto hidden md:flex" : "ml-1 hidden xl:flex"}`}
+      >
+        <a href="#/" onClick={showFeatures} className={NAV_LINK}>
+          {t("demo.site.features")}
+        </a>
+        <a href="#/docs" aria-current={hash.startsWith("#/docs") ? "page" : undefined} className={NAV_LINK}>
+          {t("demo.site.docs")}
+        </a>
+        <a href="#/download" aria-current={hash === "#/download" ? "page" : undefined} className={NAV_LINK}>
+          {t("demo.site.download")}
+        </a>
+        <a href={GITHUB_URL} {...external} className={NAV_LINK}>
+          {t("demo.landing.community.github")}
+        </a>
+        <a
+          href={DISCORD_URL}
+          {...external}
+          aria-label={t("demo.landing.community.discord")}
+          title={t("demo.landing.community.discord")}
+          className="group inline-flex h-9 w-9 items-center justify-center rounded-md transition-colors [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:w-11 hover:bg-[var(--accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--marinara-app-accent-solid)]"
+        >
+          <img
+            src={asset("home/tab-icons/discord.svg")}
+            alt=""
+            className="h-4 w-4 opacity-60 transition-opacity group-hover:opacity-100 [[data-theme=light]_&]:invert"
+          />
+        </a>
+      </nav>
+      {site && (
+        <a
+          href="#/demo"
+          data-testid="demo-site-try"
+          className="ml-auto inline-flex h-9 shrink-0 items-center rounded-full bg-[var(--primary)] px-4 text-[0.8125rem] font-semibold text-[var(--primary-foreground)] transition-opacity [@media(pointer:coarse)]:h-11 hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--marinara-app-accent-solid)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)] md:ml-0"
+        >
+          {t("demo.site.try")}
+        </a>
+      )}
+      {!site && <span aria-hidden="true" className="ml-1 h-5 w-px bg-[var(--border)]" />}
+    </div>
   );
 }
 
@@ -168,7 +190,7 @@ export function DemoNavigation() {
   return null;
 }
 
-export function DemoBanner() {
+export function DemoBanner({ site }: { site: boolean }) {
   const { t } = useUiTranslation();
   const [lessonsOpen, setLessonsOpen] = useState(false);
   const [lesson, setLesson] = useState<LessonId | null>(null);
@@ -252,21 +274,30 @@ export function DemoBanner() {
 
   return (
     <>
-      <section data-testid="demo-banner" aria-label={t("demo.banner.label")} className="shrink-0">
+      <section
+        data-testid="demo-banner"
+        aria-label={t("demo.banner.label")}
+        className={`shrink-0 ${site ? "max-md:order-last" : ""}`}
+      >
         <button
           ref={lessonsButtonRef}
           type="button"
           data-testid="demo-tutorial"
           aria-label={t("demo.banner.badge", { version: APP_VERSION })}
+          title={t("demo.banner.badge", { version: APP_VERSION })}
           aria-expanded={lessonsOpen}
           aria-controls={lessonsOpen ? "demo-lessons" : undefined}
           onClick={() => setLessonsOpen((value) => !value)}
           onKeyDown={closeLessonsOnEscape}
-          className={`${BUTTON_CLASS} min-h-9! rounded-full! border [@media(pointer:coarse)]:min-h-11! border-[var(--border)] bg-[var(--card)] text-[var(--primary)]`}
+          className={`group inline-flex h-9 items-center justify-center rounded-md text-[var(--foreground)] [@media(pointer:coarse)]:h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--marinara-app-accent-solid)] ${site ? "w-9 hover:bg-[var(--accent)] [@media(pointer:coarse)]:w-11 md:w-auto md:px-1 md:hover:bg-transparent" : "px-1"}`}
         >
-          <GraduationCap aria-hidden="true" className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">{t("demo.banner.badge", { version: APP_VERSION })}</span>
-          <span className="sm:hidden">{t("demo.controls.short")}</span>
+          <span
+            className={`items-center gap-1 rounded-full border border-[var(--border)] px-2 py-0.5 text-[0.6875rem] font-medium leading-4 text-[var(--muted-foreground)] transition-colors group-hover:text-[var(--foreground)] group-aria-expanded:border-[color-mix(in_srgb,var(--primary)_50%,var(--border))] group-aria-expanded:text-[var(--foreground)] ${site ? "hidden md:inline-flex" : "inline-flex"}`}
+          >
+            {t("demo.controls.short")}
+            <span className="hidden tabular-nums opacity-70 lg:inline">v{APP_VERSION}</span>
+          </span>
+          {site && <Menu className="h-5 w-5 md:hidden" aria-hidden="true" />}
         </button>
       </section>
       {lessonsOpen &&
@@ -283,7 +314,7 @@ export function DemoBanner() {
                 setLessonsOpen(false);
             }}
             style={position}
-            className="mari-chrome-token-scope fixed z-[9990] flex max-h-[calc(100dvh-4rem)] w-64 max-w-[calc(100vw-1rem)] flex-col gap-0.5 overflow-y-auto rounded-xl border border-[var(--marinara-chat-chrome-panel-border)] bg-[var(--marinara-chat-chrome-panel-bg)] p-1 shadow-lg"
+            className="mari-chrome-token-scope fixed z-[9990] flex max-h-[calc(100dvh-4rem)] w-64 max-w-[calc(100vw-1rem)] flex-col gap-0.5 overflow-y-auto rounded-xl border border-[var(--marinara-chat-chrome-panel-border)] bg-[var(--marinara-chat-chrome-panel-bg)] p-1 shadow-lg backdrop-blur-xl"
           >
             <li className="px-3 py-2 text-xs text-[var(--muted-foreground)]">{t("demo.controls.info")}</li>
             {LESSON_IDS.map((id) => (
@@ -327,9 +358,25 @@ export function DemoBanner() {
               </a>
             </li>
             <li>
-              <a href={INSTALL_URL} data-testid="demo-install" className={`${BUTTON_CLASS} w-full justify-start`}>
+              <a href="#/download" data-testid="demo-download" className={`${BUTTON_CLASS} w-full justify-start`}>
                 <Download size={14} aria-hidden="true" />
-                {t("demo.banner.install")}
+                {t("demo.site.download")}
+              </a>
+            </li>
+            <li className={site ? "md:hidden" : "xl:hidden"}>
+              <a href={GITHUB_URL} target="_blank" rel="noreferrer" className={`${BUTTON_CLASS} w-full justify-start`}>
+                <GitBranch size={14} aria-hidden="true" />
+                {t("demo.landing.community.github")}
+              </a>
+            </li>
+            <li className={site ? "md:hidden" : "xl:hidden"}>
+              <a href={DISCORD_URL} target="_blank" rel="noreferrer" className={`${BUTTON_CLASS} w-full justify-start`}>
+                <img
+                  src={asset("home/tab-icons/discord.svg")}
+                  alt=""
+                  className="h-3.5 w-3.5 [[data-theme=light]_&]:invert"
+                />
+                {t("demo.landing.community.discord")}
               </a>
             </li>
             <li>

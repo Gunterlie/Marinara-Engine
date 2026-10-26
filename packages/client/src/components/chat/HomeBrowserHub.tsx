@@ -1610,7 +1610,13 @@ export function HomeBrowserHub({ pageActive, onOpenCredits, hideProfessor, websi
       className="mari-chrome-token-scope relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-[var(--background)]"
       data-component="HomeBrowserHub"
     >
-      <div className="flex h-full min-h-0 w-full flex-col overflow-hidden border border-[var(--border)]/75 bg-[var(--marinara-home-page-wash)] shadow-2xl shadow-black/25 sm:rounded-xl">
+      <div
+        className={cn(
+          "flex h-full min-h-0 w-full flex-col overflow-hidden bg-[var(--marinara-home-page-wash)]",
+          // The demo website page runs edge to edge under its own bar, without the browser frame.
+          !websiteContent && "border border-[var(--border)]/75 shadow-2xl shadow-black/25 sm:rounded-xl",
+        )}
+      >
         <header
           hidden={!!websiteContent}
           className="mari-home-browser-chrome relative z-40 shrink-0 border-b border-[var(--marinara-topbar-border)] bg-[var(--marinara-topbar-surface)] shadow-[0_8px_28px_-26px_rgba(0,0,0,0.8)] backdrop-blur-sm"
@@ -2061,7 +2067,7 @@ export function HomeBrowserHub({ pageActive, onOpenCredits, hideProfessor, websi
               }}
             />
           ) : websiteContent && activeTab === "home" ? (
-            <div className={HOME_PAGE_CLASS} data-component="HomeBrowserHub.HomePage">
+            <div className={cn(HOME_PAGE_CLASS, "[[data-demo-site]_&]:pt-12")} data-component="HomeBrowserHub.HomePage">
               <HomeStarfield />
               <div className="relative z-[1]">{websiteContent}</div>
             </div>
