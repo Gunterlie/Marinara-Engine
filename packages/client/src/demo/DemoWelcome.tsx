@@ -37,14 +37,17 @@ const MODEL_OPTIONS = [
 export function DemoDownload() {
   const { t } = useTranslation();
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-10 px-4 pb-12 pt-6 sm:px-8 sm:pt-10">
+    <div data-demo-page="" className="mx-auto flex w-full max-w-3xl flex-col gap-10 px-4 pb-20 pt-6 sm:px-8 sm:pt-16">
       <a href="#/" className={`${TEXT_LINK} text-[var(--muted-foreground)]`}>
         <ArrowLeft className="h-4 w-4" aria-hidden="true" />
         {t("demo.download.home")}
       </a>
 
       <section aria-labelledby="demo-download-title" className="flex flex-col gap-3">
-        <h1 id="demo-download-title" className="text-balance text-3xl font-bold text-[var(--foreground)]">
+        <h1
+          id="demo-download-title"
+          className="text-balance text-[2.125rem] font-bold leading-[1.08] tracking-tight text-[var(--foreground)] sm:text-5xl"
+        >
           {t("demo.download.title")}
         </h1>
         <p className="max-w-[60ch] text-pretty text-sm leading-relaxed text-[var(--muted-foreground)] sm:text-base">

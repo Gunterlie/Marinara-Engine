@@ -165,7 +165,8 @@ export function DemoFeatures({ category }: { category: string }) {
     <div
       ref={topRef}
       data-testid="demo-features"
-      className="mx-auto flex w-full max-w-6xl scroll-mt-12 flex-col gap-14 px-4 pb-20 pt-8 sm:px-8 sm:pt-14"
+      data-demo-page=""
+      className="mx-auto flex w-full max-w-[75rem] scroll-mt-12 flex-col gap-14 px-4 pb-20 pt-6 sm:px-8 sm:pt-16"
     >
       <header className="flex flex-col gap-4">
         <a href="#/" className={`${TEXT_LINK} text-[var(--muted-foreground)]`}>
@@ -173,7 +174,7 @@ export function DemoFeatures({ category }: { category: string }) {
           {t("demo.download.home")}
         </a>
         <span className={EYEBROW}>{t("demo.features.eyebrow", { count: FEATURE_COUNT })}</span>
-        <h1 className="text-balance text-4xl font-bold leading-[1.05] tracking-tight text-[var(--foreground)] sm:text-5xl">
+        <h1 className="text-balance text-[2.125rem] font-bold leading-[1.08] tracking-tight text-[var(--foreground)] sm:text-5xl">
           {t("demo.features.title")}
         </h1>
         <p className="max-w-[60ch] text-pretty text-base leading-relaxed text-[var(--muted-foreground)] sm:text-lg">
@@ -185,7 +186,7 @@ export function DemoFeatures({ category }: { category: string }) {
         <div
           role="group"
           aria-label={t("demo.features.filter")}
-          className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:thin]"
+          className="demo-fade-x flex gap-2 overflow-x-auto [scrollbar-width:none]"
         >
           {chip("all", t("demo.features.all"), LayoutGrid)}
           {FEATURE_CATEGORIES.map((item) =>

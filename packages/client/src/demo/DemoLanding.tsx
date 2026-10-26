@@ -28,7 +28,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { HOME_CHAT_MODE_ACCENTS } from "../lib/home-chat-mode-style";
 import { cn } from "../lib/utils";
-import { FeedModule, HOME_MODULE_ACCENTS } from "../components/chat/HomeBrowserHub";
+import { FeedModule, HOME_MODULE_ACCENTS, MarinaraWordmark } from "../components/chat/HomeBrowserHub";
 import { useMariAppearancePack } from "../hooks/use-mari-appearance-pack";
 import { DEMO_ASSETS } from "./seed";
 import { DemoFeatures } from "./DemoFeatures";
@@ -153,6 +153,43 @@ const PLATFORMS = [
   { key: "containers", icon: Boxes, href: "#/docs/installation/containers.md" },
 ] as const;
 
+// Footer columns: the same pages as the bar, grouped the way visitors look for them.
+const FOOTER = [
+  {
+    key: "product",
+    links: [
+      { label: "demo.site.features", href: "#/features" },
+      { label: "demo.site.download", href: "#/download" },
+      { label: "demo.site.try", href: "#/demo" },
+      { label: "demo.landing.guides.mari.title", href: "#/docs/home/professor-mari.md" },
+    ],
+  },
+  {
+    key: "docs",
+    links: [
+      { label: "demo.landing.footer.gettingStarted", href: "#/docs/home/welcome.md" },
+      { label: "demo.landing.footer.installation", href: docHref("INSTALLATION.md") },
+      { label: "demo.landing.footer.faq", href: docHref("FAQ.md") },
+      { label: "demo.landing.footer.troubleshooting", href: docHref("TROUBLESHOOTING.md") },
+    ],
+  },
+  {
+    key: "community",
+    links: [
+      { label: "demo.landing.community.github", href: GITHUB_URL },
+      { label: "demo.landing.community.discord", href: DISCORD_URL },
+      { label: "demo.landing.footer.issues", href: `${GITHUB_URL}/issues` },
+    ],
+  },
+  {
+    key: "legal",
+    links: [
+      { label: "demo.landing.footer.license", href: `${GITHUB_URL}/blob/main/LICENSE` },
+      { label: "demo.banner.source", href: GITHUB_URL },
+    ],
+  },
+] as const;
+
 const GUIDES = [
   { key: "start", href: "#/docs/home/welcome.md" },
   { key: "connect", href: "#/docs/connections/connecting-to-a-provider.md" },
@@ -182,6 +219,9 @@ export function DemoLanding() {
   const [mode, setMode] = useState<(typeof MODES)[number]["key"]>("roleplay");
   const active = MODES.find((item) => item.key === mode) ?? MODES[0];
   const stageRef = useRef<HTMLDivElement>(null);
+  const heroRef = useRef<HTMLElement>(null);
+  const ctaRef = useRef<HTMLElement>(null);
+  const [actionBar, setActionBar] = useState(false);
   const stepRefs = useRef<Record<string, HTMLLIElement | null>>({});
 
   // Pointer parallax for the hero stage: mouse only, never with reduced motion.
@@ -226,12 +266,24 @@ export function DemoLanding() {
     return () => observer.disconnect();
   }, [onFeatures]);
 
+  // Phones get a bottom action bar once the hero is gone, and lose it again at the closing call to action.
+  useEffect(() => {
+    if (onFeatures) return;
+    const inView = new Map<Element, boolean>();
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) inView.set(entry.target, entry.isIntersecting);
+      setActionBar(![...inView.values()].some(Boolean));
+    });
+    for (const node of [heroRef.current, ctaRef.current]) if (node) observer.observe(node);
+    return () => observer.disconnect();
+  }, [onFeatures]);
+
   if (onFeatures) {
     return <DemoFeatures category={new URLSearchParams(hash.split("?")[1] ?? "").get("c") ?? ""} />;
   }
 
   return (
-    <div data-testid="demo-product-home" className="relative isolate w-full overflow-x-clip">
+    <div data-testid="demo-product-home" data-demo-page="" className="relative isolate w-full overflow-x-clip">
       <div
         aria-hidden="true"
         className="demo-progress sticky top-0 z-20 h-0.5 bg-[var(--primary)] [[data-demo-site]_&]:top-12"
@@ -242,23 +294,24 @@ export function DemoLanding() {
         className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[56rem] [[data-demo-site]_&]:-top-12 bg-[radial-gradient(55%_45%_at_78%_18%,color-mix(in_srgb,var(--primary)_22%,transparent),transparent_70%),radial-gradient(40%_35%_at_8%_8%,color-mix(in_srgb,var(--primary)_10%,transparent),transparent_70%)]"
       />
 
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-20 px-4 pb-20 pt-10 sm:gap-24 sm:px-8 sm:pt-16">
+      <div className="mx-auto flex w-full max-w-[75rem] flex-col gap-20 px-4 pb-28 pt-6 sm:gap-24 sm:px-8 sm:pt-16 md:pb-20">
         {/* Hero: one promise, one action, and a scripted story playing beside it */}
         <section
+          ref={heroRef}
           aria-labelledby="demo-product-title"
           onPointerMove={tilt}
           onPointerLeave={() => {
             stageRef.current?.style.removeProperty("--px");
             stageRef.current?.style.removeProperty("--py");
           }}
-          className="grid items-center gap-12 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:gap-10"
+          className="grid grid-cols-[minmax(0,1fr)] items-center gap-8 sm:gap-12 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:gap-10"
         >
-          <div className="flex flex-col gap-7">
+          <div className="flex flex-col gap-5 sm:gap-7">
             <a
               href={GITHUB_URL}
               target="_blank"
               rel="noreferrer"
-              className="group inline-flex w-fit items-center gap-2.5 rounded-full border border-[color-mix(in_srgb,var(--primary)_35%,var(--border))] bg-[color-mix(in_srgb,var(--primary)_8%,transparent)] py-1 pl-1 pr-3 text-[0.8125rem] font-medium text-[var(--foreground)] transition-colors hover:border-[var(--primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--marinara-app-accent-solid)]"
+              className="group inline-flex w-fit items-center gap-2.5 rounded-full border max-sm:hidden border-[color-mix(in_srgb,var(--primary)_35%,var(--border))] bg-[color-mix(in_srgb,var(--primary)_8%,transparent)] py-1 pl-1 pr-3 text-[0.8125rem] font-medium text-[var(--foreground)] transition-colors hover:border-[var(--primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--marinara-app-accent-solid)]"
             >
               <span className="shrink-0 whitespace-nowrap rounded-full bg-[var(--primary)] px-2 py-0.5 text-[0.6875rem] font-semibold tracking-wide text-[var(--primary-foreground)]">
                 {t("demo.product.license")}
@@ -271,28 +324,33 @@ export function DemoLanding() {
             </a>
             <h1
               id="demo-product-title"
-              className="text-balance text-4xl font-bold leading-[1.05] tracking-tight text-[var(--foreground)] sm:text-5xl xl:text-6xl"
+              className="text-balance text-[2.125rem] font-bold leading-[1.08] tracking-tight text-[var(--foreground)] sm:text-5xl xl:text-[4rem]"
             >
               {t("demo.landing.title")}
             </h1>
             <p className="max-w-[52ch] text-pretty text-base leading-relaxed text-[var(--muted-foreground)] sm:text-lg">
-              {t("demo.landing.lede")}
+              <span className="sm:hidden">{t("demo.landing.ledeShort")}</span>
+              <span className="max-sm:hidden">{t("demo.landing.lede")}</span>
             </p>
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-6">
               <a href="#/demo" className={PRIMARY_BUTTON}>
                 <Play className="h-4 w-4" aria-hidden="true" />
                 {t("demo.site.try")}
               </a>
-              <a href="#/download" className={cn(TEXT_LINK, "self-center")}>
+              <a href="#/download" className={cn(TEXT_LINK, "self-center max-sm:hidden")}>
                 <Download className="h-4 w-4" aria-hidden="true" />
                 {t("demo.landing.install")}
               </a>
             </div>
-            <p className="text-xs text-[var(--muted-foreground)]">{t("demo.landing.heroNote")}</p>
+            <p className="text-xs text-[var(--muted-foreground)] max-sm:hidden">{t("demo.landing.heroNote")}</p>
           </div>
 
           {/* Stage: a scripted chat plays in the app frame, a real screen behind, Mari at the edge */}
-          <div ref={stageRef} className="demo-hero-stage relative pb-16 sm:pb-20 lg:pl-6">
+          <div ref={stageRef} className="demo-hero-stage relative pt-12 sm:pb-20 sm:pt-0 lg:pl-6">
+            <div
+              aria-hidden="true"
+              className="demo-hero-glow pointer-events-none absolute -inset-4 -z-10 sm:-inset-12"
+            />
             <img
               src={asset("website/Desktop_DM_Conversation.webp")}
               alt=""
@@ -322,7 +380,7 @@ export function DemoLanding() {
               <figcaption className="sr-only">{t("demo.landing.teaser.caption")}</figcaption>
             </figure>
             <div
-              className={`${PARALLAX} absolute bottom-0 left-0 flex items-end gap-2 [--depth:14px] sm:-left-4 lg:-left-2`}
+              className={`${PARALLAX} absolute bottom-0 left-0 flex items-end gap-2 [--depth:14px] max-sm:bottom-auto max-sm:left-auto max-sm:right-3 max-sm:top-0 max-sm:-z-10 sm:-left-4 lg:-left-2`}
             >
               <img
                 src={mari.poses.chibi}
@@ -332,17 +390,25 @@ export function DemoLanding() {
                 draggable={false}
                 className="h-24 w-auto select-none object-contain drop-shadow-[0_10px_18px_rgba(0,0,0,0.35)] sm:h-32"
               />
-              <p className="mb-6 max-w-[15rem] rounded-2xl rounded-bl-sm border border-[var(--border)] bg-[var(--card)] px-3.5 py-2.5 text-xs font-medium leading-snug text-[var(--card-foreground)] shadow-lg sm:mb-12 sm:text-sm">
+              <p className="mb-6 max-w-[15rem] max-sm:hidden rounded-2xl rounded-bl-sm border border-[var(--border)] bg-[var(--card)] px-3.5 py-2.5 text-xs font-medium leading-snug text-[var(--card-foreground)] shadow-lg sm:mb-12 sm:text-sm">
                 {t("demo.product.mariHello")}
               </p>
             </div>
+          </div>
+          {/* Phones: the product shows first, then the second way in. */}
+          <div className="flex flex-col items-center gap-3 sm:hidden">
+            <a href="#/download" className={TEXT_LINK}>
+              <Download className="h-4 w-4" aria-hidden="true" />
+              {t("demo.landing.install")}
+            </a>
+            <p className="text-center text-xs text-[var(--muted-foreground)]">{t("demo.landing.heroNote")}</p>
           </div>
         </section>
 
         {/* Proof: four true facts, each links to where you can check it */}
         <ul
           aria-label={t("demo.landing.proof.label")}
-          className="-mt-10 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--border)] sm:-mt-14 lg:grid-cols-4"
+          className="-mt-10 grid gap-px sm:grid-cols-2 overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--border)] sm:-mt-14 lg:grid-cols-4"
         >
           {PROOF.map((item) => {
             const Icon = item.icon;
@@ -482,7 +548,7 @@ export function DemoLanding() {
               {t("demo.landing.stories.body")}
             </p>
           </div>
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="demo-rail grid gap-4 lg:grid-cols-2">
             {STORIES.map((story) => (
               <FeedModule
                 key={story.key}
@@ -529,7 +595,7 @@ export function DemoLanding() {
               {t("demo.landing.features.all", { count: FEATURE_COUNT })}
             </a>
           </div>
-          <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <ul className="demo-rail grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {FEATURE_CATEGORIES.map((category) => {
               const Icon = category.icon;
               return (
@@ -781,6 +847,7 @@ export function DemoLanding() {
 
         {/* Final call to action, closing like the Home hero */}
         <section
+          ref={ctaRef}
           aria-labelledby="demo-product-cta"
           className="relative flex flex-col items-center gap-5 overflow-hidden rounded-3xl border border-[color-mix(in_srgb,var(--primary)_30%,var(--border))] bg-[radial-gradient(60%_80%_at_50%_0%,color-mix(in_srgb,var(--primary)_18%,transparent),transparent_70%),var(--card)] px-5 py-10 text-center sm:py-14"
         >
@@ -810,38 +877,54 @@ export function DemoLanding() {
           </div>
         </section>
 
-        <footer className="flex flex-col gap-4 border-t border-[var(--border)] pt-8 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <img src={asset("logo.png")} alt="" width={32} height={32} className="h-8 w-8 rounded-lg" />
-            <div className="flex flex-col">
-              <span className="text-sm font-semibold text-[var(--foreground)]">
-                {t("demo.landing.community.title")}
-              </span>
-              <span className="text-xs text-[var(--muted-foreground)]">{t("demo.landing.community.body")}</span>
-            </div>
+        <footer className="grid grid-cols-2 gap-x-6 gap-y-8 border-t border-[var(--border)] pt-10 lg:grid-cols-[minmax(0,1.5fr)_repeat(4,minmax(0,1fr))]">
+          <div className="col-span-2 flex flex-col gap-3 lg:col-span-1">
+            <a href="#/" className={`flex w-fit items-center gap-2 rounded-md ${FOCUS}`}>
+              <img src={asset("logo.png")} alt="" width={32} height={32} className="h-8 w-8 object-contain" />
+              <MarinaraWordmark className="text-base" />
+            </a>
+            <p className="max-w-[34ch] text-sm leading-relaxed text-[var(--muted-foreground)]">
+              {t("demo.landing.footer.tagline")}
+            </p>
           </div>
-          <nav aria-label={t("demo.landing.community.title")} className="flex flex-wrap gap-2">
-            <a href="#/features" className={SECONDARY_BUTTON}>
-              <LayoutGrid className="h-4 w-4" aria-hidden="true" />
-              {t("demo.site.features")}
-            </a>
-            <a href="#/docs" className={SECONDARY_BUTTON}>
-              <BookOpen className="h-4 w-4" aria-hidden="true" />
-              {t("demo.landing.readDocs")}
-            </a>
-            {(
-              [
-                { key: "github", href: GITHUB_URL },
-                { key: "discord", href: DISCORD_URL },
-              ] as const
-            ).map((link) => (
-              <a key={link.key} href={link.href} {...external(link.href)} className={SECONDARY_BUTTON}>
-                {t(`demo.landing.community.${link.key}`)}
-                <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-              </a>
-            ))}
-          </nav>
+          {FOOTER.map((column) => (
+            <nav key={column.key} aria-labelledby={`demo-footer-${column.key}`} className="flex flex-col gap-1">
+              <h2 id={`demo-footer-${column.key}`} className={EYEBROW}>
+                {t(`demo.landing.footer.${column.key}`)}
+              </h2>
+              <ul className="flex flex-col">
+                {column.links.map((link) => (
+                  <li key={link.label}>
+                    <a
+                      href={link.href}
+                      {...external(link.href)}
+                      className={`inline-flex min-h-11 items-center text-sm text-[var(--foreground)] transition-colors hover:text-[var(--primary)] ${FOCUS}`}
+                    >
+                      {t(link.label)}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </nav>
+          ))}
         </footer>
+      </div>
+
+      <div
+        role="region"
+        aria-label={t("demo.landing.actions")}
+        data-visible={actionBar ? "" : undefined}
+        inert={!actionBar}
+        className="demo-action-bar fixed inset-x-0 bottom-0 z-30 flex gap-2 border-t border-[var(--border)] bg-[color-mix(in_srgb,var(--background)_88%,transparent)] px-4 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-3 backdrop-blur-xl md:hidden"
+      >
+        <a href="#/demo" className={cn(PRIMARY_BUTTON, "flex-1 px-3")}>
+          <Play className="h-4 w-4" aria-hidden="true" />
+          {t("demo.site.try")}
+        </a>
+        <a href="#/download" className={cn(SECONDARY_BUTTON, "flex-1 px-3")}>
+          <Download className="h-4 w-4" aria-hidden="true" />
+          {t("demo.landing.install")}
+        </a>
       </div>
     </div>
   );

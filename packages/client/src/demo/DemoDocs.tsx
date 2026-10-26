@@ -582,7 +582,7 @@ export function DemoDocs({ path, section }: { path: string; section: string }) {
         </nav>
       </dialog>
 
-      <div className="mx-auto max-w-7xl px-4 pb-16 pt-5 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-[75rem] px-4 pb-16 pt-6 sm:px-8">
         {!path ? (
           <>
             <header className="relative flex flex-col gap-6 overflow-hidden rounded-3xl border border-[var(--border)] bg-[radial-gradient(70%_90%_at_10%_0%,color-mix(in_srgb,var(--primary)_16%,transparent),transparent_70%),var(--card)] p-6 sm:p-10">
