@@ -177,7 +177,7 @@ export function DemoLanding() {
             </p>
             <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
               <a href="#/download" className={PRIMARY_BUTTON}>
-                <Download className="h-4 w-4" aria-hidden="true" />
+                <Download className="mari-rgb-static-icon h-4 w-4" aria-hidden="true" />
                 {t("demo.landing.install")}
               </a>
               <a href="#/demo" className={SECONDARY_BUTTON}>
@@ -269,7 +269,7 @@ export function DemoLanding() {
                     <span className="text-sm font-semibold text-[var(--foreground)]">
                       {t(`demo.landing.modes.${item.key}.eyebrow`)}
                     </span>
-                    <span className="truncate text-xs text-[var(--muted-foreground)]">
+                    <span className="text-xs text-[var(--muted-foreground)]">
                       {t(`demo.product.modes.${item.key}.tagline`)}
                     </span>
                   </span>
@@ -489,7 +489,7 @@ export function DemoLanding() {
                       <span className="text-sm font-semibold text-[var(--foreground)]">
                         {t(`demo.landing.guides.${guide.key}.title`)}
                       </span>
-                      <span className="truncate text-xs text-[var(--muted-foreground)]">
+                      <span className="text-xs text-[var(--muted-foreground)]">
                         {t(`demo.landing.guides.${guide.key}.body`)}
                       </span>
                     </span>
@@ -547,7 +547,7 @@ export function DemoLanding() {
               </p>
             </div>
             <a href="#/download" className={`${PRIMARY_BUTTON} shrink-0`}>
-              <Download className="h-4 w-4" aria-hidden="true" />
+              <Download className="mari-rgb-static-icon h-4 w-4" aria-hidden="true" />
               {t("demo.landing.install")}
             </a>
           </div>
@@ -596,7 +596,7 @@ export function DemoLanding() {
           </p>
           <div className="flex flex-col gap-3 sm:flex-row">
             <a href="#/download" className={PRIMARY_BUTTON}>
-              <Download className="h-4 w-4" aria-hidden="true" />
+              <Download className="mari-rgb-static-icon h-4 w-4" aria-hidden="true" />
               {t("demo.landing.install")}
             </a>
             <a href="#/demo" className={SECONDARY_BUTTON}>

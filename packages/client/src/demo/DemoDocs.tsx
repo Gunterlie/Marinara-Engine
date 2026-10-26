@@ -41,7 +41,7 @@ function SearchBox({ value, onChange }: { value: string; onChange: (value: strin
       <div className="relative">
         <Search
           size={16}
-          className="pointer-events-none absolute start-3 top-3.5 text-[var(--muted-foreground)]"
+          className="pointer-events-none absolute left-3 top-3.5 text-[var(--muted-foreground)]"
           aria-hidden="true"
         />
         <input
@@ -383,7 +383,7 @@ export function DemoDocs({ path, section }: { path: string; section: string }) {
                     key={`${doc.data.path}:${doc.data.updatedAt}`}
                     ref={setReader}
                     data-testid="demo-doc-article"
-                    className="mari-message-content docs-reader-content mx-auto max-w-[72ch] break-words text-[0.9375rem] leading-relaxed [&_pre]:whitespace-pre-wrap [&_pre]:break-words [&_.mari-md-codeblock]:whitespace-pre-wrap [&_.mari-md-codeblock]:[overflow-wrap:anywhere] [&_.mari-md-codeblock]:pb-12 [&_.mari-md-heading]:scroll-mt-6 [&_[tabindex='-1']:focus]:outline-none"
+                    className="mari-message-content docs-reader-content mx-auto max-w-[72ch] break-words text-[0.9375rem] leading-relaxed [&_pre]:whitespace-pre-wrap [&_pre]:break-words [&_.mari-md-codeblock]:whitespace-pre-wrap [&_.mari-md-codeblock]:[overflow-wrap:anywhere] [&_.mari-md-codeblock]:pb-12 [&_.mari-md-heading]:scroll-mt-6 [&_h2.mari-md-heading]:mt-8! [&_h2.mari-md-heading]:mb-2! [&_h3.mari-md-heading]:mt-6! [&_h3.mari-md-heading]:mb-1! [&_a]:text-[var(--primary)]! [&_th]:text-[var(--foreground)]! [&_[tabindex='-1']:focus]:outline-none"
                     onClick={(event) => {
                       const anchor = (event.target as HTMLElement).closest<HTMLAnchorElement>('a[href^="#/docs"]');
                       if (

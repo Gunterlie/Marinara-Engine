@@ -50,8 +50,8 @@ export function DemoDownload() {
         </h2>
         <ul className="divide-y divide-[var(--border)] overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--card)]">
           {PLATFORMS.map((platform) => (
-            <li key={platform.key} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3">
-              <div className="min-w-0 flex-1">
+            <li key={platform.key} className="flex flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3">
+              <div className="min-w-0 flex-1 basis-64">
                 <p className="text-sm font-semibold text-[var(--card-foreground)]">
                   {t(`demo.landing.platforms.${platform.key}`)}
                 </p>
@@ -62,7 +62,7 @@ export function DemoDownload() {
               <div className="flex flex-wrap gap-2">
                 {platform.key === "android" && (
                   <a href={APK_URL} className={PRIMARY}>
-                    <Download className="h-4 w-4" aria-hidden="true" />
+                    <Download className="mari-rgb-static-icon h-4 w-4" aria-hidden="true" />
                     {t("demo.download.apk")}
                   </a>
                 )}

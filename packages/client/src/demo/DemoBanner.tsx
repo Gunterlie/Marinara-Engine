@@ -134,7 +134,7 @@ export function DemoSiteStart({ site }: { site: boolean }) {
         {link("#/download", <Download className="h-4 w-4" aria-hidden="true" />, t("demo.site.download"))}
         {link(
           DISCORD_URL,
-          <img src={asset("home/tab-icons/discord.svg")} alt="" className="h-4 w-4" />,
+          <img src={asset("home/tab-icons/discord.svg")} alt="" className="h-4 w-4 [[data-theme=light]_&]:invert" />,
           t("demo.landing.community.discord"),
           "max-lg:hidden",
         )}
@@ -156,7 +156,7 @@ export function DemoSiteTry({ site }: { site: boolean }) {
     <a
       href="#/demo"
       data-testid="demo-site-try"
-      className={`ml-2 min-h-11 shrink-0 items-center rounded-full bg-[var(--primary)] px-3.5 text-xs font-semibold text-[var(--primary-foreground)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--marinara-app-accent-solid)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)] ${site ? "inline-flex" : "hidden lg:inline-flex"}`}
+      className={`ml-2 min-h-9 shrink-0 items-center rounded-full [@media(pointer:coarse)]:min-h-11 bg-[var(--primary)] px-3.5 text-xs font-semibold text-[var(--primary-foreground)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--marinara-app-accent-solid)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)] ${site ? "inline-flex" : "hidden"}`}
     >
       {t("demo.site.try")}
     </a>
@@ -262,7 +262,7 @@ export function DemoBanner() {
           aria-controls={lessonsOpen ? "demo-lessons" : undefined}
           onClick={() => setLessonsOpen((value) => !value)}
           onKeyDown={closeLessonsOnEscape}
-          className={`${BUTTON_CLASS} min-h-11 rounded-full border border-[var(--border)] bg-[var(--card)] text-[var(--primary)]`}
+          className={`${BUTTON_CLASS} min-h-9! rounded-full! border [@media(pointer:coarse)]:min-h-11! border-[var(--border)] bg-[var(--card)] text-[var(--primary)]`}
         >
           <GraduationCap aria-hidden="true" className="h-3.5 w-3.5" />
           <span className="hidden sm:inline">{t("demo.banner.badge", { version: APP_VERSION })}</span>
