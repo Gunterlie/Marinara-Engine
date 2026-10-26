@@ -25,9 +25,26 @@ const SCENARIOS: { match: RegExp; reply: string }[] = [
   },
 ];
 
+const HARBOR = new URL(DEMO_ASSETS.harbor, window.location.href).href;
+
 // Per-character replies, tried before the Iris ones. Each points at a feature the demo shows.
 const BY_CHARACTER: Record<string, { match: RegExp; reply: string }[]> = {
   "demo-character-mira": [
+    {
+      match: /\b(?:crew|who'?s on)\b/i,
+      reply:
+        "Me, Vale and K-7. This is a group chat, so everyone here gets a turn, and you can mute or nudge anyone from the chat header. (Scripted.)",
+    },
+    {
+      match: /\broll call\b/i,
+      reply:
+        "*Mira:* here. *Vale:* here, and hydrated. *K-7:* PRESENT. In a real group chat each of us answers in our own voice. (Scripted.)",
+    },
+    {
+      match: /\bjoke\b/i,
+      reply:
+        'K-7 tried one: "Why did the robot cross the deck? It was programmed to." We are still recovering. Running jokes like this can live in a character\'s lorebook. (Scripted.)',
+    },
     {
       match: /\b(?:agent|help|track)/i,
       reply:
@@ -87,6 +104,105 @@ const BY_CHARACTER: Record<string, { match: RegExp; reply: string }[]> = {
         "*The dice clatter: 13 + 3 = 16.* Success. You spot a loose stone in the wall, and behind it a rusted key. In a real game the roll is random and the game master reacts to it. (Scripted roll.)",
     },
   ],
+  "demo-character-vale": [
+    {
+      match: /\b(?:schedule|today|shift)\b/i,
+      reply:
+        "Clinic until six, then a long walk around the ring. In conversation mode every character has a daily schedule, so I might be busy when you text. (Scripted.)",
+    },
+    {
+      match: /\b(?:sleep|tired)\b/i,
+      reply:
+        "Then put the screen down soon. Doctor's orders. Characters can also message you first, so I'll check in tomorrow. (Scripted.)",
+    },
+    {
+      match: /\b(?:remember|allerg\w*)\b/i,
+      reply:
+        "Noted: no peanuts. In your Engine, memory and lorebook entries carry facts like this into later chats. (Scripted.)",
+    },
+  ],
+  "demo-character-juniper": [
+    {
+      match: /\busual\b/i,
+      reply:
+        "*Juniper starts your oat latte before you finish.* Extra cinnamon, like last time. I remember because the chat keeps its history. (Scripted.)",
+    },
+    {
+      match: /\b(?:menu|new)\b/i,
+      reply:
+        "Cinnamon knots, and a pear tart if you're quick. Everything I know about this place comes from my character card, so I never mix it up. (Scripted.)",
+    },
+    {
+      match: /\b(?:caf[eé]|show|picture|photo)\b/i,
+      reply: `*She points out the window.* Best view in Saltmere. Characters can share pictures in chat. (Scripted.)\n\n![The harbor from the café window](${HARBOR})`,
+    },
+  ],
+  "demo-character-k7": [
+    {
+      match: /\bjoke\b/i,
+      reply: "WHY DID THE ROBOT GO ON VACATION? TO RECHARGE. *K-7's lights blink proudly.* (Scripted.)",
+    },
+    {
+      match: /\b(?:working|doing|up to)\b/i,
+      reply:
+        "REPAIRING LIGHT 14. I HAVE NAMED IT GERALD. My character card says I name things, so I always will. (Scripted.)",
+    },
+    {
+      match: /\bdream\w*\b/i,
+      reply: "I DREAM OF FRESHLY OILED HINGES. Edit my character card and you change how I talk. (Scripted.)",
+    },
+  ],
+  "demo-character-tamsin": [
+    {
+      match: /\b(?:song|play|sing)\b/i,
+      reply:
+        "*Tamsin strikes a chord and the whole tavern stamps along.* In roleplay, a music agent can pick tracks to fit the scene. (Scripted.)",
+    },
+    {
+      match: /\b(?:orsolo|story)\b/i,
+      reply:
+        "*Orsolo is already on his feet, telling the one about the giant squid.* Two characters, one scene: each speaks in their own voice. (Scripted.)",
+    },
+    {
+      match: /\b(?:salt rat|tavern)\b/i,
+      reply:
+        "Low beams, loud songs and a cat that steals fish. That's the Saltmere Harbor lorebook: say 'tavern' and the entry joins the prompt. (Scripted.)",
+    },
+  ],
+  "demo-character-seraphine": [
+    {
+      match: /\b(?:silver|ashcombe)\b/i,
+      reply:
+        "Lord Ashcombe. He owes money to half the court. *She smiles.* The Hollowmere Court lorebook makes sure I never forget it. (Scripted.)",
+    },
+    {
+      match: /\bdance\b/i,
+      reply:
+        "*She takes your hand and leads you onto the floor.* Roleplay chats can set the mood with a background and sprites. (Scripted.)",
+    },
+    {
+      match: /\bmask\b/i,
+      reply:
+        "Before midnight? How rude. *She laughs.* A lorebook entry for 'mask' tells me the court's rules. (Scripted.)",
+    },
+  ],
+  "demo-character-rook": [
+    {
+      match: /\b(?:know|clues?|case)\b/i,
+      reply:
+        "Clock stopped at 3:12. Caretaker inside. A red umbrella near every scene. The Rain City Case Files lorebook keeps the clues straight. (Scripted.)",
+    },
+    {
+      match: /\b(?:clock|tower)\b/i,
+      reply:
+        "*Rook shines his torch on the gears.* Someone jammed them with a key. Clues like this wake up when a keyword shows up in the chat. (Scripted.)",
+    },
+    {
+      match: /\bumbrella\b/i,
+      reply:
+        "That's the question. *He turns up his collar.* With a real model, the twist is yours to find. (Scripted.)",
+    },
+  ],
 };
 
 /** Suggested messages per example chat. Each one reaches a different scripted reply above. */
@@ -104,6 +220,25 @@ export const DEMO_PROMPTS: Record<string, { tip: string; prompts: string[] }> = 
     prompts: ["Tell me about your ship.", "Show me your sprite.", "What is in the lorebook?"],
   },
   "demo-chat-kestrel": { tip: "game", prompts: ["Take the stairs down.", "Cross the bridge.", "Roll for perception."] },
+  "demo-chat-crew": { tip: "crew", prompts: ["Who's on the crew?", "Everyone, roll call!", "Ask K-7 for a joke."] },
+  "demo-chat-vale": {
+    tip: "schedules",
+    prompts: ["What's your schedule today?", "I can't sleep.", "Remember my allergy: peanuts."],
+  },
+  "demo-chat-juniper": { tip: "cafe", prompts: ["The usual, please.", "What's new on the menu?", "Show me the café."] },
+  "demo-chat-k7": { tip: "robot", prompts: ["Tell me a joke.", "What are you working on?", "Do you dream?"] },
+  "demo-chat-tavern": {
+    tip: "tavern",
+    prompts: ["Play us a song!", "Orsolo, tell us a story.", "What's the Salt Rat like?"],
+  },
+  "demo-chat-seraphine": {
+    tip: "court",
+    prompts: ["Who is the man in silver?", "Shall we dance?", "Take off your mask."],
+  },
+  "demo-chat-rook": {
+    tip: "noir",
+    prompts: ["What do we know?", "Check the clock tower.", "Who has the red umbrella?"],
+  },
 };
 
 export function pickDemoReply(userText: string, characterId?: string | null): string {

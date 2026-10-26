@@ -1,4 +1,6 @@
 // Immutable example content. The runtime deep-copies it into per-tab memory.
+import { DEFAULT_GENERATION_PARAMS } from "@marinara-engine/shared";
+
 export const DEMO_SEED_IDS = {
   characterId: "demo-character-iris",
   chatId: "demo-chat-iris",
@@ -205,10 +207,9 @@ export function createSeed() {
   ];
   const settings: Record<string, string> = {};
   // More example content, built from the Iris rows so every field keeps the same shape.
-  // Times count back from the current hour, so the lists look recent.
-  // ponytail: hour-rounded so two tabs seed the same rows; a tab opened across the hour sees times shifted by one hour.
-  const hour = Math.floor(Date.now() / 3_600_000) * 3_600_000;
-  const ago = (minutes: number) => new Date(hour - minutes * 60_000).toISOString();
+  // Counting back from today's UTC midnight keeps every tab in sync and the chats recent.
+  const midnight = Math.floor(Date.now() / 86_400_000) * 86_400_000;
+  const ago = (minutes: number) => new Date(midnight - minutes * 60_000).toISOString();
   const extra = [
     [
       "demo-character-mira",
@@ -623,8 +624,100 @@ export function createSeed() {
       treatAsLocalEndpoint: true,
     },
   ];
+  // Example prompt presets: each prompt is a list of sections, some written text, some markers the Engine fills in.
+  const presetList: [string, string, string, [string, string, string][]][] = [
+    [
+      "demo-preset-storyteller",
+      "Storyteller",
+      "Rich roleplay with scene detail. The default for these demo chats.",
+      [
+        [
+          "main",
+          "Main prompt",
+          "You are {{char}}. Stay in character, write in third person and keep each reply to a few paragraphs.",
+        ],
+        ["character", "Character card", ""],
+        ["lorebook", "Lorebook entries", ""],
+        ["persona", "Your persona", ""],
+        ["style", "Style", "Show feelings through actions. End each reply with something {{user}} can react to."],
+        ["chat_history", "Chat history", ""],
+      ],
+    ],
+    [
+      "demo-preset-texting",
+      "Texting buddy",
+      "Short, casual messages for conversation mode.",
+      [
+        [
+          "main",
+          "Main prompt",
+          "You are {{char}}, texting {{user}}. Keep it short and casual, like a real chat. No narration.",
+        ],
+        ["character", "Character card", ""],
+        ["persona", "Your persona", ""],
+        ["chat_history", "Chat history", ""],
+      ],
+    ],
+    [
+      "demo-preset-gm",
+      "Game master",
+      "Runs scenes, rolls and choices for game mode.",
+      [
+        [
+          "main",
+          "Main prompt",
+          "You are the game master. Describe the scene, ask what {{user}} does and call for a roll when luck matters.",
+        ],
+        ["lorebook", "Lorebook entries", ""],
+        ["rules", "House rules", "Rolls use a d20. 10 or more succeeds. Never decide what {{user}} does."],
+        ["chat_history", "Chat history", ""],
+      ],
+    ],
+  ];
+  const markers = ["character", "lorebook", "persona", "chat_history"];
+  const promptSections = presetList.flatMap(([presetId, , , sections]) =>
+    sections.map(([identifier, name, content]) => ({
+      id: `${presetId}-${identifier}`,
+      presetId,
+      identifier,
+      name,
+      content,
+      role: "system",
+      enabled: true,
+      isMarker: markers.includes(identifier),
+      groupId: null,
+      markerConfig: markers.includes(identifier) ? { type: identifier } : null,
+      injectionPosition: "ordered",
+      injectionDepth: 0,
+      injectionOrder: 100,
+      forbidOverrides: false,
+      skipWrap: false,
+    })),
+  );
+  const presets = presetList.map(([id, name, description, sections], i) => ({
+    id,
+    name,
+    description,
+    imagePath: null,
+    conversationPrompt: "",
+    gamePrompt: "",
+    sectionOrder: sections.map(([identifier]) => `${id}-${identifier}`),
+    groupOrder: [],
+    variableGroups: [],
+    variableValues: {},
+    parameters: DEFAULT_GENERATION_PARAMS,
+    wrapFormat: "xml",
+    defaultChoices: {},
+    isDefault: i === 0,
+    author: "Marinara Engine",
+    systemKey: "",
+    createdAt: NOW,
+    updatedAt: NOW,
+  }));
   return {
     settings,
+    presets,
+    promptSections,
     connections: [...connections, ...extraConnections],
     characters: [...characters, ...extraChars],
     personas: [...personas, ...extraPersonas],

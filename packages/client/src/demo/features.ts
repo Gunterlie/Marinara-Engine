@@ -15,7 +15,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-export type FeatureItem = { key: string; doc: string; section?: string; highlight?: boolean; demo?: boolean };
+export type FeatureItem = { key: string; doc: string; section?: string; highlight?: boolean; demo?: string };
 export type FeatureCategory = {
   key: string;
   icon: LucideIcon;
@@ -38,10 +38,15 @@ export const FEATURE_CATEGORIES: FeatureCategory[] = [
     accent: ROLEPLAY,
     image: { src: "website/Desktop_Roleplay_View.webp", width: 1600, height: 900 },
     items: [
-      { key: "roleplay", doc: "roleplay/getting-started.md", highlight: true, demo: true },
-      { key: "conversation", doc: "conversation/getting-started.md", highlight: true, demo: true },
-      { key: "game", doc: "game/getting-started.md", highlight: true },
-      { key: "groupChats", doc: "chats/group-chats.md" },
+      { key: "roleplay", doc: "roleplay/getting-started.md", highlight: true, demo: "#/demo" },
+      {
+        key: "conversation",
+        doc: "conversation/getting-started.md",
+        highlight: true,
+        demo: "#/demo?chat=demo-chat-juniper",
+      },
+      { key: "game", doc: "game/getting-started.md", highlight: true, demo: "#/demo?chat=demo-chat-kestrel" },
+      { key: "groupChats", doc: "chats/group-chats.md", demo: "#/demo?chat=demo-chat-crew" },
       { key: "branches", doc: "chats/branches.md" },
       { key: "connectedChats", doc: "chats/connected-chats.md" },
       { key: "scenes", doc: "roleplay/scenes.md" },
@@ -58,7 +63,7 @@ export const FEATURE_CATEGORIES: FeatureCategory[] = [
       { key: "cards", doc: "characters/creating-and-editing-characters.md", highlight: true },
       { key: "cardBrowser", doc: "characters/bot-browser.md", highlight: true },
       { key: "sprites", doc: "characters/sprites.md", highlight: true },
-      { key: "personas", doc: "characters/personas.md" },
+      { key: "personas", doc: "characters/personas.md", demo: "#/demo?panel=personas" },
       { key: "importCards", doc: "characters/import-export.md" },
       { key: "galleries", doc: "characters/galleries.md" },
       { key: "animatedExpressions", doc: "media/animated-expressions.md" },
@@ -73,7 +78,12 @@ export const FEATURE_CATEGORIES: FeatureCategory[] = [
     accent: CYAN,
     image: { src: "website/Desktop_Tracker_Panel.webp", width: 1600, height: 900 },
     items: [
-      { key: "lorebooks", doc: "lorebooks/overview.md", highlight: true, demo: true },
+      {
+        key: "lorebooks",
+        doc: "lorebooks/overview.md",
+        highlight: true,
+        demo: "#/demo?chat=demo-chat-rook&panel=lorebooks",
+      },
       { key: "memory", doc: "agents/memory.md", highlight: true },
       { key: "trackers", doc: "roleplay/hud-and-trackers.md", highlight: true },
       { key: "semanticSearch", doc: "lorebooks/semantic-search.md" },
@@ -138,7 +148,7 @@ export const FEATURE_CATEGORIES: FeatureCategory[] = [
     accent: ROLEPLAY,
     items: [
       { key: "mari", doc: "home/professor-mari.md", highlight: true },
-      { key: "agents", doc: "agents/agents-overview.md", highlight: true },
+      { key: "agents", doc: "agents/agents-overview.md", highlight: true, demo: "#/demo?panel=agents" },
       { key: "customAgents", doc: "agents/custom-agents.md", highlight: true },
       { key: "catalog", doc: "agents/built-in-agents.md" },
       { key: "approvals", doc: "agents/approvals-and-agent-suite.md" },
@@ -151,7 +161,7 @@ export const FEATURE_CATEGORIES: FeatureCategory[] = [
     icon: Sparkles,
     accent: CYAN,
     items: [
-      { key: "presets", doc: "prompts/presets.md", highlight: true },
+      { key: "presets", doc: "prompts/presets.md", highlight: true, demo: "#/demo?panel=presets" },
       { key: "peekPrompt", doc: "chats/peek-prompt.md", highlight: true },
       { key: "macros", doc: "prompts/macros.md", highlight: true },
       { key: "conditionals", doc: "prompts/conditional-prompts.md" },

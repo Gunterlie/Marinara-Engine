@@ -61,6 +61,7 @@ import {
   useRef,
   useCallback,
   useMemo,
+  useSyncExternalStore,
   type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
@@ -234,6 +235,11 @@ function SidePanelFallback() {
   );
 }
 
+const subscribeHashChange = (notify: () => void) => {
+  window.addEventListener("hashchange", notify);
+  return () => window.removeEventListener("hashchange", notify);
+};
+
 export function AppShell({
   chatWindowIntroAllowed = false,
   onChatWindowIntroOpenChange,
@@ -400,7 +406,12 @@ export function AppShell({
     (s) => import.meta.env.VITE_MARINARA_DEMO === "1" && !s.hasAnyDetailOpen() && !s.rightPanelOpen,
   );
   const demoNoChat = useChatStore((s) => !s.activeChatId);
-  const demoSite = demoNoWorkspace && demoNoChat;
+  // #/home is the Engine's own Home screen, so it keeps the workspace bar.
+  const demoEngineHome = useSyncExternalStore(
+    subscribeHashChange,
+    () => import.meta.env.VITE_MARINARA_DEMO === "1" && window.location.hash === "#/home",
+  );
+  const demoSite = demoNoWorkspace && demoNoChat && !demoEngineHome;
   const sidebarOpen = useUIStore(selectSidebarShown) && !demoSite;
   const setSidebarOpen = useUIStore((s) => s.setSidebarOpen);
   const sidebarWidth = useUIStore((s) => s.sidebarWidth);

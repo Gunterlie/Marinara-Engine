@@ -27,15 +27,23 @@ export function useDemoNavigation() {
       ui.closeRightPanel();
       if (firstRoute || isMobileShellViewport()) ui.setSidebarOpen(false);
       firstRoute = false;
-      useChatStore.getState().setActiveChatId(hash === "#/demo" ? DEMO_SEED_IDS.chatId : null);
+      // Feature links deep-link with #/demo?chat=<id> or #/demo?panel=<panel>.
+      const [route, query] = hash.split("?");
+      const params = new URLSearchParams(query);
+      useChatStore.getState().setActiveChatId(route === "#/demo" ? (params.get("chat") ?? DEMO_SEED_IDS.chatId) : null);
+      const panel = params.get("panel");
+      if (route === "#/demo" && panel) ui.openRightPanel(panel as Parameters<typeof ui.openRightPanel>[0]);
     };
     followRoute();
     window.addEventListener("hashchange", followRoute);
     const unsubscribe = useChatStore.subscribe((state, previous) => {
       if (state.activeChatId === previous.activeChatId) return;
       const hash = state.activeChatId ? "#/demo" : "#/";
-      if (hash !== window.location.hash && (state.activeChatId || window.location.hash === "#/demo")) {
-        window.history.pushState(window.history.state, "", window.location.pathname + window.location.search + hash);
+      const current = window.location.hash;
+      if (hash !== current && (state.activeChatId || current.startsWith("#/demo"))) {
+        // A deep link becomes plain #/demo in place, so Back does not reopen it.
+        const swap = state.activeChatId && current.startsWith("#/demo?") ? "replaceState" : "pushState";
+        window.history[swap](window.history.state, "", window.location.pathname + window.location.search + hash);
       }
     });
     const unsubscribeDocs = useUIStore.subscribe((state, previous) => {

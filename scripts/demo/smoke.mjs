@@ -156,9 +156,12 @@ try {
   const failures = [];
   const externalRequests = [];
   const cspFailures = [];
+  const rejected = [];
   for (const page of pages) {
     page.on("console", (message) => {
       if (message.type() === "error" || message.text().includes("[demo]")) diagnostics.push(message.text());
+      if (/^\[demo\] Unsupported (?!POST \/demo-unsupported-operation)/.test(message.text()))
+        rejected.push(message.text());
       if (/content security policy|violates.*directive/i.test(message.text())) cspFailures.push(message.text());
     });
     page.on("pageerror", (error) => errors.push(error.message));
@@ -361,6 +364,29 @@ try {
     async () => (await fetch("/api/demo-unsupported-operation", { method: "POST" })).status,
   );
   assert.equal(unsupported, 501);
+  // The Engine areas a visitor opens answer every request; the runtime's 501 stays only for the probe above.
+  await pages[0].setViewportSize({ width: 1440, height: 900 });
+  for (const panel of ["characters", "personas", "lorebooks", "presets", "connections", "agents", "settings"]) {
+    await pages[0].locator(`[data-tour="panel-${panel}"]`).first().click();
+    await pages[0].waitForTimeout(400);
+  }
+  await pages[0].locator('[data-tour="panel-settings"]').first().click();
+  // Feature-page links deep-link a chat and a panel, then settle on plain #/demo.
+  await pages[0].evaluate(() => (window.location.hash = "#/demo?chat=demo-chat-rook&panel=lorebooks"));
+  await pages[0].waitForFunction(() => window.location.hash === "#/demo");
+  for (const [mode, name] of [
+    ["conversation", "Deck 4 crew"],
+    ["roleplay", "Aboard the Gull's Promise"],
+    ["game", "The Ember Reach run"],
+    ["roleplay", "Evening at the lighthouse"],
+  ]) {
+    const toggle = pages[0].locator('[data-tour="sidebar-toggle"]');
+    if ((await toggle.getAttribute("aria-pressed")) !== "true") await toggle.click();
+    const sidebar = pages[0].locator('[data-component="ChatSidebar"]');
+    await sidebar.locator(`[data-chat-mode-tab="${mode}"]`).click();
+    await sidebar.getByText(name, { exact: true }).click();
+    await pages[0].waitForTimeout(800);
+  }
   await pages[0].screenshot({ path: resolve(evidence, "demo-sidebar-open.png"), fullPage: true });
   for (const width of [390, 768, 1440]) {
     await pages[0].setViewportSize({ width, height: 900 });
@@ -424,7 +450,10 @@ try {
           path: resolve(evidence, `demo-${width}-${visualTheme}-${theme}.png`),
           fullPage: true,
         });
+        // Home opens the Engine's own Home screen; the bar's Website link goes back to the site.
         await pages[0].getByRole("button", { name: "Home", exact: true }).click();
+        await expect(pages[0]).toHaveURL(/#\/home$/);
+        await pages[0].getByTestId("demo-back-to-site").click();
         await expect(pages[0].getByTestId("demo-product-home")).toBeVisible();
         await pages[0].screenshot({
           path: resolve(evidence, `landing-${width}-${visualTheme}-${theme}.png`),
@@ -489,6 +518,7 @@ try {
   assert.deepEqual(failures, [], "Failed static requests");
   assert.deepEqual(externalRequests, [], "External network requests");
   assert.deepEqual(cspFailures, [], "Content Security Policy violations");
+  assert.deepEqual(rejected, [], "Rejected demo requests");
   assert.ok(!requests.some((path) => path.startsWith("/api/")), "API traffic escaped the browser adapter");
   console.log(
     `Static demo smoke passed: ${metadata.version}, ${metadata.base}, two browser contexts and three viewports.`,

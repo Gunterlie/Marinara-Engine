@@ -1,7 +1,7 @@
 // ──────────────────────────────────────────────
 // Chat: Conversation Input — Discord-style
 // ──────────────────────────────────────────────
-import { useState, useRef, useCallback, useEffect, useMemo, type FormEvent } from "react";
+import { lazy, Suspense, useState, useRef, useCallback, useEffect, useMemo, type FormEvent } from "react";
 import {
   Send,
   Smile,
@@ -83,6 +83,12 @@ import {
   isInstalledCapabilityReady,
 } from "@marinara-engine/shared";
 import { useTranslation, useTranslation as useUiTranslation } from "react-i18next";
+
+// Static demo only: suggested messages for the example chats.
+const DemoPrompts =
+  import.meta.env.VITE_MARINARA_DEMO === "1"
+    ? lazy(() => import("../../demo/DemoPrompts").then((module) => ({ default: module.DemoPrompts })))
+    : null;
 
 interface Attachment {
   type: string;
@@ -1246,6 +1252,15 @@ export function ConversationInput({
     localizeUi,
   ]);
 
+  // Static demo: a suggested message goes into the box and is sent as if the user typed it.
+  const sendDemoPrompt = (text: string) => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.value = text;
+    syncInputState(text);
+    void handleSend();
+  };
+
   const runQuickSlashCommand = useCallback(
     async (commandLine: string, fallbackError: string) => {
       if (!activeChatId) return;
@@ -2206,6 +2221,11 @@ export function ConversationInput({
         </p>
       )}
       <MariSuggestionChips chips={chipRowChips} onSelect={handleMariChipSelect} disabled={isSendBlocked} />
+      {DemoPrompts && activeChatId && !isProfessorMariChat && (
+        <Suspense fallback={null}>
+          <DemoPrompts chatId={activeChatId} disabled={isSendBlocked} onPick={sendDemoPrompt} />
+        </Suspense>
+      )}
 
       {replyDraft && (
         <MessageReplyPreview reply={replyDraft} onCancel={() => activeChatId && setReplyDraft(activeChatId, null)} />

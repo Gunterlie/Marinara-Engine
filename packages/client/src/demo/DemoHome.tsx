@@ -57,7 +57,8 @@ export function DemoHome() {
         <HomeBrowserHub
           pageActive={pageActive}
           onOpenCredits={() => setCreditsOpen(true)}
-          websiteContent={<DemoLanding />}
+          // #/home is the Engine's own Home; every other route here is the website.
+          websiteContent={hash === "#/home" ? undefined : <DemoLanding />}
           hideProfessor
         />
       </div>

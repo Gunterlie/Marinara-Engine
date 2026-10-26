@@ -85,7 +85,7 @@ function CategorySection({ category, index }: { category: FeatureCategory; index
                 <span className="sr-only">: {t(`demo.features.items.${item.key}.title`)}</span>
               </a>
               {item.demo ? (
-                <a href="#/demo" className={`${TEXT_LINK} text-[var(--foreground)]`}>
+                <a href={item.demo} className={`${TEXT_LINK} text-[var(--foreground)]`}>
                   <Play className="h-4 w-4" aria-hidden="true" />
                   {t("demo.features.try")}
                 </a>

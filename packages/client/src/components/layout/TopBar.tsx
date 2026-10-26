@@ -273,7 +273,7 @@ export function TopBar({
 
     window.dispatchEvent(new Event("marinara:home-professor-mari-close"));
     setActiveChatId(null);
-    if (import.meta.env.VITE_MARINARA_DEMO === "1") window.location.hash = "#/";
+    if (import.meta.env.VITE_MARINARA_DEMO === "1") window.location.hash = "#/home";
     closeAllDetails();
     if (!mobileTopbarNavigation) return;
     setSidebarOpen(false);

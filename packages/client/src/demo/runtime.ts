@@ -1,6 +1,10 @@
 import {
   APP_VERSION,
   DEFAULT_ADVANCED_MEMORY_SETTINGS,
+  DEFAULT_DECISION_CALIBRATION,
+  DEFAULT_MARI_PERMISSIONS_MODE,
+  DEFAULT_MARI_RUNTIME,
+  SIDECAR_DEFAULT_CONFIG,
   DEFAULT_DECISION_PROMPT_QUESTION_LIMIT,
   MAX_DECISION_PROMPT_QUESTION_LIMIT,
   ttsConfigSchema,
@@ -24,6 +28,8 @@ type State = {
   lorebookEntries: Row[];
   chats: Row[];
   chatFolders: Row[];
+  presets: Row[];
+  promptSections: Row[];
   messages: Row[];
 };
 type Handler = (m: RegExpMatchArray, url: URL, body: any, signal: AbortSignal | null) => Response | Promise<Response>;
@@ -376,7 +382,22 @@ function registerRoutes() {
   on("GET", "/achievements", () => json({ definitions: [], progress: [], unlockedCount: 0, totalCount: 0 }));
   on("GET", "/game-assets/manifest", () => json({ scannedAt: nowIso(), count: 0, assets: {}, byCategory: {} }));
   on("GET", "/custom-tools/capabilities", () => json({ scriptExecutionEnabled: false }));
-  on("GET", "/prompts/default", () => json(null));
+  on("GET", "/prompts", () => json(state.presets));
+  on("GET", "/prompts/default", () => json(state.presets.find((p) => p.isDefault) ?? null));
+  on("GET", "/prompts/:id/full", (m) => {
+    const preset = byId(state.presets, m[1]!);
+    if (!preset) return notFound();
+    const sections = state.promptSections.filter((x) => x.presetId === preset.id);
+    return json({ preset, sections, groups: [], choiceBlocks: [] });
+  });
+  on("PATCH", "/prompts/:id", (m, _u, b) => {
+    const row = byId(state.presets, m[1]!);
+    return row ? json(patchRow(row, b)) : notFound();
+  });
+  on("PATCH", "/prompts/:id/sections/:sid", (m, _u, b) => {
+    const row = byId(state.promptSections, m[2]!);
+    return row ? json(patchRow(row, b)) : notFound();
+  });
   on("GET", "/chat-folders", () => json(state.chatFolders));
   on("GET", "/library-folders/:scope", () => json([]));
   // Status reads for panels that ask a real server; the demo answers "off" so they render without errors.
@@ -392,7 +413,57 @@ function registerRoutes() {
       viaProxy: false,
     }),
   );
+  // The local model, Professor Mari's workspace and the decision model need a server, so they report "not set up".
+  on("GET", "/sidecar/status", () =>
+    json({
+      status: "not_downloaded",
+      config: SIDECAR_DEFAULT_CONFIG,
+      modelDownloaded: false,
+      modelDisplayName: null,
+      modelSize: null,
+      runtime: { installed: false, build: null, variant: null, backend: null },
+      logPath: null,
+      platform: "browser",
+      arch: "",
+      curatedModels: [],
+      inferenceReady: false,
+      gpuMemory: null,
+      startupError: null,
+      failedRuntimeVariant: null,
+    }),
+  );
+  on("GET", "/professor-mari/workspace/status", () =>
+    json({
+      enabled: false,
+      piAvailable: false,
+      workspace: "",
+      dataDir: "",
+      tools: [],
+      shellSandbox: { available: false, backend: null },
+      dbAccess: "server-managed",
+      connection: null,
+      skills: [],
+      skillDiagnostics: [],
+      active: false,
+      permissionsMode: DEFAULT_MARI_PERMISSIONS_MODE,
+      permissionsModeDefault: DEFAULT_MARI_PERMISSIONS_MODE,
+      permissionsModeSource: "default",
+      runtimeSelected: DEFAULT_MARI_RUNTIME,
+      runtimeActive: DEFAULT_MARI_RUNTIME,
+      runtimeNote: null,
+      latestUnderstoodRequest: null,
+      pendingApprovals: [],
+      history: [],
+      latestRun: null,
+      error: null,
+    }),
+  );
+  on("GET", "/decision/options", () =>
+    json({ selected: null, options: [], calibration: DEFAULT_DECISION_CALIBRATION }),
+  );
   on("GET", "/spotify/playlists", () => json({ playlists: [] }));
+  on("GET", "/agents/import-policy", () => json({ enabled: false }));
+  on("GET", "/game-tile-packs", () => json({ packs: [], builtIn: [], selection: {} }));
   for (const path of [
     "/characters/:id/gallery",
     "/characters/personas/:id/gallery",
@@ -429,16 +500,51 @@ function registerRoutes() {
   );
   for (const path of [
     "/chat-presets",
-    "/prompts",
     "/regex-scripts",
     "/custom-tools",
     "/agents",
-    "/capability-packages/agents",
     "/characters/groups/list",
     "/characters/persona-groups/list",
   ]) {
     on("GET", path, () => json([]));
   }
+  // Example agents so the Agents panel shows what an installed library looks like.
+  on("GET", "/capability-packages/agents", () =>
+    json([
+      {
+        id: "lorebook-keeper",
+        name: "Lorebook Keeper",
+        description: "Writes new places, people and facts from the story into your lorebook.",
+        phase: "post_processing",
+        enabledByDefault: true,
+        category: "writer",
+      },
+      {
+        id: "illustrator",
+        name: "Illustrator",
+        description: "Draws a picture of the scene when something worth seeing happens.",
+        phase: "post_processing",
+        enabledByDefault: false,
+        category: "misc",
+      },
+      {
+        id: "music-dj",
+        name: "Music DJ",
+        description: "Picks music that fits the mood and changes it when the scene turns.",
+        phase: "parallel",
+        enabledByDefault: false,
+        category: "misc",
+      },
+      {
+        id: "world-state",
+        name: "World State",
+        description: "Keeps track of time, weather and location so the story stays consistent.",
+        phase: "post_processing",
+        enabledByDefault: true,
+        category: "tracker",
+      },
+    ]),
+  );
   on("GET", "/sprites/:id", () => json([]));
   on("POST", "/chats/:id/touch", (m) => json(byId(state.chats, m[1]!) ?? { success: true }));
   on("GET", "/characters/personas/:id", (m) =>
