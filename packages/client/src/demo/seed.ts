@@ -7,6 +7,12 @@ export const DEMO_SEED_IDS = {
   connectionId: "demo-connection",
 } as const;
 
+export const DEMO_ASSETS = {
+  iris: `${import.meta.env.BASE_URL}demo-assets/iris.webp`,
+  harbor: `${import.meta.env.BASE_URL}demo-assets/saltmere-harbor.webp`,
+  lantern: `${import.meta.env.BASE_URL}demo-assets/lighthouse-lantern.webp`,
+} as const;
+
 const NOW = "2026-01-01T00:00:00.000Z";
 
 const portrait = (bg: string, letter: string) =>
@@ -37,7 +43,7 @@ export function createSeed() {
       id: DEMO_SEED_IDS.characterId,
       data: JSON.stringify(characterData),
       comment: "Demo example",
-      avatarPath: portrait("#c0508a", "I"),
+      avatarPath: DEMO_ASSETS.iris,
       name: "Iris",
       favorite: false,
       createdAt: NOW,
@@ -120,7 +126,7 @@ export function createSeed() {
       lastMessageAt: NOW,
       createdAt: NOW,
       updatedAt: NOW,
-      metadata: {},
+      metadata: { background: DEMO_ASSETS.harbor },
     },
   ];
   const messages = [

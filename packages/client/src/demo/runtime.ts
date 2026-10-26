@@ -1,7 +1,7 @@
 import { APP_VERSION } from "@marinara-engine/shared";
 import { i18n } from "../localization/i18n";
 import { UI_PERSISTENCE } from "../lib/ui-persistence";
-import { createSeed } from "./seed";
+import { createSeed, DEMO_ASSETS } from "./seed";
 import { pickDemoReply } from "./scenarios";
 import { loadDemoDocs } from "./docs";
 
@@ -645,7 +645,7 @@ function isolateLocalStorage() {
   // Visitors land in the real chat UI: lessons replace the first-run tour and the What's New dialog.
   // ponytail: the What's New key mirrors its component; importing that component here would load stores too early.
   if (!proxy.getItem(UI_PERSISTENCE.name)) {
-    const defaultRoleplayBackground = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"><path fill="#0f0f13" d="M0 0h1v1H0z"/></svg>')}`;
+    const defaultRoleplayBackground = DEMO_ASSETS.harbor;
     proxy.setItem(
       UI_PERSISTENCE.name,
       JSON.stringify({
