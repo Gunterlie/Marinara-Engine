@@ -3,6 +3,7 @@ import { i18n } from "../localization/i18n";
 import { UI_PERSISTENCE } from "../lib/ui-persistence";
 import { createSeed } from "./seed";
 import { pickDemoReply } from "./scenarios";
+import { loadDemoDocs } from "./docs";
 
 // Browser-only stand-in for the Engine backend. It replaces window.fetch, so the real API client,
 // direct fetch calls and SSE streaming all run unchanged. State lives in memory, one copy per tab.
@@ -168,6 +169,89 @@ const on = (method: string, path: string, handler: Handler) =>
   routes.push([method, new RegExp(`^${path.replace(/:\w+/g, "([^/]+)")}$`), handler]);
 
 function registerRoutes() {
+  on("GET", "/docs/language", async () => {
+    const docs = await loadDemoDocs();
+    return json({
+      active: "en",
+      configured: true,
+      install: null,
+      available: [
+        {
+          code: "en",
+          label: "English",
+          englishLabel: "English",
+          installed: true,
+          translated: docs.length,
+          total: docs.length,
+        },
+      ],
+      integrity: {
+        ok: true,
+        unknownLanguage: false,
+        activeRootMissing: false,
+        packIncomplete: false,
+        leftovers: false,
+      },
+    });
+  });
+  on("GET", "/docs", async () =>
+    json({ root: "docs", language: "en", docs: (await loadDemoDocs()).map(({ content: _content, ...doc }) => doc) }),
+  );
+  on("GET", "/docs/content", async (_m, url) => {
+    const doc = (await loadDemoDocs()).find((row) => row.path === url.searchParams.get("path"));
+    return doc ? json(doc) : notFound();
+  });
+  on("GET", "/docs/search", async (_m, url) => {
+    const query = (url.searchParams.get("q") ?? "").trim().slice(0, 200);
+    const needle = query.toLowerCase();
+    const results =
+      needle.length < 2
+        ? []
+        : (await loadDemoDocs()).flatMap(({ content, ...doc }) => {
+            const snippets = content
+              .split("\n")
+              .flatMap((text, i) => (text.toLowerCase().includes(needle) ? [{ line: i + 1, text }] : []));
+            return snippets.length || doc.title.toLowerCase().includes(needle)
+              ? [{ ...doc, matches: snippets.length, snippets: snippets.slice(0, 3) }]
+              : [];
+          });
+    return json({ query, language: "en", results });
+  });
+  on("GET", "/updates/channel", () => json({ channel: "stable" }));
+  on("GET", "/capability-packages/catalog", () => json({ schemaVersion: 1, generatedAt: nowIso(), packages: [] }));
+  on("GET", "/characters/catalog", (_m, url) => {
+    const search = (url.searchParams.get("search") ?? "").toLowerCase();
+    const limit = Math.max(1, Math.min(100, Number(url.searchParams.get("limit")) || 100));
+    const offset = Math.max(0, Number(url.searchParams.get("offset")) || 0);
+    const items = state.characters
+      .filter((row) => row.name.toLowerCase().includes(search))
+      .map((row) => {
+        const data = parseData(row);
+        return {
+          ...row,
+          creator: data.creator ?? "",
+          version: data.character_version ?? "",
+          tags: data.tags ?? [],
+          summary: data.description ?? "",
+          explicitSummary: "",
+          description: data.description ?? "",
+          personality: data.personality ?? "",
+          scenario: data.scenario ?? "",
+          firstMessage: data.first_mes ?? "",
+          creatorNotes: data.creator_notes ?? "",
+          tokenEstimate: 0,
+          nameColor: null,
+          avatarCrop: null,
+        };
+      });
+    return json({
+      items: items.slice(offset, offset + limit),
+      limit,
+      offset,
+      hasMore: offset + limit < items.length,
+      catalogGeneration: 1,
+    });
+  });
   on("GET", "/health", () => json({ status: "ok", demo: true }));
   on("POST", "/generate", (_m, _u, body, signal) => generate(body, signal));
   on("GET", "/generate/status/:id", () => json({ active: false, translating: false }));
@@ -568,6 +652,7 @@ function isolateLocalStorage() {
         state: {
           hasCompletedOnboarding: true,
           chatWindowIntroDismissed: true,
+          chatHelpSeenModes: ["conversation", "roleplay", "game"],
           chatSettingsMoveTipDismissed: true,
           defaultRoleplayBackground,
         },

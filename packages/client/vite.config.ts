@@ -182,7 +182,9 @@ export default defineConfig({
       load(id) {
         // Rolldown can retain an orphan dynamic chunk even after its caller is removed.
         if (id === `${CLIENT_SOURCE_ROOT}demo/boot.ts`) return "";
-        if (id === `${CLIENT_SOURCE_ROOT}demo/DemoBanner.tsx`) return "export const DemoBanner = () => null;";
+        if (id === `${CLIENT_SOURCE_ROOT}demo/DemoBanner.tsx`)
+          return "export const DemoBanner = () => null; export const DemoNavigation = () => null;";
+        if (id === `${CLIENT_SOURCE_ROOT}demo/DemoHome.tsx`) return "export const DemoHome = () => null;";
       },
     },
     // The installed app serves public assets at /. Pages serves them below a project/version path.

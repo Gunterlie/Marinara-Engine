@@ -63,6 +63,7 @@
     "release:notes": "node ./scripts/render-release-notes.mjs",
     "clean": "pnpm -r --if-present run clean && node ./scripts/clean-workspace.mjs",
     "build:demo": "node scripts/build-demo.mjs",
+    "website:refresh": "node scripts/demo/refresh.mjs prepare",
     "smoke:demo": "node scripts/demo/smoke.mjs"
   },
   "devDependencies": {

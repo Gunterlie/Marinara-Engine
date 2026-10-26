@@ -84,9 +84,9 @@ const LazyAppShell = lazy(() =>
   import("./components/layout/AppShell").then((module) => ({ default: module.AppShell })),
 );
 // Keep the flag inline so Vite removes the dynamic import before building the normal module graph.
-const LazyDemoBanner =
+const LazyDemoNavigation =
   import.meta.env.VITE_MARINARA_DEMO === "1"
-    ? lazy(() => import("./demo/DemoBanner").then((module) => ({ default: module.DemoBanner })))
+    ? lazy(() => import("./demo/DemoBanner").then((module) => ({ default: module.DemoNavigation })))
     : null;
 
 type HealthResponse = {
@@ -1219,10 +1219,10 @@ export function App() {
       <CustomThemeInjector />
       <PersonalExtensionInjector />
       <ChibiProfessorMariEasterEgg />
-      {/* Before the shell, so the shell's own overlays paint above the demo banner. */}
-      {LazyDemoBanner && (
+      {/* Demo URL navigation has no extra visual chrome. */}
+      {LazyDemoNavigation && (
         <Suspense fallback={null}>
-          <LazyDemoBanner />
+          <LazyDemoNavigation />
         </Suspense>
       )}
       <Suspense fallback={null}>

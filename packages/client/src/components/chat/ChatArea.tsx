@@ -166,6 +166,7 @@ import { HomeCreditsModal } from "./HomeCreditsModal";
 import { ReplyCheckup } from "./ReplyCheckup";
 import { checkReply, replyLineFindings } from "../../lib/reply-checkup";
 import { HomeBrowserHub } from "./HomeBrowserHub";
+
 import { NewChatConnectionGate } from "./NewChatConnectionGate";
 import { ChatCommonOverlays, preloadChatSettingsDrawer, type ChatSettingsInitialSection } from "./ChatCommonOverlays";
 import { ADVANCED_MEMORY_SETTINGS_EVENT } from "../../hooks/use-advanced-memory";
@@ -457,6 +458,11 @@ function areCharacterMapsEqual(a: CharacterMap, b: CharacterMap): boolean {
   }
   return true;
 }
+
+const DemoHome =
+  import.meta.env.VITE_MARINARA_DEMO === "1"
+    ? lazy(() => import("../../demo/DemoHome").then((module) => ({ default: module.DemoHome })))
+    : null;
 
 const ChatConversationSurface = lazy(async () => {
   const module = await import("./ChatConversationSurface");
@@ -3584,6 +3590,12 @@ const LocalChatArea = memo(function LocalChatArea({
   // Empty state (no active chat)
   // ═══════════════════════════════════════════════
   if (!activeChatId) {
+    if (DemoHome)
+      return (
+        <Suspense fallback={null}>
+          <DemoHome />
+        </Suspense>
+      );
     return (
       <>
         <HomeCreditsModal open={creditsOpen} onClose={() => setCreditsOpen(false)} />

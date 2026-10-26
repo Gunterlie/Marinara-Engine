@@ -181,3 +181,20 @@ Local validation completed: full `pnpm check`, the seven normal `smoke:ui` cases
 Review fixes included request-body preservation, correct typing events, cursor pagination, normal-build module exclusion, public-asset prefixing, storage fallback, keyboard focus, mobile drawer positioning, and reset persistence. Review suggestions to remove the static runtime import were rejected after tracing the import graph: it loads no persisted stores before storage isolation. Suggestions to rewrite all dynamic sprite paths were rejected because those paths are API assets; the public Mari animation helper is handled explicitly. Reset copy deliberately distinguishes per-tab chats from preferences shared across tabs.
 
 Real iOS keyboard panning and notch safe areas still need device verification. Optional server-backed features return an explicit unsupported error. The initial lessons show orientation and record viewing; they do not validate a visitor's editing task. This fork trial does not provide automatic stable-release publication, retained snapshots, or a latest-version index yet.
+
+
+## Homepage and documentation extension
+
+The demo Home surface doubles as a product landing page: an introduction to Marinara, Professor Mari, a clearly labelled scripted preview, Try the demo, and platform installation guides. Normal installed Engine Home behavior stays separate.
+
+The static artifact includes English documentation from the same source checkout. Visitors can browse and search the guides without a documentation server. URLs use hash routes so GitHub Pages can serve direct visits and refreshes:
+
+- `#/` — homepage
+- `#/demo` — scripted chat
+- `#/docs` — documentation index and search
+- `#/docs/installation/windows.md` — an individual guide
+- `#/docs/installation/windows.md?section=<heading-id>` — a guide section
+
+The reader offers an on-page contents list and Copy page link. Internal Markdown links stay in the reader; links to source files point to the fork source branch during this trial. Documentation is bundled in English; downloading translation packs requires an installed Engine. The site continues to use independent browser sessions and static hosting.
+
+Homepage review decision: hash navigation deliberately closes the chat sidebar on desktop as well as mobile, so the public landing and documentation have the full central surface. The chat toggle remains available. A review suggestion to preserve the desktop sidebar was dismissed as conflicting with this homepage behavior.

@@ -369,6 +369,10 @@ const HOME_STARS = Array.from({ length: 42 }, (_, index) => ({
 type HomeBrowserHubProps = {
   pageActive: boolean;
   onOpenCredits: () => void;
+  /** Hide the Professor Mari tab where no live Mari runtime exists. */
+  hideProfessor?: boolean;
+  /** Replaces the Home tab page and hides the address and bookmark rows, such as the static demo product page. */
+  websiteContent?: ReactNode;
 };
 
 function MarinaraWordmark({ className }: { className?: string }) {
@@ -865,7 +869,12 @@ function ShortcutIcon({ tone, children }: { tone: string; children: ReactNode })
   );
 }
 
-export function HomeBrowserHub({ pageActive, onOpenCredits }: HomeBrowserHubProps) {
+export function HomeBrowserHub({
+  pageActive,
+  onOpenCredits,
+  hideProfessor,
+  websiteContent,
+}: HomeBrowserHubProps) {
   const { id: mariPackId, poses: mariPoses, portraits: mariPortraits } = useMariAppearancePack();
   const mariRaccoon = mariPackId === "raccoon";
   const { t, i18n } = useTranslation();
@@ -1611,7 +1620,7 @@ export function HomeBrowserHub({ pageActive, onOpenCredits }: HomeBrowserHubProp
               data-component="HomeBrowserHub.Brand"
             >
               <img
-                src="/logo-splash.gif"
+                src={websiteContent ? "/logo.png" : "/logo-splash.gif"}
                 alt=""
                 data-component="HomeBrowserHub.AnimatedLogo"
                 className="h-8 w-8 shrink-0 object-contain drop-shadow-[0_0_10px_color-mix(in_srgb,var(--marinara-app-accent-solid)_28%,transparent)]"
@@ -1627,7 +1636,7 @@ export function HomeBrowserHub({ pageActive, onOpenCredits }: HomeBrowserHubProp
                 only contain tabs, and two independent reviews flagged the
                 nesting. In the phone shell (portrait or landscape) this is the
                 only way to the bookmarks, and only on the Home tab. */}
-            {mobileShell && activeTab === "home" ? (
+            {mobileShell && activeTab === "home" && !websiteContent ? (
               <button
                 ref={mobileBookmarksTriggerRef}
                 type="button"
@@ -1672,34 +1681,36 @@ export function HomeBrowserHub({ pageActive, onOpenCredits }: HomeBrowserHubProp
                   {t("home.browser.homeTab")}
                 </span>
               </button>
-              <button
-                id={homeBrowserTabId("professor")}
-                type="button"
-                role="tab"
-                aria-controls={HOME_BROWSER_PANEL_ID}
-                aria-label={t("home.browser.professorTab")}
-                aria-selected={activeTab === "professor"}
-                onClick={openProfessor}
-                className={cn(
-                  "flex min-h-9 min-w-0 items-center justify-center rounded-t-lg border border-b-0 text-[0.65rem] font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--marinara-chat-chrome-focus-ring)] sm:min-w-[6.5rem] sm:w-auto sm:flex-none sm:gap-1.5 sm:px-3 sm:text-xs",
-                  activeTab === "professor" ? "flex-1 gap-1 px-2" : "w-9 flex-none gap-0 px-0",
-                  activeTab === "professor"
-                    ? "border-[var(--border)] bg-[var(--card)] text-[var(--foreground)]"
-                    : "border-transparent text-[var(--muted-foreground)] hover:bg-[var(--accent)]",
-                )}
-              >
-                <img
-                  src={mariPoses.profile}
-                  {...mariImgLoading(MARI_ASSET_TIER.poses.profile)}
-                  width={16}
-                  height={16}
-                  alt=""
-                  className="h-4 w-4 rounded-sm object-cover"
-                />
-                <span className={cn("min-w-0 truncate", activeTab === "professor" ? "block" : "hidden sm:block")}>
-                  {t("home.browser.professorTab")}
-                </span>
-              </button>
+              {!hideProfessor && (
+                <button
+                  id={homeBrowserTabId("professor")}
+                  type="button"
+                  role="tab"
+                  aria-controls={HOME_BROWSER_PANEL_ID}
+                  aria-label={t("home.browser.professorTab")}
+                  aria-selected={activeTab === "professor"}
+                  onClick={openProfessor}
+                  className={cn(
+                    "flex min-h-9 min-w-0 items-center justify-center rounded-t-lg border border-b-0 text-[0.65rem] font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--marinara-chat-chrome-focus-ring)] sm:min-w-[6.5rem] sm:w-auto sm:flex-none sm:gap-1.5 sm:px-3 sm:text-xs",
+                    activeTab === "professor" ? "flex-1 gap-1 px-2" : "w-9 flex-none gap-0 px-0",
+                    activeTab === "professor"
+                      ? "border-[var(--border)] bg-[var(--card)] text-[var(--foreground)]"
+                      : "border-transparent text-[var(--muted-foreground)] hover:bg-[var(--accent)]",
+                  )}
+                >
+                  <img
+                    src={mariPoses.profile}
+                    {...mariImgLoading(MARI_ASSET_TIER.poses.profile)}
+                    width={16}
+                    height={16}
+                    alt=""
+                    className="h-4 w-4 rounded-sm object-cover"
+                  />
+                  <span className={cn("min-w-0 truncate", activeTab === "professor" ? "block" : "hidden sm:block")}>
+                    {t("home.browser.professorTab")}
+                  </span>
+                </button>
+              )}
               {localizedBrowserPackages.map(({ item, display }) => {
                 const tab = display.homeBrowserTab;
                 const tabActive = activeTab === item.id;
@@ -1744,7 +1755,7 @@ export function HomeBrowserHub({ pageActive, onOpenCredits }: HomeBrowserHubProp
             </div>
           </div>
 
-          {showHomeBrowserAddressBar && !mobileShell ? (
+          {showHomeBrowserAddressBar && !mobileShell && !websiteContent ? (
             <div
               className="mari-home-browser-address-row flex h-8 shrink-0 items-center gap-1.5 px-2 py-0.5 sm:h-10 sm:gap-2 sm:px-3"
               data-component="HomeBrowserHub.AddressRow"
@@ -1804,7 +1815,7 @@ export function HomeBrowserHub({ pageActive, onOpenCredits }: HomeBrowserHubProp
             </div>
           ) : null}
 
-          {activeTab === "home" && !mobileShell ? (
+          {activeTab === "home" && !mobileShell && !websiteContent ? (
             <nav
               className="flex min-h-8 items-center border-t border-[var(--border)]/45 px-2 sm:min-h-9 sm:px-3"
               aria-label={t("home.browser.bookmarksLabel")}
@@ -2048,6 +2059,8 @@ export function HomeBrowserHub({ pageActive, onOpenCredits }: HomeBrowserHubProp
                 },
               }}
             />
+          ) : websiteContent && activeTab === "home" ? (
+            websiteContent
           ) : activeTab === "professor" ? (
             <div className="flex h-full items-center justify-center text-sm text-[var(--muted-foreground)]">
               {t("home.browser.professorOpening", "Opening Professor Mari...")}
@@ -2091,44 +2104,45 @@ export function HomeBrowserHub({ pageActive, onOpenCredits }: HomeBrowserHubProp
                       {t("home.hero.description")}
                     </p>
                   </div>
-                  <div className="grid w-full max-w-md grid-cols-3 gap-2" aria-label={t("home.shortcuts.label")}>
-                    <HomeNewChatLauncher
-                      mode="conversation"
-                      className="group !h-auto !min-h-11 !w-full !gap-1.5 !border-[color-mix(in_srgb,var(--home-chat-mode-accent)_35%,var(--border))] !bg-[color-mix(in_srgb,var(--home-chat-mode-accent)_7%,var(--card))] !px-2 !py-1 !text-center sm:!min-h-9"
-                      ariaLabel={t("home.shortcuts.newConversation")}
-                    >
-                      <ShortcutIcon tone={HOME_CHAT_MODE_ACCENTS.conversation}>
-                        <ChatModeIcon mode="conversation" size="1rem" className="mari-rgb-static-icon" />
-                      </ShortcutIcon>
-                      <span className="text-[0.65rem] font-bold text-[var(--foreground)] sm:text-xs">
-                        {t("home.recentChats.mode.conversation")}
-                      </span>
-                    </HomeNewChatLauncher>
-                    <HomeNewChatLauncher
-                      mode="roleplay"
-                      className="group !h-auto !min-h-11 !w-full !gap-1.5 !border-[color-mix(in_srgb,var(--home-chat-mode-accent)_35%,var(--border))] !bg-[color-mix(in_srgb,var(--home-chat-mode-accent)_7%,var(--card))] !px-2 !py-1 !text-center sm:!min-h-9"
-                      ariaLabel={t("home.shortcuts.newRoleplay")}
-                    >
-                      <ShortcutIcon tone={HOME_CHAT_MODE_ACCENTS.roleplay}>
-                        <ChatModeIcon mode="roleplay" size="1rem" className="mari-rgb-static-icon" />
-                      </ShortcutIcon>
-                      <span className="text-[0.65rem] font-bold text-[var(--foreground)] sm:text-xs">
-                        {t("home.recentChats.mode.roleplay")}
-                      </span>
-                    </HomeNewChatLauncher>
-                    <HomeNewChatLauncher
-                      mode="game"
-                      className="group !h-auto !min-h-11 !w-full !gap-1.5 !border-[color-mix(in_srgb,var(--home-chat-mode-accent)_35%,var(--border))] !bg-[color-mix(in_srgb,var(--home-chat-mode-accent)_7%,var(--card))] !px-2 !py-1 !text-center sm:!min-h-9"
-                      ariaLabel={t("home.shortcuts.newGame")}
-                    >
-                      <ShortcutIcon tone={HOME_CHAT_MODE_ACCENTS.game}>
-                        <ChatModeIcon mode="game" size="1rem" className="mari-rgb-static-icon" />
-                      </ShortcutIcon>
-                      <span className="text-[0.65rem] font-bold text-[var(--foreground)] sm:text-xs">
-                        {t("home.recentChats.mode.game")}
-                      </span>
-                    </HomeNewChatLauncher>
-                  </div>
+                    <div className="grid w-full max-w-md grid-cols-3 gap-2" aria-label={t("home.shortcuts.label")}>
+                      <HomeNewChatLauncher
+                        mode="conversation"
+                        className="group !h-auto !min-h-11 !w-full !gap-1.5 !border-[color-mix(in_srgb,var(--home-chat-mode-accent)_35%,var(--border))] !bg-[color-mix(in_srgb,var(--home-chat-mode-accent)_7%,var(--card))] !px-2 !py-1 !text-center sm:!min-h-9"
+                        ariaLabel={t("home.shortcuts.newConversation")}
+                      >
+                        <ShortcutIcon tone={HOME_CHAT_MODE_ACCENTS.conversation}>
+                          <ChatModeIcon mode="conversation" size="1rem" className="mari-rgb-static-icon" />
+                        </ShortcutIcon>
+                        <span className="text-[0.65rem] font-bold text-[var(--foreground)] sm:text-xs">
+                          {t("home.recentChats.mode.conversation")}
+                        </span>
+                      </HomeNewChatLauncher>
+                      <HomeNewChatLauncher
+                        mode="roleplay"
+                        className="group !h-auto !min-h-11 !w-full !gap-1.5 !border-[color-mix(in_srgb,var(--home-chat-mode-accent)_35%,var(--border))] !bg-[color-mix(in_srgb,var(--home-chat-mode-accent)_7%,var(--card))] !px-2 !py-1 !text-center sm:!min-h-9"
+                        ariaLabel={t("home.shortcuts.newRoleplay")}
+                      >
+                        <ShortcutIcon tone={HOME_CHAT_MODE_ACCENTS.roleplay}>
+                          <ChatModeIcon mode="roleplay" size="1rem" className="mari-rgb-static-icon" />
+                        </ShortcutIcon>
+                        <span className="text-[0.65rem] font-bold text-[var(--foreground)] sm:text-xs">
+                          {t("home.recentChats.mode.roleplay")}
+                        </span>
+                      </HomeNewChatLauncher>
+                      <HomeNewChatLauncher
+                        mode="game"
+                        className="group !h-auto !min-h-11 !w-full !gap-1.5 !border-[color-mix(in_srgb,var(--home-chat-mode-accent)_35%,var(--border))] !bg-[color-mix(in_srgb,var(--home-chat-mode-accent)_7%,var(--card))] !px-2 !py-1 !text-center sm:!min-h-9"
+                        ariaLabel={t("home.shortcuts.newGame")}
+                      >
+                        <ShortcutIcon tone={HOME_CHAT_MODE_ACCENTS.game}>
+                          <ChatModeIcon mode="game" size="1rem" className="mari-rgb-static-icon" />
+                        </ShortcutIcon>
+                        <span className="text-[0.65rem] font-bold text-[var(--foreground)] sm:text-xs">
+                          {t("home.recentChats.mode.game")}
+                        </span>
+                      </HomeNewChatLauncher>
+                    </div>
+
                 </section>
                 <div ref={feedShellRef} className="mari-home-feed-shell">
                   <div

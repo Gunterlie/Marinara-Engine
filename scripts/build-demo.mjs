@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
-import { copyFileSync, readFileSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import { copyFileSync, readFileSync, writeFileSync, readdirSync, statSync, mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolvePnpmRunner } from "./pnpm-runner.mjs";
@@ -21,3 +22,44 @@ const version = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8")).
 writeFileSync(resolve(root, "packages/client/dist-demo/demo-build.json"), JSON.stringify({ version, base }, null, 2));
 writeFileSync(resolve(root, "packages/client/dist-demo/.nojekyll"), "");
 copyFileSync(resolve(root, "LICENSE"), resolve(root, "packages/client/dist-demo/LICENSE"));
+
+// Ship the same English guides as the Engine, without needing the docs server or a remote fetch.
+const docs = [];
+// Public user guides only. Development plans and contribution audits stay on GitHub.
+const categories = new Set(
+  "home installation connections conversation roleplay game characters chats lorebooks agents media prompts noodle appearance settings data extending integrations".split(
+    " ",
+  ),
+);
+const rootGuides = new Set(["FAQ.md", "INSTALLATION.md", "UPGRADING.md", "CONFIGURATION.md", "TROUBLESHOOTING.md"]);
+function collectDocs(dir, prefix = "") {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = prefix + entry.name;
+    const file = resolve(dir, entry.name);
+    if (entry.isDirectory() && (prefix !== "" || categories.has(entry.name))) collectDocs(file, path + "/");
+    else if (entry.isFile() && entry.name.endsWith(".md") && (prefix !== "" || rootGuides.has(entry.name))) {
+      const content = readFileSync(file, "utf8");
+      docs.push({
+        path,
+        title: content.match(/^#\s+(.+)$/m)?.[1] ?? entry.name,
+        dir: prefix.slice(0, -1),
+        language: "en",
+        updatedAt: statSync(file).mtime.toISOString(),
+        content,
+      });
+    }
+  }
+}
+collectDocs(resolve(root, "docs"));
+docs.sort((a, b) => a.path.localeCompare(b.path));
+mkdirSync(resolve(root, "packages/client/dist-demo/demo-docs"), { recursive: true });
+writeFileSync(resolve(root, "packages/client/dist-demo/demo-docs/guides.json"), JSON.stringify(docs));
+
+mkdirSync(resolve(root, "packages/client/dist-demo/website"), { recursive: true });
+const sharp = createRequire(resolve(root, "packages/server/package.json"))("sharp");
+for (const image of ["Desktop_Roleplay_View.png", "Desktop_DM_Conversation.png", "Browser_Game_Screen.png"]) {
+  await sharp(resolve(root, "docs/screenshots", image))
+    .resize({ width: 1600, withoutEnlargement: true })
+    .webp({ quality: 82, effort: 4 })
+    .toFile(resolve(root, "packages/client/dist-demo/website", image.replace(/\.png$/, ".webp")));
+}

@@ -16,6 +16,8 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useId,
@@ -54,6 +56,11 @@ import {
   PersonalExtensionContributionsMenu,
   PersonalExtensionTopbarButtons,
 } from "./PersonalExtensionContributionsMenu";
+
+const DemoControls =
+  import.meta.env.VITE_MARINARA_DEMO === "1"
+    ? lazy(() => import("../../demo/DemoBanner").then((module) => ({ default: module.DemoBanner })))
+    : null;
 
 // English source text for `localize()` - the lookup matches on the literal string, not the key.
 const MARI_EDGE_GLOW_LABEL: Record<Exclude<MariEdgeGlow, null>, string> = {
@@ -259,6 +266,7 @@ export function TopBar({ mobileTopbarNavigation }: { mobileTopbarNavigation: boo
 
     window.dispatchEvent(new Event("marinara:home-professor-mari-close"));
     setActiveChatId(null);
+    if (import.meta.env.VITE_MARINARA_DEMO === "1") window.location.hash = "#/";
     closeAllDetails();
     if (!mobileTopbarNavigation) return;
     setSidebarOpen(false);
@@ -479,6 +487,11 @@ export function TopBar({ mobileTopbarNavigation }: { mobileTopbarNavigation: boo
         >
           {mobileTopbarNavigation ? [homeButton, chatsButton] : [chatsButton, homeButton]}
         </div>
+        {DemoControls && (
+          <Suspense fallback={null}>
+            <DemoControls />
+          </Suspense>
+        )}
         {musicDjInstalled ? (
           <>
             {spotifyDesktopViewport && <SpotifyMiniPlayer forceFloating={spotifyUseFloatingFallback} />}
