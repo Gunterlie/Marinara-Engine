@@ -1,7 +1,7 @@
 // ──────────────────────────────────────────────
 // Static demo: product page on the Home tab
 // ──────────────────────────────────────────────
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type PointerEvent } from "react";
 import {
   ArrowRight,
   BookOpen,
@@ -13,6 +13,7 @@ import {
   Download,
   Drama,
   ExternalLink,
+  HardDrive,
   Laptop,
   MessageCircle,
   Monitor,
@@ -25,6 +26,7 @@ import { HOME_CHAT_MODE_ACCENTS } from "../lib/home-chat-mode-style";
 import { cn } from "../lib/utils";
 import { FeedModule, HOME_MODULE_ACCENTS } from "../components/chat/HomeBrowserHub";
 import { useMariAppearancePack } from "../hooks/use-mari-appearance-pack";
+import { DEMO_ASSETS } from "./seed";
 
 export const asset = (path: string) => `${import.meta.env.BASE_URL}${path}`;
 
@@ -91,17 +93,20 @@ const STORIES = [
   },
 ] as const;
 
-const AUDIENCES = [
-  { key: "writers", accent: HOME_CHAT_MODE_ACCENTS.roleplay, href: "#/docs/roleplay/getting-started.md" },
-  { key: "fans", accent: HOME_CHAT_MODE_ACCENTS.conversation, href: "#/docs/conversation/getting-started.md" },
-  { key: "players", accent: HOME_CHAT_MODE_ACCENTS.game, href: "#/docs/game/getting-started.md" },
-  { key: "builders", accent: HOME_MODULE_ACCENTS.violet, href: "#/docs/agents/agents-overview.md" },
+// True facts only: each one links to where a visitor can check it.
+const PROOF = [
+  { key: "open", icon: Code, href: GITHUB_URL },
+  { key: "local", icon: HardDrive, href: "#/docs/data/where-data-is-stored.md" },
+  { key: "models", icon: Cloud, href: "#/docs/connections/connecting-to-a-provider.md" },
+  { key: "platforms", icon: Monitor, href: "#/download" },
 ] as const;
 
-const DATA_LINKS = [
-  { key: "where", href: "#/docs/data/where-data-is-stored.md" },
-  { key: "backup", href: "#/docs/data/backup-and-restore.md" },
-] as const;
+const TEASER = ["lighthouse", "fog"] as const;
+const TEASER_TICK_MS = 55;
+const TEASER_WAIT_TICKS = 18; // typing dots before the reply
+const TEASER_HOLD_TICKS = 70; // finished reply stays this long
+
+const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 const MODEL_OPTIONS = [
   { key: "app", icon: Code, href: GITHUB_URL },
@@ -133,6 +138,9 @@ const SECONDARY_BUTTON = `inline-flex min-h-12 items-center justify-center gap-2
 const TEXT_LINK = `inline-flex min-h-11 w-fit items-center gap-1.5 text-sm font-semibold text-[var(--primary)] hover:underline ${FOCUS}`;
 const EYEBROW = "text-xs font-semibold uppercase tracking-[0.18em] text-[var(--muted-foreground)]";
 const SECTION_TITLE = "text-balance text-3xl font-bold leading-tight text-[var(--foreground)] sm:text-4xl";
+// Layers move by var(--depth) times the pointer offset set on the stage.
+const PARALLAX =
+  "translate-x-[calc(var(--px,0)*var(--depth))] translate-y-[calc(var(--py,0)*var(--depth))] transition-transform duration-500 ease-out";
 const SHOT = "block w-full rounded-xl border border-[var(--border)] object-cover shadow-2xl shadow-black/30";
 
 const external = (href: string) => (href.startsWith("http") ? { target: "_blank", rel: "noreferrer" } : {});
@@ -142,6 +150,16 @@ export function DemoLanding() {
   const mari = useMariAppearancePack();
   const [mode, setMode] = useState<(typeof MODES)[number]["key"]>("roleplay");
   const active = MODES.find((item) => item.key === mode) ?? MODES[0];
+  const stageRef = useRef<HTMLDivElement>(null);
+
+  // Pointer parallax for the hero stage: mouse only, never with reduced motion.
+  const tilt = (event: PointerEvent<HTMLElement>) => {
+    const stage = stageRef.current;
+    if (!stage || event.pointerType !== "mouse" || reducedMotion()) return;
+    const box = event.currentTarget.getBoundingClientRect();
+    stage.style.setProperty("--px", String(((event.clientX - box.left) / box.width) * 2 - 1));
+    stage.style.setProperty("--py", String(((event.clientY - box.top) / box.height) * 2 - 1));
+  };
 
   useEffect(() => {
     document.title = "Marinara Engine";
@@ -155,10 +173,15 @@ export function DemoLanding() {
         className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[56rem] [[data-demo-site]_&]:-top-12 bg-[radial-gradient(55%_45%_at_78%_18%,color-mix(in_srgb,var(--primary)_22%,transparent),transparent_70%),radial-gradient(40%_35%_at_8%_8%,color-mix(in_srgb,var(--primary)_10%,transparent),transparent_70%)]"
       />
 
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-24 px-4 pb-20 pt-10 sm:gap-28 sm:px-8 sm:pt-16">
-        {/* Hero: promise and actions, then a staged view of the real app */}
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-20 px-4 pb-20 pt-10 sm:gap-24 sm:px-8 sm:pt-16">
+        {/* Hero: one promise, one action, and a scripted story playing beside it */}
         <section
           aria-labelledby="demo-product-title"
+          onPointerMove={tilt}
+          onPointerLeave={() => {
+            stageRef.current?.style.removeProperty("--px");
+            stageRef.current?.style.removeProperty("--py");
+          }}
           className="grid items-center gap-12 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:gap-10"
         >
           <div className="flex flex-col gap-7">
@@ -175,47 +198,52 @@ export function DemoLanding() {
             <p className="max-w-[52ch] text-pretty text-base leading-relaxed text-[var(--muted-foreground)] sm:text-lg">
               {t("demo.landing.lede")}
             </p>
-            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-              <a href="#/download" className={PRIMARY_BUTTON}>
-                <Download className="mari-rgb-static-icon h-4 w-4" aria-hidden="true" />
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-6">
+              <a href="#/demo" className={PRIMARY_BUTTON}>
+                <Play className="h-4 w-4" aria-hidden="true" />
+                {t("demo.site.try")}
+              </a>
+              <a href="#/download" className={cn(TEXT_LINK, "self-center")}>
+                <Download className="h-4 w-4" aria-hidden="true" />
                 {t("demo.landing.install")}
               </a>
-              <a href="#/demo" className={SECONDARY_BUTTON}>
-                <Play className="h-4 w-4" aria-hidden="true" />
-                {t("demo.product.tryChat")}
-              </a>
             </div>
-            <ul className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-[var(--muted-foreground)]">
-              {(["free", "local", "models"] as const).map((fact) => (
-                <li key={fact} className="flex items-center gap-2">
-                  <span className="h-1.5 w-1.5 rounded-full bg-[var(--primary)]" aria-hidden="true" />
-                  {t(`demo.product.facts.${fact}`)}
-                </li>
-              ))}
-            </ul>
+            <p className="text-xs text-[var(--muted-foreground)]">{t("demo.landing.heroNote")}</p>
           </div>
 
-          {/* Stage: roleplay view in front, conversation view behind, Mari at the edge */}
-          <div className="relative pb-10 sm:pb-14 lg:pl-6">
+          {/* Stage: a scripted chat plays in the app frame, a real screen behind, Mari at the edge */}
+          <div ref={stageRef} className="relative pb-16 sm:pb-20 lg:pl-6">
             <img
               src={asset("website/Desktop_DM_Conversation.webp")}
               alt=""
               width={1920}
               height={1080}
               loading="lazy"
-              className={`${SHOT} absolute -right-3 -top-6 hidden w-[62%] rotate-[4deg] opacity-70 sm:block lg:-right-8`}
+              className={`${SHOT} ${PARALLAX} absolute -right-3 -top-6 hidden w-[62%] rotate-[4deg] opacity-50 [--depth:-8px] sm:block lg:-right-8`}
             />
-            <figure className="relative">
-              <img
-                src={asset("website/Desktop_Tracker_Panel.webp")}
-                alt={t("demo.landing.stories.trackers.alt")}
-                width={1600}
-                height={900}
-                className={`${SHOT} aspect-video ring-1 ring-[color-mix(in_srgb,var(--foreground)_8%,transparent)]`}
-              />
-              <figcaption className="sr-only">{t("demo.landing.installedLabel")}</figcaption>
+            <figure
+              className={`${PARALLAX} relative overflow-hidden rounded-2xl border border-[var(--border)] shadow-2xl shadow-black/40 ring-1 ring-[color-mix(in_srgb,var(--primary)_25%,transparent)] [--depth:4px]`}
+            >
+              <img src={DEMO_ASSETS.harbor} alt="" className="absolute inset-0 h-full w-full object-cover" />
+              <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-black/45 to-black/75" />
+              <div className="relative flex items-center gap-3 border-b border-white/10 bg-black/35 px-4 py-2.5 text-xs text-white/75 backdrop-blur-md">
+                <span className="flex gap-1.5" aria-hidden="true">
+                  <span className="h-2.5 w-2.5 rounded-full bg-white/25" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-white/25" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-white/25" />
+                </span>
+                <Drama className="h-3.5 w-3.5 text-[var(--primary)]" aria-hidden="true" />
+                <span className="truncate font-semibold text-white">{t("demo.landing.teaser.chat")}</span>
+                <span className="ml-auto shrink-0 rounded-full border border-white/20 px-2 py-0.5 text-[0.6875rem]">
+                  {t("demo.landing.teaser.scripted")}
+                </span>
+              </div>
+              <HeroTeaser />
+              <figcaption className="sr-only">{t("demo.landing.teaser.caption")}</figcaption>
             </figure>
-            <div className="absolute -bottom-2 left-0 flex items-end gap-2 sm:-left-4 sm:bottom-0 lg:-left-2">
+            <div
+              className={`${PARALLAX} absolute bottom-0 left-0 flex items-end gap-2 [--depth:14px] sm:-left-4 lg:-left-2`}
+            >
               <img
                 src={mari.poses.chibi}
                 alt={t("demo.landing.mariAlt")}
@@ -224,12 +252,39 @@ export function DemoLanding() {
                 draggable={false}
                 className="h-24 w-auto select-none object-contain drop-shadow-[0_10px_18px_rgba(0,0,0,0.35)] sm:h-32"
               />
-              <p className="mb-8 max-w-[15rem] rounded-2xl rounded-bl-sm border border-[var(--border)] bg-[var(--card)] px-3.5 py-2.5 text-xs font-medium leading-snug text-[var(--card-foreground)] shadow-lg sm:mb-12 sm:text-sm">
+              <p className="mb-6 max-w-[15rem] rounded-2xl rounded-bl-sm border border-[var(--border)] bg-[var(--card)] px-3.5 py-2.5 text-xs font-medium leading-snug text-[var(--card-foreground)] shadow-lg sm:mb-12 sm:text-sm">
                 {t("demo.product.mariHello")}
               </p>
             </div>
           </div>
         </section>
+
+        {/* Proof: four true facts, each links to where you can check it */}
+        <ul
+          aria-label={t("demo.landing.proof.label")}
+          className="-mt-10 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--border)] sm:-mt-14 lg:grid-cols-4"
+        >
+          {PROOF.map((item) => {
+            const Icon = item.icon;
+            return (
+              <li key={item.key} className="flex">
+                <a
+                  href={item.href}
+                  {...external(item.href)}
+                  className={`group flex w-full flex-col gap-1.5 bg-[color-mix(in_srgb,var(--card)_92%,transparent)] p-4 transition-colors hover:bg-[var(--accent)] sm:p-5 ${FOCUS}`}
+                >
+                  <Icon className="h-5 w-5 text-[var(--primary)]" aria-hidden="true" />
+                  <span className="text-sm font-semibold text-[var(--foreground)]">
+                    {t(`demo.landing.proof.${item.key}.title`)}
+                  </span>
+                  <span className="text-xs leading-relaxed text-[var(--muted-foreground)]">
+                    {t(`demo.landing.proof.${item.key}.body`)}
+                  </span>
+                </a>
+              </li>
+            );
+          })}
+        </ul>
 
         {/* Mode tour: pick a mode, see the real screen and what it does */}
         <section aria-labelledby="demo-product-modes" className="flex flex-col gap-8">
@@ -355,34 +410,6 @@ export function DemoLanding() {
           </div>
         </section>
 
-        {/* Who it is for */}
-        <section aria-labelledby="demo-product-audience" className="flex flex-col gap-8">
-          <div className="flex max-w-2xl flex-col gap-3">
-            <span className={EYEBROW}>{t("demo.landing.audience.eyebrow")}</span>
-            <h2 id="demo-product-audience" className={SECTION_TITLE}>
-              {t("demo.landing.audience.title")}
-            </h2>
-          </div>
-          <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {AUDIENCES.map((item) => (
-              <li key={item.key} className="flex">
-                <FeedModule
-                  accent={item.accent}
-                  eyebrow={t(`demo.landing.audience.${item.key}.eyebrow`)}
-                  title={t(`demo.landing.audience.${item.key}.title`)}
-                  description={t(`demo.landing.audience.${item.key}.body`)}
-                  className="w-full"
-                >
-                  <a href={item.href} className={cn(TEXT_LINK, "mt-auto")}>
-                    {t(`demo.landing.audience.${item.key}.link`)}
-                    <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                  </a>
-                </FeedModule>
-              </li>
-            ))}
-          </ul>
-        </section>
-
         {/* Bring your own model: honest cost and hardware notes */}
         <section
           aria-labelledby="demo-product-models"
@@ -421,36 +448,6 @@ export function DemoLanding() {
               );
             })}
           </ul>
-        </section>
-
-        {/* Own your data */}
-        <section>
-          <FeedModule
-            accent={HOME_MODULE_ACCENTS.cyan}
-            eyebrow={t("demo.landing.data.eyebrow")}
-            title={t("demo.landing.data.title")}
-            description={t("demo.landing.data.body")}
-            className="gap-4"
-          >
-            <ul className="grid gap-3 text-sm leading-relaxed text-[var(--card-foreground)] md:grid-cols-3">
-              {(["provider", "folder", "keys"] as const).map((point) => (
-                <li
-                  key={point}
-                  className="rounded-xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--background)_60%,transparent)] p-4"
-                >
-                  {t(`demo.landing.data.points.${point}`)}
-                </li>
-              ))}
-            </ul>
-            <div className="mt-2 flex flex-wrap gap-x-6">
-              {DATA_LINKS.map((item) => (
-                <a key={item.key} href={item.href} className={TEXT_LINK}>
-                  {t(`demo.landing.data.links.${item.key}`)}
-                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                </a>
-              ))}
-            </div>
-          </FeedModule>
         </section>
 
         {/* Professor Mari as the guide into the docs and the scripted chat */}
@@ -511,27 +508,6 @@ export function DemoLanding() {
               </a>
             </div>
           </div>
-        </section>
-
-        {/* Open source */}
-        <section>
-          <FeedModule
-            accent={HOME_MODULE_ACCENTS.orange}
-            eyebrow={t("demo.landing.source.eyebrow")}
-            title={t("demo.landing.source.title")}
-            description={t("demo.landing.source.body")}
-          >
-            <div className="mt-2 flex flex-wrap gap-3">
-              <a href={GITHUB_URL} {...external(GITHUB_URL)} className={SECONDARY_BUTTON}>
-                <Code className="h-4 w-4" aria-hidden="true" />
-                {t("demo.landing.source.github")}
-              </a>
-              <a href={DISCORD_URL} {...external(DISCORD_URL)} className={SECONDARY_BUTTON}>
-                <MessageCircle className="h-4 w-4" aria-hidden="true" />
-                {t("demo.landing.source.discord")}
-              </a>
-            </div>
-          </FeedModule>
         </section>
 
         {/* Install: platform guides and the download page */}
@@ -634,6 +610,83 @@ export function DemoLanding() {
             ))}
           </nav>
         </footer>
+      </div>
+    </div>
+  );
+}
+
+/** Roleplay actions are written *like this*; an unclosed one stays italic while it types. */
+const italicActions = (text: string) => text.split("*").map((part, i) => (i % 2 ? <em key={i}>{part}</em> : part));
+
+/** Hero chat: a scripted exchange that types itself, then the next one. Reduced motion shows the first one finished. */
+function HeroTeaser() {
+  const { t } = useTranslation();
+  const [exchange, setExchange] = useState(0);
+  const [tick, setTick] = useState(() => (reducedMotion() ? Number.POSITIVE_INFINITY : -TEASER_WAIT_TICKS));
+  const key = TEASER[exchange];
+  const words = t(`demo.landing.teaser.${key}.reply`).split(/(?<=\s)/);
+
+  useEffect(() => {
+    if (!Number.isFinite(tick)) return;
+    const timer = window.setTimeout(() => {
+      if (tick < words.length + TEASER_HOLD_TICKS) return setTick(tick + 1);
+      setExchange((exchange + 1) % TEASER.length);
+      setTick(-TEASER_WAIT_TICKS);
+    }, TEASER_TICK_MS);
+    return () => window.clearTimeout(timer);
+  }, [tick, exchange, words.length]);
+
+  const bubble = "max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed shadow-lg backdrop-blur-md";
+  return (
+    <div
+      aria-hidden="true"
+      className="relative flex min-h-[22rem] flex-col justify-end gap-3 p-4 pb-12 sm:min-h-[25rem] sm:p-5 sm:pb-16"
+    >
+      <div className="flex items-end gap-2.5">
+        <img
+          src={DEMO_ASSETS.iris}
+          alt=""
+          className="h-8 w-8 shrink-0 rounded-full object-cover ring-1 ring-white/30"
+        />
+        <p className={`${bubble} rounded-bl-sm bg-black/55 text-white/90`}>
+          {italicActions(t("demo.landing.teaser.greeting"))}
+        </p>
+      </div>
+      <p
+        key={`user-${exchange}`}
+        className={`${bubble} animate-message-in self-end rounded-br-sm bg-[var(--primary)] text-[var(--primary-foreground)]`}
+      >
+        {t(`demo.landing.teaser.${key}.user`)}
+      </p>
+      <div key={`reply-${exchange}`} className="flex items-start gap-2.5">
+        <img
+          src={DEMO_ASSETS.iris}
+          alt=""
+          className="h-8 w-8 shrink-0 rounded-full object-cover ring-1 ring-white/30"
+        />
+        <div className="flex min-w-0 flex-col items-start gap-1.5">
+          {tick < 0 ? (
+            <p className={`${bubble} flex gap-1 rounded-bl-sm bg-black/55`}>
+              {[0, 150, 300].map((delay) => (
+                <span
+                  key={delay}
+                  className="h-2 w-2 animate-pulse rounded-full bg-white/70"
+                  style={{ animationDelay: `${delay}ms` }}
+                />
+              ))}
+            </p>
+          ) : (
+            <>
+              <p className={`${bubble} rounded-bl-sm bg-black/55 text-white/90`}>
+                {italicActions(words.slice(0, tick + 1).join(""))}
+              </p>
+              <span className="animate-fade-in-up inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-black/40 px-2.5 py-1 text-[0.6875rem] text-white/80 backdrop-blur-md">
+                <BookOpen className="h-3 w-3 text-[var(--primary)]" />
+                {t(`demo.landing.teaser.${key}.entry`)}
+              </span>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
