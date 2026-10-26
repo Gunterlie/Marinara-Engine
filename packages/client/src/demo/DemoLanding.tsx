@@ -34,6 +34,7 @@ import { DEMO_ASSETS } from "./seed";
 import { DemoFeatures } from "./DemoFeatures";
 import { docHref } from "./docs";
 import { FEATURE_CATEGORIES, FEATURE_COUNT } from "./features";
+import "./demo-landing.css";
 
 const subscribeHash = (notify: () => void) => {
   window.addEventListener("hashchange", notify);
@@ -181,6 +182,7 @@ export function DemoLanding() {
   const [mode, setMode] = useState<(typeof MODES)[number]["key"]>("roleplay");
   const active = MODES.find((item) => item.key === mode) ?? MODES[0];
   const stageRef = useRef<HTMLDivElement>(null);
+  const stepRefs = useRef<Record<string, HTMLLIElement | null>>({});
 
   // Pointer parallax for the hero stage: mouse only, never with reduced motion.
   const tilt = (event: PointerEvent<HTMLElement>) => {
@@ -195,13 +197,45 @@ export function DemoLanding() {
     document.title = "Marinara Engine";
   }, []);
   const hash = useSyncExternalStore(subscribeHash, () => window.location.hash);
+  const onFeatures = hash.startsWith("#/features");
 
-  if (hash.startsWith("#/features")) {
+  // The mode in the middle band of the viewport drives the pinned window. Observing never moves the scroll.
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const hit = entries.find((entry) => entry.isIntersecting);
+        if (hit) setMode((hit.target as HTMLElement).dataset.mode as (typeof MODES)[number]["key"]);
+      },
+      { rootMargin: "-45% 0px -45% 0px" },
+    );
+    Object.values(stepRefs.current).forEach((node) => node && observer.observe(node));
+    return () => observer.disconnect();
+  }, [onFeatures]);
+
+  // Browsers without scroll timelines reveal each block once it enters the viewport.
+  useEffect(() => {
+    if (CSS.supports("animation-timeline: view()") || reducedMotion()) return;
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        entry.target.setAttribute("data-revealed", "");
+        observer.unobserve(entry.target);
+      }
+    });
+    document.querySelectorAll(".demo-reveal").forEach((node) => observer.observe(node));
+    return () => observer.disconnect();
+  }, [onFeatures]);
+
+  if (onFeatures) {
     return <DemoFeatures category={new URLSearchParams(hash.split("?")[1] ?? "").get("c") ?? ""} />;
   }
 
   return (
     <div data-testid="demo-product-home" className="relative isolate w-full overflow-x-clip">
+      <div
+        aria-hidden="true"
+        className="demo-progress sticky top-0 z-20 h-0.5 bg-[var(--primary)] [[data-demo-site]_&]:top-12"
+      />
       {/* Ambient light, behind every section */}
       <div
         aria-hidden="true"
@@ -247,7 +281,7 @@ export function DemoLanding() {
           </div>
 
           {/* Stage: a scripted chat plays in the app frame, a real screen behind, Mari at the edge */}
-          <div ref={stageRef} className="relative pb-16 sm:pb-20 lg:pl-6">
+          <div ref={stageRef} className="demo-hero-stage relative pb-16 sm:pb-20 lg:pl-6">
             <img
               src={asset("website/Desktop_DM_Conversation.webp")}
               alt=""
@@ -302,7 +336,7 @@ export function DemoLanding() {
           {PROOF.map((item) => {
             const Icon = item.icon;
             return (
-              <li key={item.key} className="flex">
+              <li key={item.key} className="demo-reveal flex">
                 <a
                   href={item.href}
                   {...external(item.href)}
@@ -323,7 +357,7 @@ export function DemoLanding() {
 
         {/* Mode tour: pick a mode, see the real screen and what it does */}
         <section aria-labelledby="demo-product-modes" className="flex flex-col gap-8">
-          <div className="flex max-w-2xl flex-col gap-3">
+          <div className="demo-reveal flex max-w-2xl flex-col gap-3">
             <span className={EYEBROW}>{t("demo.product.modesEyebrow")}</span>
             <h2 id="demo-product-modes" className={`${SECTION_TITLE} scroll-mt-20`}>
               {t("demo.landing.modes.title")}
@@ -333,80 +367,102 @@ export function DemoLanding() {
             </p>
           </div>
 
-          <div className="grid gap-2 sm:grid-cols-3" role="group" aria-label={t("demo.landing.modes.title")}>
-            {MODES.map((item) => {
-              const Icon = item.icon;
-              const selected = item.key === mode;
-              return (
-                <button
-                  key={item.key}
-                  type="button"
-                  aria-pressed={selected}
-                  onClick={() => setMode(item.key)}
-                  style={{ "--mode-accent": HOME_CHAT_MODE_ACCENTS[item.key] } as CSSProperties}
-                  className={cn(
-                    "flex min-h-14 items-center gap-3 rounded-xl border px-4 py-3 text-left transition-colors",
-                    FOCUS,
-                    selected
-                      ? "border-[color-mix(in_srgb,var(--mode-accent)_55%,var(--border))] bg-[color-mix(in_srgb,var(--mode-accent)_12%,var(--card))]"
-                      : "border-[var(--border)] bg-[color-mix(in_srgb,var(--card)_60%,transparent)] hover:bg-[var(--accent)]",
-                  )}
-                >
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[color-mix(in_srgb,var(--mode-accent)_18%,transparent)] text-[var(--mode-accent)]">
-                    <Icon className="h-[1.1rem] w-[1.1rem]" aria-hidden="true" />
-                  </span>
-                  <span className="flex min-w-0 flex-col">
-                    <span className="text-sm font-semibold text-[var(--foreground)]">
+          <div className="grid gap-10 lg:gap-16 lg:motion-safe:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+            <ol className="flex flex-col gap-12 lg:motion-safe:gap-0">
+              {MODES.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <li
+                    key={item.key}
+                    ref={(node) => {
+                      stepRefs.current[item.key] = node;
+                    }}
+                    data-mode={item.key}
+                    data-active={item.key === mode ? "" : undefined}
+                    style={{ "--mode-accent": HOME_CHAT_MODE_ACCENTS[item.key] } as CSSProperties}
+                    className="demo-mode-step flex flex-col gap-4 lg:motion-safe:min-h-[70vh] lg:motion-safe:justify-center"
+                  >
+                    <span className="flex items-center gap-3 text-sm font-semibold text-[var(--mode-accent)]">
+                      <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[color-mix(in_srgb,var(--mode-accent)_18%,transparent)]">
+                        <Icon className="h-[1.1rem] w-[1.1rem]" aria-hidden="true" />
+                      </span>
                       {t(`demo.landing.modes.${item.key}.eyebrow`)}
                     </span>
-                    <span className="text-xs text-[var(--muted-foreground)]">
-                      {t(`demo.product.modes.${item.key}.tagline`)}
-                    </span>
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-
-          <div
-            style={{ "--mode-accent": HOME_CHAT_MODE_ACCENTS[active.key] } as CSSProperties}
-            className="grid gap-8 rounded-3xl border border-[var(--border)] bg-[radial-gradient(70%_80%_at_0%_100%,color-mix(in_srgb,var(--mode-accent)_14%,transparent),transparent_70%),var(--card)] p-4 sm:p-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] lg:items-center lg:p-8"
-          >
-            <img
-              key={active.image}
-              src={asset(active.image)}
-              alt={t(`demo.landing.modes.${active.key}.alt`)}
-              width={1920}
-              height={1080}
-              loading="lazy"
-              className={`${SHOT} aspect-video`}
-            />
-            <div className="flex flex-col gap-4">
-              <h3 className="text-2xl font-bold leading-tight text-[var(--card-foreground)]">
-                {t(`demo.landing.modes.${active.key}.title`)}
-              </h3>
-              <p className="text-sm leading-relaxed text-[var(--muted-foreground)] sm:text-base">
-                {t(`demo.landing.modes.${active.key}.body`)}
-              </p>
-              <ul className="flex flex-col gap-2.5 text-sm text-[var(--card-foreground)]">
-                {active.points.map((point) => (
-                  <li key={point} className="flex gap-2.5">
-                    <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-[var(--mode-accent)]" aria-hidden="true" />
-                    {t(`demo.product.modes.${active.key}.points.${point}`)}
+                    <h3 className="text-balance text-2xl font-bold leading-tight text-[var(--foreground)] sm:text-3xl">
+                      {t(`demo.landing.modes.${item.key}.title`)}
+                    </h3>
+                    <p className="max-w-[48ch] text-pretty leading-relaxed text-[var(--muted-foreground)]">
+                      {t(`demo.landing.modes.${item.key}.body`)}
+                    </p>
+                    <ul className="flex flex-col gap-2 text-sm text-[var(--foreground)]">
+                      {item.points.map((point) => (
+                        <li key={point} className="flex gap-2.5">
+                          <span
+                            className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-[var(--mode-accent)]"
+                            aria-hidden="true"
+                          />
+                          {t(`demo.product.modes.${item.key}.points.${point}`)}
+                        </li>
+                      ))}
+                    </ul>
+                    <a href={item.href} className={TEXT_LINK}>
+                      {t(`demo.landing.modes.${item.key}.link`)}
+                      <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                    </a>
+                    {/* Without the pinned window (small screens, reduced motion) each mode shows its own screen. */}
+                    <img
+                      src={asset(item.image)}
+                      alt={t(`demo.landing.modes.${item.key}.alt`)}
+                      width={1920}
+                      height={1080}
+                      loading="lazy"
+                      decoding="async"
+                      className={`${SHOT} aspect-video lg:max-w-3xl lg:motion-safe:hidden`}
+                    />
                   </li>
-                ))}
-              </ul>
-              <a href={active.href} className={TEXT_LINK}>
-                {t(`demo.landing.modes.${active.key}.link`)}
-                <ArrowRight className="h-4 w-4" aria-hidden="true" />
-              </a>
+                );
+              })}
+            </ol>
+            {/* Pinned product window: the screen cross-fades as each mode scrolls past. Decorative, the steps carry the text. */}
+            <div className="hidden lg:motion-safe:block" aria-hidden="true">
+              <div
+                style={{ "--mode-accent": HOME_CHAT_MODE_ACCENTS[active.key] } as CSSProperties}
+                className="sticky top-[calc(50vh-12rem)] rounded-3xl border border-[var(--border)] bg-[radial-gradient(70%_80%_at_0%_100%,color-mix(in_srgb,var(--mode-accent)_16%,transparent),transparent_70%),var(--card)] p-4 transition-colors duration-500"
+              >
+                <div className="relative aspect-video">
+                  {MODES.map((item) => (
+                    <img
+                      key={item.key}
+                      src={asset(item.image)}
+                      alt=""
+                      width={1920}
+                      height={1080}
+                      loading="lazy"
+                      decoding="async"
+                      data-active={item.key === mode ? "" : undefined}
+                      className={`demo-mode-shot ${SHOT} absolute inset-0 h-full`}
+                    />
+                  ))}
+                </div>
+                <div className="mt-4 flex justify-center gap-2">
+                  {MODES.map((item) => (
+                    <span
+                      key={item.key}
+                      className={cn(
+                        "h-1.5 rounded-full transition-all duration-500",
+                        item.key === mode ? "w-8 bg-[var(--mode-accent)]" : "w-1.5 bg-[var(--border)]",
+                      )}
+                    />
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </section>
 
         {/* Feature stories in Home module cards */}
         <section aria-labelledby="demo-product-stories" className="flex flex-col gap-8">
-          <div className="flex max-w-2xl flex-col gap-3">
+          <div className="demo-reveal flex max-w-2xl flex-col gap-3">
             <span className={EYEBROW}>{t("demo.landing.stories.eyebrow")}</span>
             <h2 id="demo-product-stories" className={SECTION_TITLE}>
               {t("demo.landing.stories.title")}
@@ -448,7 +504,7 @@ export function DemoLanding() {
         {/* Feature areas: every documented feature, one tile per area */}
         <section aria-labelledby="demo-product-features" className="flex flex-col gap-8">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-            <div className="flex max-w-2xl flex-col gap-3">
+            <div className="demo-reveal flex max-w-2xl flex-col gap-3">
               <span className={EYEBROW}>{t("demo.features.eyebrow", { count: FEATURE_COUNT })}</span>
               <h2 id="demo-product-features" className={`${SECTION_TITLE} scroll-mt-20`}>
                 {t("demo.landing.features.title")}
@@ -545,7 +601,7 @@ export function DemoLanding() {
             height={360}
             loading="lazy"
             draggable={false}
-            className="mx-auto h-48 w-auto select-none object-contain drop-shadow-[0_16px_24px_rgba(0,0,0,0.35)] sm:h-64 md:mx-0 md:self-end lg:h-80"
+            className="demo-drift mx-auto h-48 w-auto select-none object-contain drop-shadow-[0_16px_24px_rgba(0,0,0,0.35)] sm:h-64 md:mx-0 md:self-end lg:h-80"
           />
           <div className="flex min-w-0 flex-col gap-5">
             <div className="flex flex-col gap-3">
@@ -596,7 +652,7 @@ export function DemoLanding() {
         {/* Install: platform guides and the download page */}
         <section aria-labelledby="demo-product-install" className="flex flex-col gap-8">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-            <div className="flex max-w-2xl flex-col gap-3">
+            <div className="demo-reveal flex max-w-2xl flex-col gap-3">
               <span className={EYEBROW}>{t("demo.product.installEyebrow")}</span>
               <h2 id="demo-product-install" className={SECTION_TITLE}>
                 {t("demo.landing.platforms.title")}

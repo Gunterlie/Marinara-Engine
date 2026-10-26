@@ -275,6 +275,10 @@ try {
   // Reset that tab's in-memory seed before comparing independent fresh sessions.
   await pages[0].reload();
   await expect(pages[0].getByTestId("demo-product-home")).toBeVisible();
+  // Scroll story: the step in the middle of the viewport picks the pinned screen.
+  await pages[0].locator('[data-mode="conversation"]').evaluate((node) => node.scrollIntoView({ block: "center" }));
+  await expect(pages[0].locator("[data-mode][data-active]")).toHaveAttribute("data-mode", "conversation");
+  await expect(pages[0].locator(".demo-mode-shot[data-active]")).toHaveCount(1);
   const [first, second] = await Promise.all(pages.map(probe));
   assert.ok(Array.isArray(first.chars) && first.chars.length, "Example characters missing");
   assert.ok(Array.isArray(first.chats) && first.chats.length, "Example chat missing");
