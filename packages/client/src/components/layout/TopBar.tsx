@@ -474,7 +474,11 @@ export function TopBar({
         // Website pages scroll under a see-through bar; under [data-demo-site] they pad themselves by its height.
         demoSite
           ? "absolute inset-x-0 top-[env(safe-area-inset-top)] z-30 bg-[color-mix(in_srgb,var(--background)_35%,transparent)]! backdrop-blur-xl sm:px-4"
-          : "relative z-10 bg-[var(--marinara-topbar-surface)] backdrop-blur-sm",
+          : cn(
+              // The demo keeps the bar out of flow on every route, so entering the workspace moves nothing.
+              import.meta.env.VITE_MARINARA_DEMO === "1" ? "absolute inset-x-0 top-0" : "relative",
+              "z-10 bg-[var(--marinara-topbar-surface)] backdrop-blur-sm",
+            ),
         mobileTopbarNavigation ? "touch-none" : "select-none",
       )}
     >

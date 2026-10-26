@@ -374,6 +374,8 @@ try {
   // Feature-page links deep-link a chat and a panel, then settle on plain #/demo.
   await pages[0].evaluate(() => (window.location.hash = "#/demo?chat=demo-chat-rook&panel=lorebooks"));
   await pages[0].waitForFunction(() => window.location.hash === "#/demo");
+  await expect(pages[0].locator('[data-tour="panel-lorebooks"]').first()).toHaveAttribute("aria-pressed", "true");
+  await pages[0].locator('[data-tour="panel-lorebooks"]').first().click();
   for (const [mode, name] of [
     ["conversation", "Deck 4 crew"],
     ["roleplay", "Aboard the Gull's Promise"],

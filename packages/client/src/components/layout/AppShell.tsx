@@ -1434,6 +1434,8 @@ export function AppShell({
             data-chat-covered={chatSurfaceActive ? undefined : "true"}
             className={cn(
               "mari-app-background-paint flex flex-1 flex-col overflow-hidden",
+              // The demo bar is out of flow everywhere (see TopBar); website pages pad themselves.
+              import.meta.env.VITE_MARINARA_DEMO === "1" && !demoSite && "pt-12",
               (botBrowserOpen || gameAssetsBrowserOpen || (!shellOverlayMode && hasDetailView)) && "hidden",
             )}
             style={
