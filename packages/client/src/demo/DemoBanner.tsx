@@ -9,7 +9,6 @@ import {
   useState,
   useSyncExternalStore,
   type KeyboardEvent as ReactKeyboardEvent,
-  type MouseEvent as ReactMouseEvent,
 } from "react";
 import { createPortal } from "react-dom";
 import { APP_VERSION } from "@marinara-engine/shared";
@@ -113,20 +112,6 @@ const subscribeHash = (notify: () => void) => {
   return () => window.removeEventListener("hashchange", notify);
 };
 
-// Features is a section of the home page, so the link scrolls there once home shows.
-function showFeatures(event: ReactMouseEvent<HTMLAnchorElement>) {
-  const scroll = () =>
-    requestAnimationFrame(() =>
-      document.getElementById("demo-product-modes")?.scrollIntoView({
-        block: "start",
-        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
-      }),
-    );
-  if (window.location.hash !== "#/") return window.addEventListener("hashchange", scroll, { once: true });
-  event.preventDefault();
-  scroll();
-}
-
 // The website part of the one shared bar. Website pages give it the whole bar; in the demo workspace the Engine
 // controls follow it, so its links wait for wide screens and the demo menu carries them.
 export function DemoSiteStart({ site }: { site: boolean }) {
@@ -162,7 +147,7 @@ export function DemoSiteStart({ site }: { site: boolean }) {
         aria-label={t("demo.site.navigation")}
         className={`items-center gap-0.5 ${site ? "mx-auto hidden md:flex" : "hidden"}`}
       >
-        <a href="#/" onClick={showFeatures} className={NAV_LINK}>
+        <a href="#/features" className={NAV_LINK}>
           {t("demo.site.features")}
         </a>
         <a href="#/docs" aria-current={hash.startsWith("#/docs") ? "page" : undefined} className={NAV_LINK}>
