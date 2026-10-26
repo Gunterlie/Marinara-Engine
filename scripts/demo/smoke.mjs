@@ -74,7 +74,7 @@ async function closeSidebar(page) {
   await expect(page.locator('[data-component="ChatSidebar"]')).not.toBeInViewport();
 }
 async function openSeedChat(page) {
-  // The website pages have their own header; the Engine TopBar starts in the demo workspace.
+  // The website and the demo share one TopBar; its Engine controls show once the demo workspace opens.
   const tryDemo = page.getByTestId("demo-site-try");
   if (await tryDemo.isVisible()) await tryDemo.click();
   const toggle = page.locator('[data-tour="sidebar-toggle"]');

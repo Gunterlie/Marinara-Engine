@@ -1,7 +1,15 @@
 // ──────────────────────────────────────────────
 // Static demo: persistent banner + guided lessons
 // ──────────────────────────────────────────────
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+} from "react";
 import { createPortal } from "react-dom";
 import { APP_VERSION } from "@marinara-engine/shared";
 import { BookOpen, Check, Code, Download, GraduationCap, Home, RotateCcw } from "lucide-react";
@@ -13,6 +21,8 @@ import { isMobileShellViewport, useUIStore, type Panel } from "../stores/ui.stor
 import { resetDemo } from "./runtime";
 import { DEMO_SEED_IDS } from "./seed";
 import { useDemoNavigation } from "./navigation";
+import { MarinaraWordmark } from "../components/chat/HomeBrowserHub";
+import { DISCORD_URL, GITHUB_URL, asset } from "./DemoLanding";
 
 const INSTALL_URL = "https://github.com/Pasta-Devs/Marinara-Engine#installation";
 // ponytail: fork trial branch; point at the release tag once demos publish from stable tags.
@@ -89,10 +99,69 @@ function readDone(): LessonId[] {
   }
 }
 
-let pendingLesson: LessonId | null = null;
-
 const BUTTON_CLASS =
   "flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs font-medium text-[var(--marinara-chat-chrome-panel-text)] transition-colors hover:bg-[var(--marinara-chat-chrome-highlight-bg)] focus-visible:outline-2 focus-visible:outline-[var(--marinara-chat-chrome-focus-ring)]";
+
+const NAV_LINK =
+  "inline-flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-[var(--muted-foreground)] transition-colors hover:bg-[var(--accent)] hover:text-[var(--foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--marinara-app-accent-solid)] sm:px-2.5";
+
+// The website part of the one shared bar: TopBar puts it first, and in the demo workspace its Engine controls follow.
+export function DemoSiteStart({ site }: { site: boolean }) {
+  const { t } = useUiTranslation();
+  // In the workspace the Engine icons need the room, so labels wait for wide screens and phones use the lessons menu.
+  const labelClass = site ? "max-sm:sr-only" : "max-lg:sr-only";
+  const link = (href: string, icon: ReactNode, label: string, className = "") => (
+    <a
+      href={href}
+      className={`${NAV_LINK} ${className}`}
+      {...(href.startsWith("http") ? { target: "_blank", rel: "noreferrer" } : {})}
+    >
+      {icon}
+      <span className={labelClass}>{label}</span>
+    </a>
+  );
+  return (
+    <div data-testid="demo-site-header" className="flex min-w-0 shrink-0 items-center gap-0.5 sm:gap-1">
+      <a href="#/" className={`${NAV_LINK} !px-1`} aria-label={t("demo.docs.home")}>
+        <img src={asset("logo.png")} alt="" width={32} height={32} className="h-7 w-7 object-contain" />
+        <MarinaraWordmark className="hidden text-sm lg:block" />
+      </a>
+      <nav
+        aria-label={t("demo.site.navigation")}
+        className={`items-center gap-0.5 ${site ? "flex" : "hidden sm:flex"}`}
+      >
+        {link("#/docs", <BookOpen className="h-4 w-4" aria-hidden="true" />, t("demo.site.docs"))}
+        {link("#/download", <Download className="h-4 w-4" aria-hidden="true" />, t("demo.site.download"))}
+        {link(
+          DISCORD_URL,
+          <img src={asset("home/tab-icons/discord.svg")} alt="" className="h-4 w-4" />,
+          t("demo.landing.community.discord"),
+          "max-lg:hidden",
+        )}
+        {link(
+          GITHUB_URL,
+          <Code className="h-4 w-4" aria-hidden="true" />,
+          t("demo.landing.community.github"),
+          "max-lg:hidden",
+        )}
+      </nav>
+      <DemoBanner />
+    </div>
+  );
+}
+
+export function DemoSiteTry({ site }: { site: boolean }) {
+  const { t } = useUiTranslation();
+  return (
+    <a
+      href="#/demo"
+      data-testid="demo-site-try"
+      className={`ml-2 min-h-11 shrink-0 items-center rounded-full bg-[var(--primary)] px-3.5 text-xs font-semibold text-[var(--primary-foreground)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--marinara-app-accent-solid)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)] ${site ? "inline-flex" : "hidden lg:inline-flex"}`}
+    >
+      {t("demo.site.try")}
+    </a>
+  );
+}
 
 export function DemoNavigation() {
   useDemoNavigation();
@@ -150,23 +219,11 @@ export function DemoBanner() {
     lessonsButtonRef.current?.focus();
   };
 
-  // The website header unmounts once a chat opens, so a lesson started there
-  // continues in the banner that the Engine TopBar mounts next.
-  useEffect(() => {
-    if (!pendingLesson) return;
-    setLesson(pendingLesson);
-    pendingLesson = null;
-  }, []);
-
   const startLesson = (id: LessonId) => {
     setLessonsOpen(false);
     const ui = useUIStore.getState();
-    if (useChatStore.getState().activeChatId || ui.hasAnyDetailOpen() || ui.rightPanelOpen) {
-      setLesson(id);
-      return;
-    }
-    pendingLesson = id;
-    openChat();
+    if (!useChatStore.getState().activeChatId && !ui.hasAnyDetailOpen() && !ui.rightPanelOpen) openChat();
+    setLesson(id);
   };
 
   const finishLesson = (completed: boolean) => {

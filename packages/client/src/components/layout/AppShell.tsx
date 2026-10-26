@@ -1407,7 +1407,7 @@ export function AppShell({
           shellOverlayMode && hasDetailView && "z-50",
         )}
       >
-        {!demoSite && <TopBar mobileTopbarNavigation={shellOverlayMode} />}
+        <TopBar mobileTopbarNavigation={shellOverlayMode} demoSite={demoSite} />
         <div className="mari-app-background-paint relative flex flex-1 flex-col overflow-hidden">
           {/* Browser — kept mounted once opened so state persists across close/reopen */}
           <MountOnceWhenOpened open={botBrowserOpen} overlay>

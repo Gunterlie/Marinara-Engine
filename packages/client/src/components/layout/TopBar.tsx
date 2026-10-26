@@ -57,9 +57,13 @@ import {
   PersonalExtensionTopbarButtons,
 } from "./PersonalExtensionContributionsMenu";
 
-const DemoControls =
+const DemoSiteStart =
   import.meta.env.VITE_MARINARA_DEMO === "1"
-    ? lazy(() => import("../../demo/DemoBanner").then((module) => ({ default: module.DemoBanner })))
+    ? lazy(() => import("../../demo/DemoBanner").then((module) => ({ default: module.DemoSiteStart })))
+    : null;
+const DemoSiteTry =
+  import.meta.env.VITE_MARINARA_DEMO === "1"
+    ? lazy(() => import("../../demo/DemoBanner").then((module) => ({ default: module.DemoSiteTry })))
     : null;
 
 // English source text for `localize()` - the lookup matches on the literal string, not the key.
@@ -129,7 +133,14 @@ const TOPBAR_ACCENT_ICON_CLASS = "mari-topbar-accent-icon mari-accent-animated";
 const CHAT_TOPBAR_GRADIENT_ID = "mari-topbar-chats-gradient";
 const HOME_LONG_PRESS_MS = 550;
 
-export function TopBar({ mobileTopbarNavigation }: { mobileTopbarNavigation: boolean }) {
+export function TopBar({
+  mobileTopbarNavigation,
+  demoSite = false,
+}: {
+  mobileTopbarNavigation: boolean;
+  // Static demo website routes: only the site part of the bar shows, the Engine controls hide.
+  demoSite?: boolean;
+}) {
   const localize = useLocalizedUiText();
   const mariEdgeGlow = useMariEdgeGlow();
   const { contributions } = usePersonalExtensionContributions();
@@ -481,17 +492,21 @@ export function TopBar({ mobileTopbarNavigation }: { mobileTopbarNavigation: boo
 
       {/* Left section: window controls + chat info */}
       <div className="mari-topbar-left flex min-w-0 flex-1 items-center gap-2">
+        {DemoSiteStart && (
+          <Suspense fallback={null}>
+            <DemoSiteStart site={demoSite} />
+          </Suspense>
+        )}
         <div
           ref={leftControlsRef}
-          className="mari-topbar-left-controls mari-rgb-icon-scope flex shrink-0 items-center gap-2"
+          className={cn(
+            "mari-topbar-left-controls mari-rgb-icon-scope flex shrink-0 items-center gap-2",
+            // Important beats the phone rule that sets display: contents.
+            demoSite && "!hidden",
+          )}
         >
           {mobileTopbarNavigation ? [homeButton, chatsButton] : [chatsButton, homeButton]}
         </div>
-        {DemoControls && (
-          <Suspense fallback={null}>
-            <DemoControls />
-          </Suspense>
-        )}
         {musicDjInstalled ? (
           <>
             {spotifyDesktopViewport && <SpotifyMiniPlayer forceFloating={spotifyUseFloatingFallback} />}
@@ -508,7 +523,10 @@ export function TopBar({ mobileTopbarNavigation }: { mobileTopbarNavigation: boo
         ref={rightNavRef}
         data-tour="panel-buttons"
         aria-label={localize("Panel navigation")}
-        className="mari-topbar-panel-nav mari-rgb-icon-scope flex shrink-0 items-center justify-end gap-0.5 rounded-xl p-1 max-sm:gap-0 max-sm:p-0.5"
+        className={cn(
+          "mari-topbar-panel-nav mari-rgb-icon-scope flex shrink-0 items-center justify-end gap-0.5 rounded-xl p-1 max-sm:gap-0 max-sm:p-0.5",
+          demoSite && "!hidden",
+        )}
       >
         <button
           onClick={() => handleRightPanelClick("characters")}
@@ -598,6 +616,11 @@ export function TopBar({ mobileTopbarNavigation }: { mobileTopbarNavigation: boo
         <PersonalExtensionContributionsMenu />
         <TopbarMoreMenu items={overflowItems} headerRef={headerRef} phoneTopbar={phoneTopbar} />
       </nav>
+      {DemoSiteTry && (
+        <Suspense fallback={null}>
+          <DemoSiteTry site={demoSite} />
+        </Suspense>
+      )}
     </header>
   );
 
