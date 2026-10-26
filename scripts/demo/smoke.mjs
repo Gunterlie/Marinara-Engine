@@ -74,6 +74,9 @@ async function closeSidebar(page) {
   await expect(page.locator('[data-component="ChatSidebar"]')).not.toBeInViewport();
 }
 async function openSeedChat(page) {
+  // The website pages have their own header; the Engine TopBar starts in the demo workspace.
+  const tryDemo = page.getByTestId("demo-site-try");
+  if (await tryDemo.isVisible()) await tryDemo.click();
   const toggle = page.locator('[data-tour="sidebar-toggle"]');
   await toggle.waitFor();
   if ((await toggle.getAttribute("aria-pressed")) !== "true") await toggle.click();
@@ -165,8 +168,9 @@ try {
   const article = pages[0].getByTestId("demo-doc-article");
   await expect(article).toBeVisible();
   await expect(article.locator("h1")).toBeVisible();
-  await pages[0].getByText("On this page", { exact: true }).click();
-  const sectionLink = pages[0].getByTestId("demo-docs").locator("details a").nth(1);
+  const toc = pages[0].getByTestId("demo-docs-toc");
+  await toc.locator("summary").click();
+  const sectionLink = toc.locator("a").nth(1);
   const sectionUrl = await sectionLink.getAttribute("href");
   await sectionLink.click();
   await pages[0].reload();

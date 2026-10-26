@@ -333,7 +333,10 @@ const HOME_WIDGET_MANAGER_LABEL_KEYS: Record<BuiltInHomeWidgetId, { name: string
 const HOME_WIDGET_MIN_ROW_HEIGHT = 208;
 const HOME_WIDGET_MAX_ROW_HEIGHT = 640;
 const ENGINE_RELEASE_URL = `https://github.com/Pasta-Devs/Marinara-Engine/releases/tag/v${encodeURIComponent(APP_VERSION)}`;
-const HOME_MODULE_ACCENTS = {
+const HOME_PAGE_CLASS =
+  "relative min-h-full overflow-hidden bg-[radial-gradient(circle_at_12%_8%,oklch(0.79_0.16_205/0.14),transparent_27%),radial-gradient(circle_at_87%_12%,oklch(0.73_0.21_345/0.14),transparent_29%),radial-gradient(circle_at_72%_76%,oklch(0.76_0.19_52/0.08),transparent_28%),var(--background)]";
+
+export const HOME_MODULE_ACCENTS = {
   cyan: "oklch(0.79 0.16 205)",
   orange: "oklch(0.76 0.19 52)",
   // Explicit custom-widget palette choice; built-in interface accents follow the theme.
@@ -375,7 +378,7 @@ type HomeBrowserHubProps = {
   websiteContent?: ReactNode;
 };
 
-function MarinaraWordmark({ className }: { className?: string }) {
+export function MarinaraWordmark({ className }: { className?: string }) {
   const { t } = useTranslation();
   const brandName = t("app.documentTitle");
   return (
@@ -748,7 +751,7 @@ function HomeWidgetShortcut({
   );
 }
 
-function FeedModule({
+export function FeedModule({
   eyebrow,
   title,
   description,
@@ -1608,14 +1611,17 @@ export function HomeBrowserHub({ pageActive, onOpenCredits, hideProfessor, websi
       data-component="HomeBrowserHub"
     >
       <div className="flex h-full min-h-0 w-full flex-col overflow-hidden border border-[var(--border)]/75 bg-[var(--marinara-home-page-wash)] shadow-2xl shadow-black/25 sm:rounded-xl">
-        <header className="mari-home-browser-chrome relative z-40 shrink-0 border-b border-[var(--marinara-topbar-border)] bg-[var(--marinara-topbar-surface)] shadow-[0_8px_28px_-26px_rgba(0,0,0,0.8)] backdrop-blur-sm">
+        <header
+          hidden={!!websiteContent}
+          className="mari-home-browser-chrome relative z-40 shrink-0 border-b border-[var(--marinara-topbar-border)] bg-[var(--marinara-topbar-surface)] shadow-[0_8px_28px_-26px_rgba(0,0,0,0.8)] backdrop-blur-sm"
+        >
           <div className="mari-home-browser-tab-row flex h-10 min-w-0 items-end gap-1 border-b border-[var(--border)]/45 px-2 sm:gap-2 sm:px-3">
             <div
               className="relative z-10 flex shrink-0 self-center items-center gap-2 pr-1 sm:pr-3"
               data-component="HomeBrowserHub.Brand"
             >
               <img
-                src={websiteContent ? "/logo.png" : "/logo-splash.gif"}
+                src="/logo-splash.gif"
                 alt=""
                 data-component="HomeBrowserHub.AnimatedLogo"
                 className="h-8 w-8 shrink-0 object-contain drop-shadow-[0_0_10px_color-mix(in_srgb,var(--marinara-app-accent-solid)_28%,transparent)]"
@@ -1631,7 +1637,7 @@ export function HomeBrowserHub({ pageActive, onOpenCredits, hideProfessor, websi
                 only contain tabs, and two independent reviews flagged the
                 nesting. In the phone shell (portrait or landscape) this is the
                 only way to the bookmarks, and only on the Home tab. */}
-            {mobileShell && activeTab === "home" && !websiteContent ? (
+            {mobileShell && activeTab === "home" ? (
               <button
                 ref={mobileBookmarksTriggerRef}
                 type="button"
@@ -1750,7 +1756,7 @@ export function HomeBrowserHub({ pageActive, onOpenCredits, hideProfessor, websi
             </div>
           </div>
 
-          {showHomeBrowserAddressBar && !mobileShell && !websiteContent ? (
+          {showHomeBrowserAddressBar && !mobileShell ? (
             <div
               className="mari-home-browser-address-row flex h-8 shrink-0 items-center gap-1.5 px-2 py-0.5 sm:h-10 sm:gap-2 sm:px-3"
               data-component="HomeBrowserHub.AddressRow"
@@ -1810,7 +1816,7 @@ export function HomeBrowserHub({ pageActive, onOpenCredits, hideProfessor, websi
             </div>
           ) : null}
 
-          {activeTab === "home" && !mobileShell && !websiteContent ? (
+          {activeTab === "home" && !mobileShell ? (
             <nav
               className="flex min-h-8 items-center border-t border-[var(--border)]/45 px-2 sm:min-h-9 sm:px-3"
               aria-label={t("home.browser.bookmarksLabel")}
@@ -2055,16 +2061,16 @@ export function HomeBrowserHub({ pageActive, onOpenCredits, hideProfessor, websi
               }}
             />
           ) : websiteContent && activeTab === "home" ? (
-            websiteContent
+            <div className={HOME_PAGE_CLASS} data-component="HomeBrowserHub.HomePage">
+              <HomeStarfield />
+              <div className="relative z-[1]">{websiteContent}</div>
+            </div>
           ) : activeTab === "professor" ? (
             <div className="flex h-full items-center justify-center text-sm text-[var(--muted-foreground)]">
               {t("home.browser.professorOpening", "Opening Professor Mari...")}
             </div>
           ) : (
-            <div
-              className="relative min-h-full overflow-hidden bg-[radial-gradient(circle_at_12%_8%,oklch(0.79_0.16_205/0.14),transparent_27%),radial-gradient(circle_at_87%_12%,oklch(0.73_0.21_345/0.14),transparent_29%),radial-gradient(circle_at_72%_76%,oklch(0.76_0.19_52/0.08),transparent_28%),var(--background)]"
-              data-component="HomeBrowserHub.HomePage"
-            >
+            <div className={HOME_PAGE_CLASS} data-component="HomeBrowserHub.HomePage">
               <HomeStarfield />
               <div className="relative z-[1] w-full p-[clamp(0.65rem,1vw,1.25rem)]">
                 <section

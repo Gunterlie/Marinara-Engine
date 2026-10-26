@@ -133,8 +133,7 @@ const TRACKER_PANEL_ANCHOR_SELECTOR = '[data-tracker-panel-anchor="roleplay-hud"
 const ROLEPLAY_CHAT_COLUMN_SELECTOR = '[data-roleplay-chat-column="true"]';
 const TOP_BAR_SELECTOR = '[data-component="TopBar"]';
 // Below the TopBar, whose height a sideways phone shortens (--mari-topbar-height in globals.css).
-const MOBILE_SHELL_PANEL_TOP_CLASS =
-  "top-[calc(env(safe-area-inset-top)_+_var(--mari-topbar-height,3rem))]";
+const MOBILE_SHELL_PANEL_TOP_CLASS = "top-[calc(env(safe-area-inset-top)_+_var(--mari-topbar-height,3rem))]";
 const MOBILE_SHELL_PANEL_BOTTOM_PADDING_CLASS =
   "pb-[min(max(var(--mari-safe-area-inset-bottom,env(safe-area-inset-bottom)),0.5rem),3rem)]";
 const CENTER_COMPACT_WIDTH = 768;
@@ -396,7 +395,13 @@ export function AppShell({
     };
   }, []);
 
-  const sidebarOpen = useUIStore(selectSidebarShown);
+  // Static demo: the website pages (no chat, editor or panel open) bring their own header instead of the Engine chrome.
+  const demoNoWorkspace = useUIStore(
+    (s) => import.meta.env.VITE_MARINARA_DEMO === "1" && !s.hasAnyDetailOpen() && !s.rightPanelOpen,
+  );
+  const demoNoChat = useChatStore((s) => !s.activeChatId);
+  const demoSite = demoNoWorkspace && demoNoChat;
+  const sidebarOpen = useUIStore(selectSidebarShown) && !demoSite;
   const setSidebarOpen = useUIStore((s) => s.setSidebarOpen);
   const sidebarWidth = useUIStore((s) => s.sidebarWidth);
   const setSidebarWidth = useUIStore((s) => s.setSidebarWidth);
@@ -1402,7 +1407,7 @@ export function AppShell({
           shellOverlayMode && hasDetailView && "z-50",
         )}
       >
-        <TopBar mobileTopbarNavigation={shellOverlayMode} />
+        {!demoSite && <TopBar mobileTopbarNavigation={shellOverlayMode} />}
         <div className="mari-app-background-paint relative flex flex-1 flex-col overflow-hidden">
           {/* Browser — kept mounted once opened so state persists across close/reopen */}
           <MountOnceWhenOpened open={botBrowserOpen} overlay>

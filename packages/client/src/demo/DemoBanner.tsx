@@ -89,6 +89,8 @@ function readDone(): LessonId[] {
   }
 }
 
+let pendingLesson: LessonId | null = null;
+
 const BUTTON_CLASS =
   "flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs font-medium text-[var(--marinara-chat-chrome-panel-text)] transition-colors hover:bg-[var(--marinara-chat-chrome-highlight-bg)] focus-visible:outline-2 focus-visible:outline-[var(--marinara-chat-chrome-focus-ring)]";
 
@@ -148,9 +150,23 @@ export function DemoBanner() {
     lessonsButtonRef.current?.focus();
   };
 
+  // The website header unmounts once a chat opens, so a lesson started there
+  // continues in the banner that the Engine TopBar mounts next.
+  useEffect(() => {
+    if (!pendingLesson) return;
+    setLesson(pendingLesson);
+    pendingLesson = null;
+  }, []);
+
   const startLesson = (id: LessonId) => {
     setLessonsOpen(false);
-    setLesson(id);
+    const ui = useUIStore.getState();
+    if (useChatStore.getState().activeChatId || ui.hasAnyDetailOpen() || ui.rightPanelOpen) {
+      setLesson(id);
+      return;
+    }
+    pendingLesson = id;
+    openChat();
   };
 
   const finishLesson = (completed: boolean) => {
@@ -206,7 +222,8 @@ export function DemoBanner() {
             onKeyDown={closeLessonsOnEscape}
             onBlur={(event) => {
               const target = event.relatedTarget as Node | null;
-              if (!event.currentTarget.contains(target) && !lessonsButtonRef.current?.contains(target)) setLessonsOpen(false);
+              if (!event.currentTarget.contains(target) && !lessonsButtonRef.current?.contains(target))
+                setLessonsOpen(false);
             }}
             style={position}
             className="mari-chrome-token-scope fixed z-[9990] flex max-h-[calc(100dvh-4rem)] w-64 max-w-[calc(100vw-1rem)] flex-col gap-0.5 overflow-y-auto rounded-xl border border-[var(--marinara-chat-chrome-panel-border)] bg-[var(--marinara-chat-chrome-panel-bg)] p-1 shadow-lg"

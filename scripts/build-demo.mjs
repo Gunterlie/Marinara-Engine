@@ -57,9 +57,17 @@ writeFileSync(resolve(root, "packages/client/dist-demo/demo-docs/guides.json"), 
 
 mkdirSync(resolve(root, "packages/client/dist-demo/website"), { recursive: true });
 const sharp = createRequire(resolve(root, "packages/server/package.json"))("sharp");
-for (const image of ["Desktop_Roleplay_View.png", "Desktop_DM_Conversation.png", "Browser_Game_Screen.png"]) {
+for (const image of [
+  "Desktop_Roleplay_View.png",
+  "Desktop_DM_Conversation.png",
+  "Browser_Game_Screen.png",
+  "Desktop_Tracker_Panel.png",
+  "Mobile_Group_Conversation.png",
+  "Desktop_Custom_Theme.png",
+  "Browser_Game_Dialogue.png",
+]) {
   await sharp(resolve(root, "docs/screenshots", image))
-    .resize({ width: 1600, withoutEnlargement: true })
+    .resize({ width: 1600, height: 1600, fit: "inside", withoutEnlargement: true })
     .webp({ quality: 82, effort: 4 })
     .toFile(resolve(root, "packages/client/dist-demo/website", image.replace(/\.png$/, ".webp")));
 }

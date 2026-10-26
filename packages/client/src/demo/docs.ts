@@ -27,11 +27,11 @@ export function headingSlug(text: string) {
 }
 
 // Keep these categories aligned with build-demo.mjs, which only publishes user guides.
-const categories = new Set(
+export const DOC_CATEGORIES =
   "home installation connections conversation roleplay game characters chats lorebooks agents media prompts noodle appearance settings data extending integrations".split(
     " ",
-  ),
-);
+  );
+const categories = new Set(DOC_CATEGORIES);
 const rootGuides = new Set(["FAQ.md", "INSTALLATION.md", "UPGRADING.md", "CONFIGURATION.md", "TROUBLESHOOTING.md"]);
 function isUserGuide(path: string) {
   return path.includes("/") ? categories.has(path.split("/")[0]!) : rootGuides.has(path);

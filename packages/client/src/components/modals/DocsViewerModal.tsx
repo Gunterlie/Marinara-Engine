@@ -248,7 +248,7 @@ const DIR_LABELS_BY_DOCS_LANG: Record<string, Record<string, string>> = {
   },
 };
 
-function dirLabel(dir: string, docsLanguage: string) {
+export function dirLabel(dir: string, docsLanguage: string) {
   return (
     DIR_LABELS_BY_DOCS_LANG[docsLanguage]?.[dir] ??
     DIR_LABELS_BY_DOCS_LANG.en[dir] ??
