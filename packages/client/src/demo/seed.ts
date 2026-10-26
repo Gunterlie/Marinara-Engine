@@ -15,6 +15,26 @@ export const DEMO_ASSETS = {
   lantern: `${import.meta.env.BASE_URL}demo-assets/lighthouse-lantern.webp`,
 } as const;
 
+// Generated portraits, keyed by seed id. Rows without art keep their letter placeholder.
+const PORTRAITS: Record<string, string> = {
+  "demo-character-mira": "mira-voss",
+  "demo-character-orsolo": "captain-orsolo",
+  "demo-character-kestrel": "kestrel",
+  "demo-character-seraphine": "seraphine-vey",
+  "demo-character-rook": "detective-rook",
+  "demo-character-juniper": "juniper-hale",
+  "demo-character-k7": "k-7",
+  "demo-character-vale": "dr-vale-okonkwo",
+  "demo-character-tamsin": "tamsin-reed",
+  "demo-persona-you": "persona-you",
+  "demo-persona-wren": "persona-wren",
+  "demo-persona-ash": "persona-captain-ash",
+  "demo-persona-nova": "persona-nova",
+};
+const avatar = (id: string, fallback: string) =>
+  PORTRAITS[id] ? `${import.meta.env.BASE_URL}demo-assets/characters/${PORTRAITS[id]}.webp` : fallback;
+const scene = (slug: string) => `${import.meta.env.BASE_URL}demo-assets/backgrounds/${slug}.webp`;
+
 const NOW = "2026-01-01T00:00:00.000Z";
 
 const portrait = (bg: string, letter: string) =>
@@ -62,7 +82,7 @@ export function createSeed() {
       scenario: "",
       backstory: "",
       appearance: "",
-      avatarPath: portrait("#4a6fb5", "Y"),
+      avatarPath: avatar(DEMO_SEED_IDS.personaId, portrait("#4a6fb5", "Y")),
       isActive: "true",
       tags: ["traveler"],
       creator: "",
@@ -307,7 +327,7 @@ export function createSeed() {
     id,
     name,
     favorite,
-    avatarPath: portrait(bg, letter),
+    avatarPath: avatar(id, portrait(bg, letter)),
     data: JSON.stringify({
       ...characterData,
       name,
@@ -377,8 +397,24 @@ export function createSeed() {
       DEMO_ASSETS.lantern,
     ],
     ["demo-chat-seraphine", "The Hollowmere masquerade", "roleplay", ["demo-character-seraphine"], 130, null, null],
-    ["demo-chat-rook", "The clock that stopped", "roleplay", ["demo-character-rook"], 2900, null, null],
-    ["demo-chat-kestrel", "The Ember Reach run", "game", ["demo-character-kestrel"], 15, null, DEMO_ASSETS.lantern],
+    [
+      "demo-chat-rook",
+      "The clock that stopped",
+      "roleplay",
+      ["demo-character-rook"],
+      2900,
+      null,
+      scene("rain-city-street"),
+    ],
+    [
+      "demo-chat-kestrel",
+      "The Ember Reach run",
+      "game",
+      ["demo-character-kestrel"],
+      15,
+      null,
+      scene("ember-reach-ruins"),
+    ],
     [
       "demo-chat-smugglers",
       "Smugglers of Saltmere",
@@ -585,7 +621,7 @@ export function createSeed() {
     name,
     comment: "",
     description,
-    avatarPath: portrait(bg, name[0]!),
+    avatarPath: avatar(id, portrait(bg, name[0]!)),
     isActive: "false",
   });
   const extraPersonas = [
