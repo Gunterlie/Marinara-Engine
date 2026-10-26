@@ -14,6 +14,15 @@ const UPSTREAM_URL = "https://github.com/Pasta-Devs/Marinara-Engine.git";
 const SOURCES = ["main", "staging"]; // allowlist: nothing else ever reaches git
 const MAX_OVERLAY_COMMITS = 200; // more than this means the base is wrong, not the overlay big
 const WEBSITE_MARKERS = ["scripts/build-demo.mjs", "packages/client/src/demo/DemoHome.tsx"]; // upstream already ships the site
+// Paths this fork deleted on purpose (WEBSITE-REBUILD.md). Keep in sync with AGENTS.md.
+const DELETED_PATHS = [
+  "android/", "win/", "Dockerfile", "docker-compose", ".dockerignore", "start", "MarinaraLauncher.exe", "hacs.json",
+  "custom_components/", ".github/workflows/", "e2e/", "playwright.", "scripts/regressions/", "scripts/art/", "tools/",
+  ".cursor/", ".coderabbit.yaml", "docs/development/", "docs/contrib/", "docs/evidence/", "docs/pr-evidence/",
+  "docs/examples/", "docs/screenshots/", "docs/REMOTE_ACCESS.md", "docs/configuration/", "CONTRIBUTING.md", "SECURITY.md",
+  "CODE_OF_CONDUCT.md", "CHANGELOG.md", "PRODUCT.md", "DESIGN.", "skills-lock.json", "packages/server/tests/",
+  "packages/server/data/",
+];
 const FORBIDDEN_DIRS = ["/tmp", "/dev/shm"]; // tmpfs counts against devbox RAM
 
 function git(args, cwd, { allowFail = false } = {}) {
@@ -115,9 +124,18 @@ export function prepare({
     ? []
     : ["-c", "user.name=website-refresh", "-c", "user.email=website-refresh@users.noreply.github.com"];
   // One sequencer run, so `git cherry-pick --continue` resumes the remaining commits after a repair.
-  const pick = overlayCommits.length
+  let pick = overlayCommits.length
     ? git([...identity, "cherry-pick", ...overlayCommits], dir, { allowFail: true })
     : { ok: true };
+  // The overlay deletes this fork's stripped paths; upstream edits to them are modify/delete conflicts, so the deletion wins.
+  while (!pick.ok) {
+    const unmerged = git(["status", "--porcelain"], dir).out.split("\n").filter((l) => /^(UD|DU|UU|AA|AU|UA|DD) /.test(l));
+    const files = unmerged.map((l) => l.slice(3));
+    const stripped = (f) => DELETED_PATHS.some((p) => f === p || f.startsWith(p));
+    if (!files.length || !unmerged.every((l) => l.startsWith("UD ") && stripped(l.slice(3)))) break;
+    git(["rm", "-rq", "--", ...files], dir);
+    pick = git([...identity, "-c", "core.editor=true", "cherry-pick", "--continue"], dir, { allowFail: true });
+  }
   if (!pick.ok) return { conflict: true, dir, meta, report: repairPrompt(dir, meta, pick.err) };
   return { conflict: false, dir, meta: finish({ dir }) };
 }

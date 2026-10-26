@@ -66,7 +66,7 @@ for (const image of [
   "Desktop_Custom_Theme.png",
   "Browser_Game_Dialogue.png",
 ]) {
-  await sharp(resolve(root, "docs/screenshots", image))
+  await sharp(resolve(root, "packages/client/public/website-src", image))
     .resize({ width: 1600, height: 1600, fit: "inside", withoutEnlargement: true })
     .webp({ quality: 82, effort: 4 })
     .toFile(resolve(root, "packages/client/dist-demo/website", image.replace(/\.png$/, ".webp")));

@@ -3,7 +3,7 @@
 //   node scripts/demo/refresh-check.mjs
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { finish, prepare } from "./refresh.mjs";
@@ -127,6 +127,20 @@ try {
     () => prepare({ root: integrated, source: "staging", dir: resolve(base, "out-none"), upstreamUrl: up }),
     /has no website/,
   );
+  // 9. Upstream edits a path this fork deleted: the deletion wins without a conflict.
+  sh(up, "checkout", "main");
+  mkdirSync(resolve(up, "docs/development"), { recursive: true });
+  commit(up, "docs/development/x.md", "a\n", "add dev doc");
+  const stripped = resolve(base, "stripped");
+  sh(base, "clone", up, "stripped");
+  sh(stripped, "checkout", "main");
+  sh(stripped, "rm", "-q", "docs/development/x.md");
+  sh(stripped, "commit", "-qm", "strip");
+  commit(up, "docs/development/x.md", "b\n", "edit dev doc");
+  const gone = prepare({ root: stripped, source: "main", dir: resolve(base, "out-stripped"), upstreamUrl: up });
+  assert.equal(gone.conflict, false);
+  assert.ok(!existsSync(resolve(gone.dir, "docs/development/x.md")));
+
   console.log("refresh-check: ok");
 } finally {
   rmSync(base, { recursive: true, force: true });

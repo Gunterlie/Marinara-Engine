@@ -1,5 +1,12 @@
 # Rebuilding the demo website on a new upstream release
 
+## Stripped fork
+
+This fork is intentionally stripped to what the demo website needs. When you merge or cherry-pick newer upstream `staging` and a conflict touches a path deleted here, keep it deleted (`git rm`). Never restore server `src` installers, android, win, docker, other workflows, tests, dev docs, or any path in `DELETED_PATHS` in `scripts/demo/refresh.mjs`. Plain `git merge -X ours` is not needed: `refresh.mjs` resolves modify/delete conflicts for those paths on its own.
+
+Deleted set: android/, win/, Dockerfile*, docker-compose*, .dockerignore, start*.sh/.bat, MarinaraLauncher.exe, hacs.json, custom_components/, all .github/workflows except demo-pages.yml, e2e/, playwright*.config.ts, scripts/ except build-demo, pnpm-runner, ensure-native-deps, clean-stale-client-artifacts and demo/, docs/development, docs/contrib, docs/evidence, docs/pr-evidence, docs/examples, docs/screenshots, docs/REMOTE_ACCESS.md, docs/configuration, tools/, .cursor/, .coderabbit.yaml, CONTRIBUTING/SECURITY/CODE_OF_CONDUCT/CHANGELOG/PRODUCT/DESIGN files, skills-lock.json, packages/server tests and data.
+
+
 The website is an overlay: a few commits on top of upstream `staging`. A refresh replays those commits onto the
 latest upstream `main` or `staging` in a separate worktree. Your branch, upstream and the fork stay unchanged.
 
