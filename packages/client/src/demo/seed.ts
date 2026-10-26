@@ -198,21 +198,57 @@ export function createSeed() {
   const settings: Record<string, string> = {};
   // More example content, built from the Iris rows so every field keeps the same shape.
   const extra = [
-    ["demo-character-mira", "Mira Voss", "#3b82a6", "M", "conversation", "A sharp, funny station engineer who texts in short bursts. Made up for the demo.", "Hey, you up? The coffee machine on deck 4 is haunted again.", ["demo", "sci-fi"]],
-    ["demo-character-orsolo", "Captain Orsolo", "#a64b3b", "O", "roleplay", "A weathered sea captain with a booming laugh. Made up for the demo.", "*Orsolo slaps the map table.* Ye look like someone who needs a ship. Sit, sit!", ["demo", "adventure"]],
-    ["demo-character-kestrel", "Kestrel", "#6b8f3a", "K", "game", "A dry-witted game master narrating the ember-lit ruins of Ember Reach. Made up for the demo.", "The gate groans open. Torchlight shows three paths: a stair down, a bridge, and a door with no handle. What do you do?", ["demo", "fantasy"]],
+    [
+      "demo-character-mira",
+      "Mira Voss",
+      "#3b82a6",
+      "M",
+      "conversation",
+      "A sharp, funny station engineer who texts in short bursts. Made up for the demo.",
+      "Hey, you up? The coffee machine on deck 4 is haunted again.",
+      ["demo", "sci-fi"],
+    ],
+    [
+      "demo-character-orsolo",
+      "Captain Orsolo",
+      "#a64b3b",
+      "O",
+      "roleplay",
+      "A weathered sea captain with a booming laugh. Made up for the demo.",
+      "*Orsolo slaps the map table.* Ye look like someone who needs a ship. Sit, sit!",
+      ["demo", "adventure"],
+    ],
+    [
+      "demo-character-kestrel",
+      "Kestrel",
+      "#6b8f3a",
+      "K",
+      "game",
+      "A dry-witted game master narrating the ember-lit ruins of Ember Reach. Made up for the demo.",
+      "The gate groans open. Torchlight shows three paths: a stair down, a bridge, and a door with no handle. What do you do?",
+      ["demo", "fantasy"],
+    ],
   ] as const;
   const extraChars = extra.map(([id, name, bg, letter, , description, first_mes, tags]) => ({
     ...characters[0],
     id,
     name,
     avatarPath: portrait(bg, letter),
-    data: JSON.stringify({ ...characterData, name, description, first_mes, tags: [...tags], scenario: "", personality: "" }),
+    data: JSON.stringify({
+      ...characterData,
+      name,
+      description,
+      first_mes,
+      tags: [...tags],
+      scenario: "",
+      personality: "",
+    }),
   }));
   const extraChats = extra.map(([id, name, , , mode, , first_mes]) => ({
     ...chats[0],
     id: id.replace("character", "chat"),
-    name: mode === "conversation" ? `Chat with ${name}` : mode === "game" ? "The Ember Reach run" : `Aboard with ${name}`,
+    name:
+      mode === "conversation" ? `Chat with ${name}` : mode === "game" ? "The Ember Reach run" : `Aboard with ${name}`,
     mode,
     characterIds: [id],
     metadata: JSON.stringify({}),
@@ -234,18 +270,73 @@ export function createSeed() {
     keys,
   });
   const extraLorebooks = [
-    { ...lorebooks[0], id: "demo-lorebook-ember", name: "Ember Reach", description: "Example ruins for the game mode demo." },
+    {
+      ...lorebooks[0],
+      id: "demo-lorebook-ember",
+      name: "Ember Reach",
+      description: "Example ruins for the game mode demo.",
+    },
+    {
+      ...lorebooks[0],
+      id: "demo-lorebook-deck4",
+      name: "Deck 4",
+      description: "Example station notes for Mira's chat.",
+    },
   ];
   const extraEntries = [
-    entry("demo-entry-fog", "demo-lorebook-harbor", "The Saltmere Fog", "Fog rolls in from the bay most evenings. The ships sound horns until it lifts.", ["fog", "horn"]),
-    entry("demo-entry-orsolo-ship", "demo-lorebook-harbor", "The Gull's Promise", "Captain Orsolo's ship, a patched brig that has never sunk. Its crew swears it is lucky.", ["ship", "brig", "gull"]),
-    entry("demo-entry-ruins", "demo-lorebook-ember", "Ember Reach Ruins", "A drowned fortress lit by ever-burning torches. Three routes lead inside: stair, bridge and handleless door.", ["ruins", "fortress", "torch"]),
+    entry(
+      "demo-entry-fog",
+      "demo-lorebook-harbor",
+      "The Saltmere Fog",
+      "Fog rolls in from the bay most evenings. The ships sound horns until it lifts.",
+      ["fog", "horn"],
+    ),
+    entry(
+      "demo-entry-orsolo-ship",
+      "demo-lorebook-harbor",
+      "The Gull's Promise",
+      "Captain Orsolo's ship, a patched brig that has never sunk. Its crew swears it is lucky.",
+      ["ship", "brig", "gull"],
+    ),
+    entry(
+      "demo-entry-ruins",
+      "demo-lorebook-ember",
+      "Ember Reach Ruins",
+      "A drowned fortress lit by ever-burning torches. Three routes lead inside: stair, bridge and handleless door.",
+      ["ruins", "fortress", "torch"],
+    ),
+    entry(
+      "demo-entry-stair",
+      "demo-lorebook-ember",
+      "The Drowned Stair",
+      "A spiral stair that ends in black water. A map of the reach glows on the wall at the bottom.",
+      ["stair", "stairs", "map"],
+    ),
+    entry(
+      "demo-entry-coffee",
+      "demo-lorebook-deck4",
+      "The Coffee Machine",
+      "The coffee machine on deck 4 hums at night and makes tea when nobody asked. Mira thinks it is haunted.",
+      ["coffee", "machine", "haunted"],
+    ),
+  ];
+  // A second persona, so the Personas panel shows switching.
+  const extraPersonas = [
+    {
+      ...personas[0],
+      id: "demo-persona-wren",
+      name: "Wren",
+      comment: "",
+      description: "A cartographer mapping the coast near Saltmere. Example persona for the demo.",
+      avatarPath: portrait("#5b8a6b", "W"),
+      isActive: "false",
+    },
   ];
   return {
     settings,
     connections,
     characters: [...characters, ...extraChars],
-    personas,
+    personas: [...personas, ...extraPersonas],
     lorebooks: [...lorebooks, ...extraLorebooks],
     lorebookEntries: [...lorebookEntries, ...extraEntries],
     chats: [...chats, ...extraChats.map(({ _first, ...c }) => c)],

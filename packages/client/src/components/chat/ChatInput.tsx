@@ -1,7 +1,7 @@
 // ──────────────────────────────────────────────
 // Chat: Input — mode-aware styling
 // ──────────────────────────────────────────────
-import { useState, useRef, useCallback, useEffect, useMemo, memo, type FormEvent } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo, memo, lazy, Suspense, type FormEvent } from "react";
 import {
   Send,
   Paperclip,
@@ -83,6 +83,11 @@ interface Attachment {
 }
 
 const EMPTY_RESPONSE_QUEUE: string[] = [];
+// Static demo only: suggested messages for the example chats.
+const DemoPrompts =
+  import.meta.env.VITE_MARINARA_DEMO === "1"
+    ? lazy(() => import("../../demo/DemoPrompts").then((module) => ({ default: module.DemoPrompts })))
+    : null;
 
 type NarrativeDirectorMode = "natural" | "random";
 
@@ -1168,6 +1173,15 @@ export const ChatInput = memo(function ChatInput({
     localizeUi,
   ]);
 
+  // Static demo: a suggested message goes into the box and is sent as if the user typed it.
+  const sendDemoPrompt = (text: string) => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.value = text;
+    syncInputState(text);
+    void handleSend();
+  };
+
   const runQuickSlashCommand = useCallback(
     async (commandLine: string, fallbackError: string) => {
       if (!activeChatId) return;
@@ -2028,6 +2042,11 @@ export const ChatInput = memo(function ChatInput({
         </p>
       )}
       <MariSuggestionChips chips={chipRowChips} onSelect={handleMariChipSelect} disabled={isInputBusy} />
+      {DemoPrompts && activeChatId && !isProfessorMariChat && (
+        <Suspense fallback={null}>
+          <DemoPrompts chatId={activeChatId} disabled={isInputBusy} onPick={sendDemoPrompt} />
+        </Suspense>
+      )}
 
       {replyDraft && (
         <MessageReplyPreview reply={replyDraft} onCancel={() => activeChatId && setReplyDraft(activeChatId, null)} />

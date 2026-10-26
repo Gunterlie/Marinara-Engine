@@ -333,6 +333,9 @@ try {
     (await fetch("/api/chats/demo-chat-iris/messages")).json(),
   );
   assert.deepEqual(secondAfterReset, messages[1], "Reset leaked to another visitor");
+  // A suggested-message chip sends its text and gets its own scripted reply.
+  await pages[1].getByTestId("demo-prompts").getByRole("button", { name: "What is the harbor like?" }).click();
+  await expect(pages[1].getByText(/harbor never sleeps/).first()).toBeVisible({ timeout: 30_000 });
   for (const width of [390, 768, 1440]) {
     await pages[0].setViewportSize({ width, height: 900 });
     for (const visualTheme of ["default", "sillytavern"]) {

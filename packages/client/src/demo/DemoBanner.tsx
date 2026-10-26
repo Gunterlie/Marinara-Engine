@@ -82,7 +82,8 @@ const LESSONS = {
 } satisfies Record<string, TourStep[]>;
 
 type LessonId = keyof typeof LESSONS;
-const LESSON_IDS = Object.keys(LESSONS) as LessonId[];
+export const LESSON_IDS = Object.keys(LESSONS) as LessonId[];
+export const PROGRESS_EVENT = "marinara-demo-progress";
 
 function lessonSteps(id: LessonId): TourStep[] {
   return LESSONS[id].map((step, i) => ({
@@ -92,7 +93,7 @@ function lessonSteps(id: LessonId): TourStep[] {
   }));
 }
 
-function readDone(): LessonId[] {
+export function readDone(): LessonId[] {
   try {
     const stored: unknown = JSON.parse(window.localStorage.getItem(DONE_KEY) ?? "[]");
     return Array.isArray(stored) ? stored.filter((id): id is LessonId => LESSON_IDS.includes(id)) : [];
@@ -279,6 +280,7 @@ export function DemoBanner({ site }: { site: boolean }) {
     if (completed && lesson && !done.includes(lesson)) {
       const next = [...done, lesson];
       setDone(next);
+      window.setTimeout(() => window.dispatchEvent(new Event(PROGRESS_EVENT)));
       try {
         window.localStorage.setItem(DONE_KEY, JSON.stringify(next));
       } catch {
