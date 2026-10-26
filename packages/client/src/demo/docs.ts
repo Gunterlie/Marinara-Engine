@@ -14,6 +14,81 @@ export function loadDemoDocs() {
     }));
 }
 
+export type DemoDocSummary = DocSummary & { minutes?: number };
+
+async function fetchDemoDocsFile(file: string) {
+  const response = await fetch(`${import.meta.env.BASE_URL}demo-docs/${file}`);
+  if (!response.ok) throw new Error("Documentation unavailable");
+  return response;
+}
+
+/** Titles and dates only. The reader fetches one guide at a time and the full corpus only for search. */
+export const loadDemoIndex = () =>
+  fetchDemoDocsFile("index.json").then((response) => response.json() as Promise<DemoDocSummary[]>);
+
+export const loadDemoGuide = (path: string) =>
+  fetchDemoDocsFile(`guides/${path.split("/").map(encodeURIComponent).join("/")}`).then((response) => response.text());
+
+export interface DemoSearchHit {
+  path: string;
+  title: string;
+  dir: string;
+  section: string;
+  snippet: string;
+}
+
+const plain = (line: string) =>
+  line
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/[`*_>#|]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+/** Every term must appear in the guide. Title hits rank first, then the number of matching lines. */
+export function searchDemoDocs(docs: Array<DocSummary & { content: string }>, query: string): DemoSearchHit[] {
+  const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (!terms.length) return [];
+  const hits: Array<DemoSearchHit & { score: number }> = [];
+  for (const doc of docs) {
+    const title = doc.title.toLowerCase();
+    const body = doc.content.toLowerCase();
+    if (!terms.every((term) => title.includes(term) || body.includes(term))) continue;
+    const lines = doc.content.split("\n");
+    let heading = "";
+    let section = "";
+    let snippet = "";
+    let lineHits = 0;
+    for (const line of lines) {
+      const headingMatch = line.match(/^#{2,4}\s+(.+)$/);
+      if (headingMatch) heading = plain(headingMatch[1]!);
+      const lower = line.toLowerCase();
+      if (!terms.some((term) => lower.includes(term))) continue;
+      lineHits++;
+      if (snippet || line.startsWith("#") || !plain(line)) continue;
+      const text = plain(line);
+      const found = terms.map((term) => text.toLowerCase().indexOf(term)).filter((i) => i >= 0);
+      const at = Math.max(0, (found.length ? Math.min(...found) : 0) - 50);
+      snippet = `${at ? "..." : ""}${text.slice(at, at + 160)}${text.length > at + 160 ? "..." : ""}`;
+      section = heading ? headingSlug(heading) : "";
+    }
+    const titleScore = title.includes(query.trim().toLowerCase())
+      ? 1000
+      : terms.filter((term) => title.includes(term)).length * 200;
+    hits.push({
+      path: doc.path,
+      title: doc.title,
+      dir: doc.dir,
+      section,
+      snippet,
+      score: titleScore + Math.min(lineHits, 50),
+    });
+  }
+  return hits
+    .sort((a, b) => b.score - a.score || a.title.localeCompare(b.title))
+    .slice(0, 30)
+    .map(({ score: _score, ...hit }) => hit);
+}
+
 export function docHref(path = "", section = "") {
   return `#/docs${path ? "/" + path.split("/").map(encodeURIComponent).join("/") : ""}${section ? "?section=" + encodeURIComponent(section) : ""}`;
 }

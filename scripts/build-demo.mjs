@@ -32,6 +32,17 @@ const categories = new Set(
   ),
 );
 const rootGuides = new Set(["FAQ.md", "INSTALLATION.md", "UPGRADING.md", "CONFIGURATION.md", "TROUBLESHOOTING.md"]);
+// Last commit date per guide. The Pages workflow checks out full history; mtime is the fallback.
+const gitDates = new Map();
+const gitLog = spawnSync("git", ["log", "--format=%x00%cI", "--name-only", "--", "docs"], {
+  cwd: root,
+  encoding: "utf8",
+});
+let commitDate = "";
+for (const line of gitLog.status === 0 ? gitLog.stdout.split("\n") : []) {
+  if (line.startsWith("\0")) commitDate = line.slice(1);
+  else if (line && !gitDates.has(line)) gitDates.set(line, commitDate);
+}
 function collectDocs(dir, prefix = "") {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const path = prefix + entry.name;
@@ -44,7 +55,8 @@ function collectDocs(dir, prefix = "") {
         title: content.match(/^#\s+(.+)$/m)?.[1] ?? entry.name,
         dir: prefix.slice(0, -1),
         language: "en",
-        updatedAt: statSync(file).mtime.toISOString(),
+        updatedAt: gitDates.get(`docs/${path}`) ?? statSync(file).mtime.toISOString(),
+        minutes: Math.max(1, Math.round(content.split(/\s+/).length / 220)),
         content,
       });
     }
@@ -53,7 +65,17 @@ function collectDocs(dir, prefix = "") {
 collectDocs(resolve(root, "docs"));
 docs.sort((a, b) => a.path.localeCompare(b.path));
 mkdirSync(resolve(root, "packages/client/dist-demo/demo-docs"), { recursive: true });
+// The full corpus is only fetched for search. Readers load the small index and one guide at a time.
 writeFileSync(resolve(root, "packages/client/dist-demo/demo-docs/guides.json"), JSON.stringify(docs));
+writeFileSync(
+  resolve(root, "packages/client/dist-demo/demo-docs/index.json"),
+  JSON.stringify(docs.map(({ content: _content, ...doc }) => doc)),
+);
+for (const doc of docs) {
+  const file = resolve(root, "packages/client/dist-demo/demo-docs/guides", doc.path);
+  mkdirSync(resolve(file, ".."), { recursive: true });
+  writeFileSync(file, doc.content);
+}
 
 mkdirSync(resolve(root, "packages/client/dist-demo/website"), { recursive: true });
 const sharp = createRequire(resolve(root, "packages/server/package.json"))("sharp");

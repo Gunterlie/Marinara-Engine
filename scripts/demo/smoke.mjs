@@ -4,7 +4,21 @@ import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { resolve, sep, extname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium, expect } from "@playwright/test";
-import { prepareDemoDoc } from "../../packages/client/src/demo/docs.ts";
+import { prepareDemoDoc, searchDemoDocs } from "../../packages/client/src/demo/docs.ts";
+
+const searchFixture = [
+  ["a/one.md", "Lorebooks", "# Lorebooks\n\n## Keys\nA key wakes the entry."],
+  ["a/two.md", "Other", "# Other\nNothing here about lorebooks keys."],
+  ["a/three.md", "None", "Unrelated"],
+].map(([path, title, content]) => ({ path, title, content, dir: "a", language: "en", updatedAt: "" }));
+const hits = searchDemoDocs(searchFixture, "Lorebooks KEY");
+assert.deepEqual(
+  hits.map((hit) => hit.path),
+  ["a/one.md", "a/two.md"],
+  "Docs search must require every term and rank title hits first",
+);
+assert.equal(hits[0].section, "keys", "Docs search should deep link the matching section");
+assert.equal(hits[0].snippet, "A key wakes the entry.");
 
 assert.equal(
   prepareDemoDoc("[Next](../characters/overview.md#details)", "home/welcome.md"),
@@ -191,10 +205,60 @@ try {
   await expect(article.locator(`[id="${sectionId}"]`)).toBeFocused();
   await pages[0].screenshot({ path: resolve(evidence, "documentation-768-dark.png"), fullPage: true });
   await pages[0].goto(url + "#/docs");
-  await pages[0].getByLabel("Search documentation", { exact: true }).fill("lorebook");
-  await expect(pages[0].getByRole("link", { name: /Lorebook/i }).first()).toBeVisible();
+  await expect(pages[0].getByRole("heading", { name: "Documentation", exact: true })).toBeVisible();
+  assert.ok(
+    !requests.some((path) => path.endsWith("demo-docs/guides.json")),
+    "Reading guides fetched the full search corpus",
+  );
+  await pages[0].keyboard.press("Control+k");
+  await pages[0].getByRole("combobox", { name: "Search documentation", exact: true }).fill("lorebook keys");
+  await expect(pages[0].getByRole("option", { name: /Lorebook/i }).first()).toBeVisible();
+  await expect(pages[0].locator(".demo-docs-palette mark").first()).toBeVisible();
+  await pages[0].screenshot({ path: resolve(evidence, "documentation-search-768-dark.png") });
+  await pages[0].keyboard.press("ArrowDown");
+  await pages[0].keyboard.press("Enter");
+  await expect(pages[0].locator(".demo-docs-palette")).toBeHidden();
+  await expect(article).toBeVisible();
+  assert.match(pages[0].url(), /#\/docs\/.+\.md/, "Search Enter did not open a guide");
+  await pages[0].setViewportSize({ width: 390, height: 900 });
+  await pages[0].getByRole("button", { name: "Open guides" }).click();
+  await expect(pages[0].locator(".demo-docs-drawer [aria-current='page']")).toBeVisible();
+  await pages[0].screenshot({ path: resolve(evidence, "documentation-nav-390-dark.png"), animations: "disabled" });
+  await pages[0].keyboard.press("Escape");
+  await pages[0].screenshot({ path: resolve(evidence, "documentation-390-dark.png"), fullPage: true });
+  await pages[0].setViewportSize({ width: 1440, height: 900 });
+  await pages[0].screenshot({ path: resolve(evidence, "documentation-1440-dark.png") });
   await pages[0].goto(url + "#/docs/missing-guide.md");
   await expect(pages[0].getByRole("heading", { name: "This guide could not be found" })).toBeVisible();
+
+  // Features showcase: every area, a filter, and a checklist whose lines all open real guides.
+  await pages[0].goto(url + "#/features");
+  const features = pages[0].getByTestId("demo-features");
+  await expect(features.getByRole("heading", { level: 1 })).toBeVisible();
+  const guideLinks = await features
+    .locator('a[href^="#/docs/"]')
+    .evaluateAll((links) =>
+      links.map((link) => decodeURIComponent(link.getAttribute("href").slice("#/docs/".length).split("?")[0])),
+    );
+  const missingGuides = guideLinks.filter((path) => !guides.some((doc) => doc.path === path));
+  assert.deepEqual(missingGuides, [], "Feature links point at guides that do not exist");
+  for (const width of [390, 768, 1440]) {
+    await pages[0].setViewportSize({ width, height: 900 });
+    assert.ok(
+      await pages[0].evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+      `Features overflow at ${width}`,
+    );
+    await pages[0].screenshot({ path: resolve(evidence, `features-${width}-dark.png`), fullPage: true });
+  }
+  await features.getByRole("button", { name: "Game mode", exact: true }).click();
+  await expect(features.locator("#features-game")).toBeVisible();
+  await expect(features.locator("#features-modes")).toHaveCount(0);
+  assert.ok(pages[0].url().endsWith("#/features?c=game"), "Feature filter is not in the address");
+  await pages[0].setViewportSize({ width: 390, height: 900 });
+  await pages[0].goto(url + "#/download");
+  await expect(pages[0].getByText("docker compose up -d")).toBeVisible();
+  await pages[0].screenshot({ path: resolve(evidence, "download-390-dark.png"), fullPage: true });
+  await pages[0].setViewportSize({ width: 1440, height: 900 });
   await pages[0].goto(url + "#/");
   await pages[0].getByRole("link", { name: "Try the scripted chat", exact: true }).first().click();
   await expect(pages[0].locator("textarea[data-chat-composer]")).toBeVisible();

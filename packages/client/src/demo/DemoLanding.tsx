@@ -1,7 +1,7 @@
 // ──────────────────────────────────────────────
 // Static demo: product page on the Home tab
 // ──────────────────────────────────────────────
-import { useEffect, useRef, useState, type CSSProperties, type PointerEvent } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type PointerEvent } from "react";
 import {
   ArrowRight,
   BookOpen,
@@ -20,6 +20,10 @@ import {
   Play,
   Smartphone,
   Tablet,
+  Archive,
+  ChevronDown,
+  LayoutGrid,
+  ShieldCheck,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { HOME_CHAT_MODE_ACCENTS } from "../lib/home-chat-mode-style";
@@ -27,6 +31,32 @@ import { cn } from "../lib/utils";
 import { FeedModule, HOME_MODULE_ACCENTS } from "../components/chat/HomeBrowserHub";
 import { useMariAppearancePack } from "../hooks/use-mari-appearance-pack";
 import { DEMO_ASSETS } from "./seed";
+import { DemoFeatures } from "./DemoFeatures";
+import { docHref } from "./docs";
+import { FEATURE_CATEGORIES, FEATURE_COUNT } from "./features";
+
+const subscribeHash = (notify: () => void) => {
+  window.addEventListener("hashchange", notify);
+  return () => window.removeEventListener("hashchange", notify);
+};
+
+// Short answers from docs/FAQ.md. Each links to the full answer in its section.
+const FAQ = [
+  { key: "apiKey", section: "do-i-need-an-api-key-to-use-marinara" },
+  { key: "pay", section: "do-i-have-to-pay-to-use-marinara" },
+  { key: "keysSafe", section: "are-my-api-keys-safe" },
+  { key: "mobile", section: "is-there-a-mobile-app-for-marinara" },
+  { key: "data", section: "where-is-my-data-stored" },
+  { key: "update", section: "will-i-lose-my-data-when-i-update" },
+] as const;
+
+// Local-first facts, checked against the guides they link to.
+const LOCAL_FIRST = [
+  { key: "folder", icon: HardDrive, href: docHref("data/where-data-is-stored.md") },
+  { key: "keys", icon: ShieldCheck, href: docHref("FAQ.md", "are-my-api-keys-safe") },
+  { key: "free", icon: Code, href: docHref("FAQ.md", "do-i-have-to-pay-to-use-marinara") },
+  { key: "portable", icon: Archive, href: docHref("data/backup-and-restore.md") },
+] as const;
 
 export const asset = (path: string) => `${import.meta.env.BASE_URL}${path}`;
 
@@ -65,7 +95,7 @@ const STORIES = [
     width: 1600,
     height: 900,
     accent: HOME_MODULE_ACCENTS.cyan,
-    href: "#/docs/roleplay/hud-and-trackers.md",
+    href: "#/features?c=world",
   },
   {
     key: "groups",
@@ -73,7 +103,7 @@ const STORIES = [
     width: 739,
     height: 1600,
     accent: HOME_MODULE_ACCENTS.pink,
-    href: "#/docs/chats/group-chats.md",
+    href: "#/features?c=modes",
   },
   {
     key: "themes",
@@ -81,7 +111,7 @@ const STORIES = [
     width: 1600,
     height: 777,
     accent: HOME_MODULE_ACCENTS.violet,
-    href: "#/docs/appearance/custom-css-themes.md",
+    href: "#/features?c=look",
   },
   {
     key: "game",
@@ -89,15 +119,15 @@ const STORIES = [
     width: 1600,
     height: 900,
     accent: HOME_MODULE_ACCENTS.orange,
-    href: "#/docs/game/party-and-npcs.md",
+    href: "#/features?c=game",
   },
 ] as const;
 
 // True facts only: each one links to where a visitor can check it.
 const PROOF = [
   { key: "open", icon: Code, href: GITHUB_URL },
-  { key: "local", icon: HardDrive, href: "#/docs/data/where-data-is-stored.md" },
-  { key: "models", icon: Cloud, href: "#/docs/connections/connecting-to-a-provider.md" },
+  { key: "local", icon: HardDrive, href: "#/features?c=data" },
+  { key: "models", icon: Cloud, href: "#/features?c=models" },
   { key: "platforms", icon: Monitor, href: "#/download" },
 ] as const;
 
@@ -164,6 +194,11 @@ export function DemoLanding() {
   useEffect(() => {
     document.title = "Marinara Engine";
   }, []);
+  const hash = useSyncExternalStore(subscribeHash, () => window.location.hash);
+
+  if (hash.startsWith("#/features")) {
+    return <DemoFeatures category={new URLSearchParams(hash.split("?")[1] ?? "").get("c") ?? ""} />;
+  }
 
   return (
     <div data-testid="demo-product-home" className="relative isolate w-full overflow-x-clip">
@@ -410,6 +445,54 @@ export function DemoLanding() {
           </div>
         </section>
 
+        {/* Feature areas: every documented feature, one tile per area */}
+        <section aria-labelledby="demo-product-features" className="flex flex-col gap-8">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div className="flex max-w-2xl flex-col gap-3">
+              <span className={EYEBROW}>{t("demo.features.eyebrow", { count: FEATURE_COUNT })}</span>
+              <h2 id="demo-product-features" className={`${SECTION_TITLE} scroll-mt-20`}>
+                {t("demo.landing.features.title")}
+              </h2>
+              <p className="text-pretty text-base leading-relaxed text-[var(--muted-foreground)]">
+                {t("demo.landing.features.body")}
+              </p>
+            </div>
+            <a href="#/features" className={`${SECONDARY_BUTTON} shrink-0`}>
+              <LayoutGrid className="h-4 w-4" aria-hidden="true" />
+              {t("demo.landing.features.all", { count: FEATURE_COUNT })}
+            </a>
+          </div>
+          <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {FEATURE_CATEGORIES.map((category) => {
+              const Icon = category.icon;
+              return (
+                <li key={category.key} className="flex">
+                  <a
+                    href={`#/features?c=${category.key}`}
+                    style={{ "--feature-accent": category.accent } as CSSProperties}
+                    className={`flex w-full flex-col gap-3 rounded-2xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--card)_80%,transparent)] p-4 transition-colors hover:border-[color-mix(in_srgb,var(--feature-accent)_55%,var(--border))] motion-reduce:transition-none ${FOCUS}`}
+                  >
+                    <span className="flex items-center justify-between gap-2">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[color-mix(in_srgb,var(--feature-accent)_16%,transparent)] text-[var(--feature-accent)]">
+                        <Icon className="h-5 w-5" aria-hidden="true" />
+                      </span>
+                      <span className="text-xs tabular-nums text-[var(--muted-foreground)]">
+                        {t("demo.landing.features.count", { count: category.items.length })}
+                      </span>
+                    </span>
+                    <span className="text-sm font-semibold text-[var(--foreground)]">
+                      {t(`demo.features.categories.${category.key}.title`)}
+                    </span>
+                    <span className="text-xs leading-relaxed text-[var(--muted-foreground)]">
+                      {t(`demo.features.categories.${category.key}.body`)}
+                    </span>
+                  </a>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+
         {/* Bring your own model: honest cost and hardware notes */}
         <section
           aria-labelledby="demo-product-models"
@@ -551,6 +634,84 @@ export function DemoLanding() {
           </ul>
         </section>
 
+        {/* Why local-first: checked facts, each with its guide */}
+        <section
+          aria-labelledby="demo-product-local"
+          className="grid gap-8 rounded-3xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--card)_70%,transparent)] p-5 sm:p-8 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:gap-12 lg:p-12"
+        >
+          <div className="flex flex-col gap-3">
+            <span className={EYEBROW}>{t("demo.landing.local.eyebrow")}</span>
+            <h2 id="demo-product-local" className={SECTION_TITLE}>
+              {t("demo.landing.local.title")}
+            </h2>
+            <p className="text-pretty text-base leading-relaxed text-[var(--muted-foreground)]">
+              {t("demo.landing.local.body")}
+            </p>
+          </div>
+          <ul className="grid gap-x-8 gap-y-6 sm:grid-cols-2">
+            {LOCAL_FIRST.map((item) => {
+              const Icon = item.icon;
+              return (
+                <li key={item.key} className="flex flex-col gap-2">
+                  <Icon className="h-5 w-5 text-[var(--primary)]" aria-hidden="true" />
+                  <h3 className="text-base font-semibold text-[var(--foreground)]">
+                    {t(`demo.landing.local.${item.key}.title`)}
+                  </h3>
+                  <p className="flex-1 text-sm leading-relaxed text-[var(--muted-foreground)]">
+                    {t(`demo.landing.local.${item.key}.body`)}
+                  </p>
+                  <a href={item.href} className={TEXT_LINK}>
+                    {t("demo.features.guide")}
+                    <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                    <span className="sr-only">: {t(`demo.landing.local.${item.key}.title`)}</span>
+                  </a>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+
+        {/* FAQ: short answers from docs/FAQ.md, each with its full answer */}
+        <section
+          aria-labelledby="demo-product-faq"
+          className="grid gap-8 lg:grid-cols-[minmax(0,0.7fr)_minmax(0,1.3fr)] lg:gap-12"
+        >
+          <div className="flex flex-col gap-3">
+            <span className={EYEBROW}>{t("demo.landing.faq.eyebrow")}</span>
+            <h2 id="demo-product-faq" className={SECTION_TITLE}>
+              {t("demo.landing.faq.title")}
+            </h2>
+            <a href={docHref("FAQ.md")} className={TEXT_LINK}>
+              {t("demo.landing.faq.all")}
+              <ArrowRight className="h-4 w-4" aria-hidden="true" />
+            </a>
+          </div>
+          <div className="divide-y divide-[var(--border)] border-y border-[var(--border)]">
+            {FAQ.map((item) => (
+              <details key={item.key} className="group">
+                <summary
+                  className={`flex min-h-14 cursor-pointer list-none items-center justify-between gap-4 py-4 text-base font-semibold text-[var(--foreground)] [&::-webkit-details-marker]:hidden ${FOCUS}`}
+                >
+                  {t(`demo.landing.faq.${item.key}.q`)}
+                  <ChevronDown
+                    className="h-4 w-4 shrink-0 text-[var(--muted-foreground)] transition-transform group-open:rotate-180 motion-reduce:transition-none"
+                    aria-hidden="true"
+                  />
+                </summary>
+                <div className="flex flex-col gap-2 pb-5">
+                  <p className="max-w-[65ch] text-sm leading-relaxed text-[var(--muted-foreground)]">
+                    {t(`demo.landing.faq.${item.key}.a`)}
+                  </p>
+                  <a href={docHref("FAQ.md", item.section)} className={TEXT_LINK}>
+                    {t("demo.landing.faq.more")}
+                    <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                  </a>
+                </div>
+              </details>
+            ))}
+          </div>
+        </section>
+
         {/* Final call to action, closing like the Home hero */}
         <section
           aria-labelledby="demo-product-cta"
@@ -593,6 +754,10 @@ export function DemoLanding() {
             </div>
           </div>
           <nav aria-label={t("demo.landing.community.title")} className="flex flex-wrap gap-2">
+            <a href="#/features" className={SECONDARY_BUTTON}>
+              <LayoutGrid className="h-4 w-4" aria-hidden="true" />
+              {t("demo.site.features")}
+            </a>
             <a href="#/docs" className={SECONDARY_BUTTON}>
               <BookOpen className="h-4 w-4" aria-hidden="true" />
               {t("demo.landing.readDocs")}

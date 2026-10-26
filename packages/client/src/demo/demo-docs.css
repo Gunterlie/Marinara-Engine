@@ -1,0 +1,196 @@
+/* Demo docs reader. Loaded only with the demo docs chunk, so installed builds keep their docs modal styles. */
+
+.demo-docs-reader {
+  font-size: 1rem;
+  line-height: 1.75;
+}
+
+/* Chat code blocks use a fixed dark tint, which is unreadable on the light theme. */
+.demo-docs-reader pre,
+.demo-docs-reader .mari-md-codeblock {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding-bottom: 3rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--secondary);
+  color: var(--foreground);
+}
+
+.demo-docs-reader .mari-md-heading {
+  position: relative;
+  scroll-margin-top: 5rem;
+  text-wrap: balance;
+  color: var(--foreground);
+}
+
+[data-demo-site] .demo-docs-reader .mari-md-heading {
+  scroll-margin-top: 8rem;
+}
+
+@media (min-width: 80rem) {
+  .demo-docs-reader .mari-md-heading {
+    scroll-margin-top: 1.5rem;
+  }
+  [data-demo-site] .demo-docs-reader .mari-md-heading {
+    scroll-margin-top: 4.5rem;
+  }
+}
+
+.demo-docs-reader h1.mari-md-heading {
+  margin: 0 0 1.25rem;
+  font-size: clamp(1.875rem, 1.5rem + 1.5vw, 2.5rem);
+  line-height: 1.15;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.demo-docs-reader h2.mari-md-heading {
+  margin: 2.75rem 0 0.75rem;
+  padding-top: 1.75rem;
+  border-top: 1px solid var(--border);
+  font-size: 1.5rem;
+  line-height: 1.25;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.demo-docs-reader h3.mari-md-heading {
+  margin: 2rem 0 0.5rem;
+  font-size: 1.1875rem;
+  line-height: 1.35;
+  font-weight: 650;
+}
+
+.demo-docs-reader [tabindex="-1"]:focus {
+  outline: none;
+}
+
+.demo-docs-reader a {
+  color: var(--primary);
+  text-underline-offset: 0.2em;
+}
+
+.demo-docs-reader th {
+  color: var(--foreground);
+}
+
+/* External links leave the demo, so they say so. */
+.demo-docs-reader a[target="_blank"]::after {
+  content: "\2197";
+  display: inline-block;
+  margin-inline-start: 0.15em;
+  font-size: 0.8em;
+  text-decoration: none;
+}
+
+.demo-docs-anchor {
+  margin-inline-start: 0.4em;
+  padding: 0 0.2em;
+  border-radius: 0.25rem;
+  color: var(--muted-foreground) !important;
+  text-decoration: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.mari-md-heading:hover .demo-docs-anchor,
+.demo-docs-anchor:focus-visible {
+  opacity: 1;
+}
+
+.demo-docs-anchor:focus-visible {
+  outline: 2px solid var(--ring);
+}
+
+@media (hover: none) {
+  .demo-docs-anchor {
+    opacity: 0.55;
+  }
+}
+
+/* Tables: theme borders in light and dark, scroll sideways on small screens. */
+.demo-docs-reader .mari-md-table-wrapper {
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+}
+
+.demo-docs-reader .mari-md-table {
+  margin: 0;
+}
+
+.demo-docs-reader .mari-md-table th,
+.demo-docs-reader .mari-md-table td {
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.demo-docs-reader .mari-md-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.demo-docs-reader .mari-md-table th {
+  background: var(--secondary);
+}
+
+/* Callouts: blockquotes that start with Note, Tip, Warning and so on. */
+.demo-docs-reader .mari-md-blockquote[data-callout] {
+  --callout: var(--primary);
+  border-inline-start: 4px solid var(--callout);
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, var(--callout) 9%, transparent);
+  padding: 0.75rem 1rem;
+  font-style: normal;
+}
+
+.demo-docs-reader .mari-md-blockquote[data-callout="note"],
+.demo-docs-reader .mari-md-blockquote[data-callout="info"] {
+  --callout: oklch(0.62 0.15 250);
+}
+
+.demo-docs-reader .mari-md-blockquote[data-callout="tip"] {
+  --callout: oklch(0.62 0.15 150);
+}
+
+.demo-docs-reader .mari-md-blockquote[data-callout="warning"],
+.demo-docs-reader .mari-md-blockquote[data-callout="caution"] {
+  --callout: oklch(0.72 0.16 70);
+}
+
+.demo-docs-palette mark {
+  border-radius: 0.2rem;
+  background: color-mix(in srgb, var(--primary) 28%, transparent);
+  color: inherit;
+}
+
+.demo-docs-palette[open] {
+  animation: demo-docs-pop 0.16s ease-out;
+}
+
+.demo-docs-drawer[open] {
+  animation: demo-docs-slide 0.22s ease-out;
+}
+
+@keyframes demo-docs-pop {
+  from {
+    opacity: 0;
+    transform: translateY(-0.5rem) scale(0.98);
+  }
+}
+
+@keyframes demo-docs-slide {
+  from {
+    transform: translateX(-100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .demo-docs-palette[open],
+  .demo-docs-drawer[open] {
+    animation: none;
+  }
+  .demo-docs-anchor {
+    transition: none;
+  }
+}

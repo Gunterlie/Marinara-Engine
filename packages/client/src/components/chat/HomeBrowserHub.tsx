@@ -2067,7 +2067,10 @@ export function HomeBrowserHub({ pageActive, onOpenCredits, hideProfessor, websi
               }}
             />
           ) : websiteContent && activeTab === "home" ? (
-            <div className={cn(HOME_PAGE_CLASS, "[[data-demo-site]_&]:pt-12")} data-component="HomeBrowserHub.HomePage">
+            <div
+              className={cn(HOME_PAGE_CLASS, "[[data-demo-site]_&]:overflow-clip [[data-demo-site]_&]:pt-12")}
+              data-component="HomeBrowserHub.HomePage"
+            >
               <HomeStarfield />
               <div className="relative z-[1]">{websiteContent}</div>
             </div>
