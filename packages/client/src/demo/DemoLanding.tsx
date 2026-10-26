@@ -254,10 +254,21 @@ export function DemoLanding() {
           className="grid items-center gap-12 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:gap-10"
         >
           <div className="flex flex-col gap-7">
-            <span className="inline-flex w-fit items-center gap-2.5 rounded-full border border-[var(--border)] bg-[color-mix(in_srgb,var(--card)_70%,transparent)] py-1 pl-1 pr-3.5 text-xs font-semibold text-[var(--foreground)]">
-              <img src={asset("logo.png")} alt="" width={24} height={24} className="h-6 w-6 rounded-full" />
+            <a
+              href={GITHUB_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="group inline-flex w-fit items-center gap-2.5 rounded-full border border-[color-mix(in_srgb,var(--primary)_35%,var(--border))] bg-[color-mix(in_srgb,var(--primary)_8%,transparent)] py-1 pl-1 pr-3 text-[0.8125rem] font-medium text-[var(--foreground)] transition-colors hover:border-[var(--primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--marinara-app-accent-solid)]"
+            >
+              <span className="shrink-0 whitespace-nowrap rounded-full bg-[var(--primary)] px-2 py-0.5 text-[0.6875rem] font-semibold tracking-wide text-[var(--primary-foreground)]">
+                {t("demo.product.license")}
+              </span>
               {t("demo.product.badge")}
-            </span>
+              <ExternalLink
+                className="h-3.5 w-3.5 text-[var(--muted-foreground)] transition-colors group-hover:text-[var(--foreground)]"
+                aria-hidden="true"
+              />
+            </a>
             <h1
               id="demo-product-title"
               className="text-balance text-4xl font-bold leading-[1.05] tracking-tight text-[var(--foreground)] sm:text-5xl xl:text-6xl"

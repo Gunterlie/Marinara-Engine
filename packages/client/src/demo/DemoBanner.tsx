@@ -134,11 +134,15 @@ export function DemoSiteStart({ site }: { site: boolean }) {
   const hash = useSyncExternalStore(subscribeHash, () => window.location.hash);
   const external = { target: "_blank", rel: "noreferrer" };
   return (
-    <div data-testid="demo-site-header" className={`flex min-w-0 items-center gap-1 ${site ? "flex-1" : "shrink-0"}`}>
+    <div
+      data-testid="demo-site-header"
+      className={`flex min-w-0 items-center ${site ? "mx-auto w-full max-w-6xl flex-1 gap-2 sm:px-4 xl:px-8" : "shrink-0 gap-1"}`}
+    >
+      {!site && <span aria-hidden="true" className="mr-1 h-5 w-px bg-[var(--border)] max-md:hidden" />}
       <a
         href="#/"
         aria-label={t("demo.docs.home")}
-        className="flex shrink-0 items-center gap-2 rounded-md pr-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--marinara-app-accent-solid)]"
+        className={`flex shrink-0 items-center gap-2 rounded-md pr-1 ${site ? "" : "max-md:hidden"} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--marinara-app-accent-solid)]`}
       >
         <img src={asset("logo.png")} alt="" width={32} height={32} className="h-7 w-7 object-contain" />
         <MarinaraWordmark className={`text-sm ${site ? "block" : "hidden lg:block"}`} />
@@ -148,15 +152,15 @@ export function DemoSiteStart({ site }: { site: boolean }) {
         <a
           href="#/"
           data-testid="demo-back-to-site"
-          className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-[var(--border)] px-3 text-[0.8125rem] font-medium text-[var(--foreground)] transition-colors hover:bg-[var(--accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--marinara-app-accent-solid)] [@media(pointer:coarse)]:h-11"
+          className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-full border border-[var(--border)] px-3 max-md:w-9 max-md:px-0 text-[0.8125rem] font-medium text-[var(--foreground)] transition-colors hover:bg-[var(--accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--marinara-app-accent-solid)] [@media(pointer:coarse)]:h-11"
         >
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-          {t("demo.site.back")}
+          <span className="max-md:sr-only">{t("demo.site.back")}</span>
         </a>
       )}
       <nav
         aria-label={t("demo.site.navigation")}
-        className={`items-center gap-0.5 ${site ? "mx-auto hidden md:flex" : "ml-1 hidden xl:flex"}`}
+        className={`items-center gap-0.5 ${site ? "mx-auto hidden md:flex" : "hidden"}`}
       >
         <a href="#/" onClick={showFeatures} className={NAV_LINK}>
           {t("demo.site.features")}
@@ -193,7 +197,6 @@ export function DemoSiteStart({ site }: { site: boolean }) {
           {t("demo.site.try")}
         </a>
       )}
-      {!site && <span aria-hidden="true" className="ml-1 h-5 w-px bg-[var(--border)]" />}
     </div>
   );
 }
@@ -211,6 +214,8 @@ export function DemoBanner({ site }: { site: boolean }) {
   const steps = useMemo(() => (lesson ? lessonSteps(lesson) : null), [lesson]);
 
   const lessonsButtonRef = useRef<HTMLButtonElement>(null);
+  // Only a lesson picked from the menu returns focus there; the automatic welcome must not leave a focus ring.
+  const fromMenu = useRef(false);
   const lessonsListRef = useRef<HTMLUListElement>(null);
 
   const [position, setPosition] = useState({ top: 48, left: 8 });
@@ -268,6 +273,7 @@ export function DemoBanner({ site }: { site: boolean }) {
     setLessonsOpen(false);
     const ui = useUIStore.getState();
     if (!useChatStore.getState().activeChatId && !ui.hasAnyDetailOpen() && !ui.rightPanelOpen) openChat();
+    fromMenu.current = true;
     setLesson(id);
   };
 
@@ -288,7 +294,8 @@ export function DemoBanner({ site }: { site: boolean }) {
       }
     }
     setLesson(null);
-    requestAnimationFrame(() => lessonsButtonRef.current?.focus());
+    if (fromMenu.current) requestAnimationFrame(() => lessonsButtonRef.current?.focus());
+    fromMenu.current = false;
   };
 
   const confirmReset = async () => {
@@ -392,13 +399,13 @@ export function DemoBanner({ site }: { site: boolean }) {
                 {t("demo.site.download")}
               </a>
             </li>
-            <li className={site ? "md:hidden" : "xl:hidden"}>
+            <li className={site ? "md:hidden" : undefined}>
               <a href={GITHUB_URL} target="_blank" rel="noreferrer" className={`${BUTTON_CLASS} w-full justify-start`}>
                 <GitBranch size={14} aria-hidden="true" />
                 {t("demo.landing.community.github")}
               </a>
             </li>
-            <li className={site ? "md:hidden" : "xl:hidden"}>
+            <li className={site ? "md:hidden" : undefined}>
               <a href={DISCORD_URL} target="_blank" rel="noreferrer" className={`${BUTTON_CLASS} w-full justify-start`}>
                 <img
                   src={asset("home/tab-icons/discord.svg")}

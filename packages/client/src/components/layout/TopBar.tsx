@@ -492,11 +492,6 @@ export function TopBar({
 
       {/* Left section: window controls + chat info */}
       <div className="mari-topbar-left flex min-w-0 flex-1 items-center gap-2">
-        {DemoSiteStart && (
-          <Suspense fallback={null}>
-            <DemoSiteStart site={demoSite} />
-          </Suspense>
-        )}
         <div
           ref={leftControlsRef}
           className={cn(
@@ -507,6 +502,12 @@ export function TopBar({
         >
           {mobileTopbarNavigation ? [homeButton, chatsButton] : [chatsButton, homeButton]}
         </div>
+        {/* Static demo: the site start follows the Engine controls, so they stay where the installed app has them. */}
+        {DemoSiteStart && (
+          <Suspense fallback={null}>
+            <DemoSiteStart site={demoSite} />
+          </Suspense>
+        )}
         {musicDjInstalled ? (
           <>
             {spotifyDesktopViewport && <SpotifyMiniPlayer forceFloating={spotifyUseFloatingFallback} />}
