@@ -13,7 +13,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { APP_VERSION } from "@marinara-engine/shared";
-import { BookOpen, Check, Code, Download, GitBranch, Home, Menu, RotateCcw } from "lucide-react";
+import { ArrowLeft, BookOpen, Check, Code, Download, GitBranch, Home, Menu, RotateCcw } from "lucide-react";
 import { useTranslation as useUiTranslation } from "react-i18next";
 import { OnboardingTutorialInner, type TourStep } from "../components/onboarding/OnboardingTutorial";
 import { showConfirmDialog } from "../lib/app-dialogs";
@@ -28,6 +28,7 @@ import { DISCORD_URL, GITHUB_URL, asset } from "./DemoLanding";
 // ponytail: fork trial branch; point at the release tag once demos publish from stable tags.
 const SOURCE_URL = "https://github.com/Gunterlie/Marinara-Engine/tree/feat/static-demo-tutorial";
 const DONE_KEY = `marinara-demo:lessons-done:${APP_VERSION}`;
+const WELCOMED_KEY = `marinara-demo:welcomed:${APP_VERSION}`;
 
 function openChat() {
   const ui = useUIStore.getState();
@@ -46,6 +47,7 @@ function openPanel(panel: Panel) {
 
 const LESSONS = {
   chat: [
+    { target: "chat-area", centerCard: true, enter: openChat, sprite: { pose: "greet" } },
     { target: "chat-area", centerCard: true, enter: openChat, sprite: { pose: "wave" } },
     { target: "chat-area", centerCard: true, enter: openChat, sprite: { pose: "point-middle" } },
     { target: "chat-area", centerCard: true, enter: openChat, sprite: { pose: "point-middle" } },
@@ -141,6 +143,16 @@ export function DemoSiteStart({ site }: { site: boolean }) {
         <MarinaraWordmark className={`text-sm ${site ? "block" : "hidden lg:block"}`} />
       </a>
       <DemoBanner site={site} />
+      {!site && (
+        <a
+          href="#/"
+          data-testid="demo-back-to-site"
+          className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-[var(--border)] px-3 text-[0.8125rem] font-medium text-[var(--foreground)] transition-colors hover:bg-[var(--accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--marinara-app-accent-solid)] [@media(pointer:coarse)]:h-11"
+        >
+          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+          {t("demo.site.back")}
+        </a>
+      )}
       <nav
         aria-label={t("demo.site.navigation")}
         className={`items-center gap-0.5 ${site ? "mx-auto hidden md:flex" : "ml-1 hidden xl:flex"}`}
@@ -211,6 +223,16 @@ export function DemoBanner({ site }: { site: boolean }) {
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
   }, [lessonsOpen]);
+  // Until a first lesson ends (done or skipped), opening the workspace starts Mari's welcome lesson.
+  useEffect(() => {
+    const welcome = () => {
+      if (window.location.hash === "#/demo" && !localStorage.getItem(WELCOMED_KEY)) setLesson("chat");
+    };
+    welcome();
+    window.addEventListener("hashchange", welcome);
+    return () => window.removeEventListener("hashchange", welcome);
+  }, []);
+
   useEffect(() => {
     const open = () => setLessonsOpen(true);
     window.addEventListener("marinara-demo-lessons", open);
@@ -249,6 +271,11 @@ export function DemoBanner({ site }: { site: boolean }) {
   };
 
   const finishLesson = (completed: boolean) => {
+    try {
+      localStorage.setItem(WELCOMED_KEY, "1");
+    } catch {
+      /* storage unavailable: the welcome may show again */
+    }
     if (completed && lesson && !done.includes(lesson)) {
       const next = [...done, lesson];
       setDone(next);

@@ -77,6 +77,16 @@ async function openSeedChat(page) {
   // The website and the demo share one TopBar; its Engine controls show once the demo workspace opens.
   const tryDemo = page.getByTestId("demo-site-try");
   if (await tryDemo.isVisible()) await tryDemo.click();
+  // Until a lesson ends, the workspace opens with Mari's welcome lesson; Skip closes it.
+  const card = page.locator('[data-component="OnboardingTutorial.Card"]');
+  const welcomed = await card.waitFor({ timeout: 5_000 }).then(
+    () => true,
+    () => false,
+  );
+  if (welcomed) {
+    await card.getByRole("button", { name: "Skip Tutorial", exact: true }).click();
+    await expect(card).toBeHidden();
+  }
   const toggle = page.locator('[data-tour="sidebar-toggle"]');
   await toggle.waitFor();
   if ((await toggle.getAttribute("aria-pressed")) !== "true") await toggle.click();
@@ -93,6 +103,7 @@ async function openSeedChat(page) {
   await sidebar.locator('[data-chat-mode-tab="roleplay"]').click();
   await sidebar.getByText("Evening at the lighthouse", { exact: true }).click();
   await page.locator("textarea[data-chat-composer]").waitFor();
+  return welcomed;
 }
 let browser;
 let pages = [];
@@ -206,8 +217,9 @@ try {
   assert.deepEqual(first.chars, second.chars);
   assert.deepEqual(first.chats, second.chats);
   for (const page of pages) {
-    await openSeedChat(page);
+    assert.ok(await openSeedChat(page), "Mari's welcome did not open on the first demo visit");
   }
+  await expect(pages[0].getByTestId("demo-back-to-site")).toBeVisible();
   await Promise.all(
     pages.map(async (page, i) => {
       const composer = page.locator("textarea[data-chat-composer]");
@@ -360,8 +372,7 @@ try {
   await expect(pages[0].locator('[data-component="OnboardingTutorial.Card"]')).toBeVisible();
   await pages[0].screenshot({ path: resolve(evidence, "lesson-chat.png"), fullPage: true });
   const card = pages[0].locator('[data-component="OnboardingTutorial.Card"]');
-  await card.getByRole("button", { name: "Next", exact: true }).click();
-  await card.getByRole("button", { name: "Next", exact: true }).click();
+  for (let step = 1; step < 4; step++) await card.getByRole("button", { name: "Next", exact: true }).click();
   await card.getByRole("button", { name: "Get Started", exact: true }).click();
   assert.ok(
     await pages[0].evaluate(

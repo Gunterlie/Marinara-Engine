@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { flushSync } from "react-dom";
 import { useChatStore } from "../stores/chat.store";
 import { isMobileShellViewport, useUIStore } from "../stores/ui.store";
 import { DEMO_SEED_IDS } from "./seed";
@@ -11,6 +12,16 @@ export function useDemoNavigation() {
     const followRoute = () => {
       const hash = window.location.hash;
       if (hash && !hash.startsWith("#/")) return;
+      // Website and workspace cross-fade; not on first load and not with reduced motion.
+      const fade =
+        !firstRoute &&
+        "startViewTransition" in document &&
+        !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      // A quick second route skips the first fade, which rejects its ready promise; that is expected.
+      if (fade) document.startViewTransition(() => flushSync(() => openRoute(hash))).ready.catch(() => {});
+      else openRoute(hash);
+    };
+    const openRoute = (hash: string) => {
       const ui = useUIStore.getState();
       ui.closeAllDetails();
       ui.closeRightPanel();
