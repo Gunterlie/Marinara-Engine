@@ -760,7 +760,10 @@ export function App() {
   useEffect(() => {
     const root = document.documentElement;
     const reducedMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const accent = appAccentColor.trim();
+    // The static demo website keeps one still Marinara orange (the middle stop of the default gradient): no stored
+    // colour, theme pulse or RGB cycling.
+    const demoBuild = import.meta.env.VITE_MARINARA_DEMO === "1";
+    const accent = demoBuild ? "#f29744" : appAccentColor.trim();
     const defaultAccent = getDefaultAppAccentColor();
     const defaultSolidAccent = getCssColorFallback(defaultAccent, "currentColor");
     const accentSource = accent || themeAccentPulseConfig.source || defaultAccent;
@@ -772,7 +775,8 @@ export function App() {
     const animatedGradientStops = animatedAccentIsGradient
       ? getCssGradientColorStops(animatedAccentSource, animatedSolidAccent)
       : [animatedSolidAccent];
-    const accentAnimationEnabled = appAccentRgbMode || appAccentPulseMode || themeAccentPulseConfig.enabled;
+    const accentAnimationEnabled =
+      !demoBuild && (appAccentRgbMode || appAccentPulseMode || themeAccentPulseConfig.enabled);
     const usesTimerDrivenAccentAnimation = accentAnimationEnabled;
 
     root.style.setProperty("--marinara-app-accent-static", solidAccent);
