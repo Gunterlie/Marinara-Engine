@@ -436,7 +436,10 @@ export function DemoBanner({ site }: { site: boolean }) {
           </ul>,
           document.body,
         )}
-      {lesson && steps && <OnboardingTutorialInner key={lesson} steps={steps} onDone={finishLesson} />}
+      {/* Portaled: the bar's backdrop blur would otherwise pin the fixed tour stage inside the 48px bar. */}
+      {lesson &&
+        steps &&
+        createPortal(<OnboardingTutorialInner key={lesson} steps={steps} onDone={finishLesson} />, document.body)}
     </>
   );
 }
