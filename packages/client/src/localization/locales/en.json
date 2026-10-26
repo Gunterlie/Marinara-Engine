@@ -1906,7 +1906,7 @@
   "demo.landing.platforms.android": "Android (Termux)",
   "demo.landing.platforms.body": "Marinara runs as a small server on your computer, and you use it in your browser. Pick your platform for step-by-step instructions.",
   "demo.landing.platforms.containers": "Docker and containers",
-  "demo.landing.platforms.ios": "iPhone and iPad · connect to your server",
+  "demo.landing.platforms.ios": "iPhone and iPad (via server)",
   "demo.landing.platforms.macosLinux": "macOS and Linux",
   "demo.landing.platforms.title": "Install on your device",
   "demo.landing.platforms.windows": "Windows",

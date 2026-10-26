@@ -207,10 +207,10 @@ export function DemoLanding() {
             />
             <figure className="relative">
               <img
-                src={asset("website/Desktop_Roleplay_View.webp")}
-                alt={t("demo.landing.modes.roleplay.alt")}
-                width={1920}
-                height={1080}
+                src={asset("website/Desktop_Tracker_Panel.webp")}
+                alt={t("demo.landing.stories.trackers.alt")}
+                width={1600}
+                height={900}
                 className={`${SHOT} aspect-video ring-1 ring-[color-mix(in_srgb,var(--foreground)_8%,transparent)]`}
               />
               <figcaption className="sr-only">{t("demo.landing.installedLabel")}</figcaption>
