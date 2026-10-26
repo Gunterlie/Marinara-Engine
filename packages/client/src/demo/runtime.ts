@@ -1,4 +1,10 @@
-import { APP_VERSION } from "@marinara-engine/shared";
+import {
+  APP_VERSION,
+  DEFAULT_ADVANCED_MEMORY_SETTINGS,
+  DEFAULT_DECISION_PROMPT_QUESTION_LIMIT,
+  MAX_DECISION_PROMPT_QUESTION_LIMIT,
+  ttsConfigSchema,
+} from "@marinara-engine/shared";
 import { i18n } from "../localization/i18n";
 import { UI_PERSISTENCE } from "../lib/ui-persistence";
 import { createSeed, DEMO_ASSETS } from "./seed";
@@ -17,6 +23,7 @@ type State = {
   lorebooks: Row[];
   lorebookEntries: Row[];
   chats: Row[];
+  chatFolders: Row[];
   messages: Row[];
 };
 type Handler = (m: RegExpMatchArray, url: URL, body: any, signal: AbortSignal | null) => Response | Promise<Response>;
@@ -370,9 +377,58 @@ function registerRoutes() {
   on("GET", "/game-assets/manifest", () => json({ scannedAt: nowIso(), count: 0, assets: {}, byCategory: {} }));
   on("GET", "/custom-tools/capabilities", () => json({ scriptExecutionEnabled: false }));
   on("GET", "/prompts/default", () => json(null));
+  on("GET", "/chat-folders", () => json(state.chatFolders));
+  on("GET", "/library-folders/:scope", () => json([]));
+  // Status reads for panels that ask a real server; the demo answers "off" so they render without errors.
+  on("GET", "/access/status", () =>
+    json({
+      loopbackOnly: true,
+      host: "127.0.0.1",
+      basicAuth: false,
+      adminSecret: false,
+      allowlist: false,
+      passwordlessPeers: [],
+      loginKeepsOpen: [],
+      viaProxy: false,
+    }),
+  );
+  on("GET", "/spotify/playlists", () => json({ playlists: [] }));
+  for (const path of [
+    "/characters/:id/gallery",
+    "/characters/personas/:id/gallery",
+    "/custom-emojis",
+    "/custom-stickers",
+    "/connection-folders",
+  ])
+    on("GET", path, () => json([]));
+  on("GET", "/ui-languages", () => json({ installed: [] }));
+  on("GET", "/conversation/status/:id", () => json({ statuses: {} }));
+  on("GET", "/decision/thinking-pregeneration", () => json({ enabled: false }));
+  on("GET", "/decision/smart-order", () => json({ enabled: false }));
+  on("GET", "/decision/prompt-question-limit", () =>
+    json({
+      limit: DEFAULT_DECISION_PROMPT_QUESTION_LIMIT,
+      defaultLimit: DEFAULT_DECISION_PROMPT_QUESTION_LIMIT,
+      maxLimit: MAX_DECISION_PROMPT_QUESTION_LIMIT,
+    }),
+  );
+  on("GET", "/game/scene-videos/:id", () => json({ videos: [] }));
+  on("GET", "/game/storyboards/:id", () => json({ storyboards: [] }));
+  on("GET", "/chats/:id/game-state", () => json(null));
+  on("GET", "/tts/config", () => json(ttsConfigSchema.parse({})));
+  on("GET", "/chats/:id/advanced-memory", () =>
+    json({
+      settings: DEFAULT_ADVANCED_MEMORY_SETTINGS,
+      job: { status: "idle", stage: "idle", completed: 0, total: 0, error: null },
+      missingKnowledgeCharacterIds: [],
+      records: [],
+      helperModel: null,
+      summaryModel: null,
+      warnings: [],
+    }),
+  );
   for (const path of [
     "/chat-presets",
-    "/chat-folders",
     "/prompts",
     "/regex-scripts",
     "/custom-tools",

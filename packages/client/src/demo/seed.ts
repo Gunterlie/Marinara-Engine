@@ -62,6 +62,14 @@ export function createSeed() {
       appearance: "",
       avatarPath: portrait("#4a6fb5", "Y"),
       isActive: "true",
+      tags: ["traveler"],
+      creator: "",
+      creatorNotes: "",
+      personaVersion: "1.0",
+      versioningEnabled: false,
+      nameColor: "",
+      dialogueColor: "",
+      boxColor: "",
       createdAt: NOW,
       updatedAt: NOW,
     },
@@ -197,42 +205,107 @@ export function createSeed() {
   ];
   const settings: Record<string, string> = {};
   // More example content, built from the Iris rows so every field keeps the same shape.
+  // Times count back from the current hour, so the lists look recent.
+  // ponytail: hour-rounded so two tabs seed the same rows; a tab opened across the hour sees times shifted by one hour.
+  const hour = Math.floor(Date.now() / 3_600_000) * 3_600_000;
+  const ago = (minutes: number) => new Date(hour - minutes * 60_000).toISOString();
   const extra = [
     [
       "demo-character-mira",
       "Mira Voss",
       "#3b82a6",
       "M",
-      "conversation",
       "A sharp, funny station engineer who texts in short bursts. Made up for the demo.",
       "Hey, you up? The coffee machine on deck 4 is haunted again.",
       ["demo", "sci-fi"],
+      true,
     ],
     [
       "demo-character-orsolo",
       "Captain Orsolo",
       "#a64b3b",
       "O",
-      "roleplay",
       "A weathered sea captain with a booming laugh. Made up for the demo.",
       "*Orsolo slaps the map table.* Ye look like someone who needs a ship. Sit, sit!",
       ["demo", "adventure"],
+      false,
     ],
     [
       "demo-character-kestrel",
       "Kestrel",
       "#6b8f3a",
       "K",
-      "game",
       "A dry-witted game master narrating the ember-lit ruins of Ember Reach. Made up for the demo.",
       "The gate groans open. Torchlight shows three paths: a stair down, a bridge, and a door with no handle. What do you do?",
-      ["demo", "fantasy"],
+      ["demo", "fantasy", "game master"],
+      true,
+    ],
+    [
+      "demo-character-seraphine",
+      "Seraphine Vey",
+      "#7c3aed",
+      "S",
+      "A masked noble who trades secrets at the Hollowmere court. Made up for the demo.",
+      "*Seraphine lowers her fan.* You are new here. Dance with me, and I will tell you who to fear.",
+      ["demo", "gothic", "intrigue"],
+      true,
+    ],
+    [
+      "demo-character-rook",
+      "Detective Rook",
+      "#475569",
+      "R",
+      "A tired detective in a city where it never stops raining. Made up for the demo.",
+      "*Rook flicks rain off his hat.* The clock tower stopped at 3:12. So did the man inside it.",
+      ["demo", "noir", "mystery"],
+      false,
+    ],
+    [
+      "demo-character-juniper",
+      "Juniper Hale",
+      "#d97706",
+      "J",
+      "Runs a tiny cafe and remembers everyone's order. Made up for the demo.",
+      "Morning! Your usual? I tried a new cinnamon thing, you have to taste it.",
+      ["demo", "slice of life", "cozy"],
+      false,
+    ],
+    [
+      "demo-character-k7",
+      "K-7",
+      "#0891b2",
+      "K",
+      "A polite maintenance robot learning human jokes. Made up for the demo.",
+      "GREETINGS. I have prepared a joke. It contains a pun. Please brace.",
+      ["demo", "sci-fi", "robot"],
+      false,
+    ],
+    [
+      "demo-character-vale",
+      "Dr. Vale Okonkwo",
+      "#16a34a",
+      "V",
+      "The station doctor, calm in every emergency. Made up for the demo.",
+      "Checking in after your shift. Did you sleep, or do I need to prescribe a nap?",
+      ["demo", "sci-fi", "medic"],
+      false,
+    ],
+    [
+      "demo-character-tamsin",
+      "Tamsin Reed",
+      "#db2777",
+      "T",
+      "A traveling bard who turns every tavern into a stage. Made up for the demo.",
+      "*Tamsin tunes her lute.* Request a song, friend. Anything but sea shanties. Orsolo has worn them out.",
+      ["demo", "fantasy", "music"],
+      false,
     ],
   ] as const;
-  const extraChars = extra.map(([id, name, bg, letter, , description, first_mes, tags]) => ({
+  const extraChars = extra.map(([id, name, bg, letter, description, first_mes, tags, favorite]) => ({
     ...characters[0],
     id,
     name,
+    favorite,
     avatarPath: portrait(bg, letter),
     data: JSON.stringify({
       ...characterData,
@@ -244,23 +317,147 @@ export function createSeed() {
       personality: "",
     }),
   }));
-  const extraChats = extra.map(([id, name, , , mode, , first_mes]) => ({
+  const firstMes = Object.fromEntries(extra.map(([id, , , , , first_mes]) => [id, first_mes]));
+
+  const chatFolders = [
+    {
+      id: "demo-folder-saltmere",
+      name: "Saltmere stories",
+      mode: "roleplay",
+      color: "#f29744",
+      sortOrder: 0,
+      collapsed: false,
+      createdAt: NOW,
+      updatedAt: NOW,
+    },
+    {
+      id: "demo-folder-station",
+      name: "Station crew",
+      mode: "conversation",
+      color: "#0891b2",
+      sortOrder: 0,
+      collapsed: false,
+      createdAt: NOW,
+      updatedAt: NOW,
+    },
+  ];
+
+  // [id, name, mode, character ids, minutes ago, folder, background]
+  const chatList: [string, string, string, string[], number, string | null, string | null][] = [
+    ["demo-chat-mira", "Chat with Mira Voss", "conversation", ["demo-character-mira"], 6, "demo-folder-station", null],
+    [
+      "demo-chat-crew",
+      "Deck 4 crew",
+      "conversation",
+      ["demo-character-mira", "demo-character-vale", "demo-character-k7"],
+      25,
+      "demo-folder-station",
+      null,
+    ],
+    ["demo-chat-vale", "Chat with Dr. Vale", "conversation", ["demo-character-vale"], 190, "demo-folder-station", null],
+    ["demo-chat-juniper", "Chat with Juniper", "conversation", ["demo-character-juniper"], 75, null, null],
+    ["demo-chat-k7", "Chat with K-7", "conversation", ["demo-character-k7"], 1500, null, null],
+    [
+      "demo-chat-orsolo",
+      "Aboard the Gull's Promise",
+      "roleplay",
+      ["demo-character-orsolo"],
+      40,
+      "demo-folder-saltmere",
+      DEMO_ASSETS.harbor,
+    ],
+    [
+      "demo-chat-tavern",
+      "Songs at the Salt Rat",
+      "roleplay",
+      ["demo-character-tamsin", "demo-character-orsolo"],
+      300,
+      "demo-folder-saltmere",
+      DEMO_ASSETS.lantern,
+    ],
+    ["demo-chat-seraphine", "The Hollowmere masquerade", "roleplay", ["demo-character-seraphine"], 130, null, null],
+    ["demo-chat-rook", "The clock that stopped", "roleplay", ["demo-character-rook"], 2900, null, null],
+    ["demo-chat-kestrel", "The Ember Reach run", "game", ["demo-character-kestrel"], 15, null, DEMO_ASSETS.lantern],
+    [
+      "demo-chat-smugglers",
+      "Smugglers of Saltmere",
+      "game",
+      ["demo-character-kestrel"],
+      4300,
+      null,
+      DEMO_ASSETS.harbor,
+    ],
+  ];
+
+  // Longer scripted histories, so a few chats look lived in. user / assistant lines alternate after the first message.
+  const history: Record<string, string[]> = {
+    "demo-chat-mira": [
+      "Haunted how?",
+      "It made tea. Nobody asked for tea. It does not have a tea setting.",
+      "Maybe it likes you.",
+      "Great. A machine with a crush. Vale says I need more sleep.",
+    ],
+    "demo-chat-crew": [
+      "Status report, everyone?",
+      "[Mira] Coffee machine still haunted. Filing a ticket with the ghost.",
+      "[Vale] Everyone drink water. That is my status.",
+      "[K-7] I HAVE FIXED THE LIGHTS. I HAVE ALSO NAMED THEM.",
+    ],
+    "demo-chat-orsolo": [
+      "Where are we sailing?",
+      "*Orsolo jabs a finger at the chart.* North, past the lighthouse, where the fog hides the old smugglers' cove.",
+      "Is it safe?",
+      "*He laughs until the lantern swings.* Safe? No. Worth it? Aye.",
+    ],
+    "demo-chat-seraphine": [
+      "Who should I fear?",
+      "*She tilts her mask toward the balcony.* The man in silver. He smiles at everyone, which means he trusts no one.",
+    ],
+    "demo-chat-kestrel": [
+      "I take the bridge.",
+      "The bridge sways. Roll a skill check, difficulty 12. *The dice show 15.* You cross, and the far gate is already open.",
+    ],
+    "demo-chat-juniper": [
+      "Surprise me.",
+      "*She slides over a cup with a cinnamon heart on top.* On the house. Tell me if it is too sweet.",
+    ],
+  };
+
+  const extraChats = chatList.map(([id, name, mode, characterIds, minutes, folderId, background], sortOrder) => ({
     ...chats[0],
-    id: id.replace("character", "chat"),
-    name:
-      mode === "conversation" ? `Chat with ${name}` : mode === "game" ? "The Ember Reach run" : `Aboard with ${name}`,
+    id,
+    name,
     mode,
-    characterIds: [id],
-    metadata: JSON.stringify({}),
-    _first: first_mes,
+    characterIds,
+    folderId,
+    sortOrder,
+    lastMessageAt: ago(minutes),
+    createdAt: ago(minutes + 600),
+    updatedAt: ago(minutes),
+    // A game chat without a gameId opens the new-game wizard; these play as running games.
+    metadata: {
+      ...(background ? { background } : {}),
+      ...(mode === "game" ? { gameId: id, gameSessionStatus: "active" } : {}),
+    },
   }));
-  const extraMessages = extraChats.map(({ _first, ...c }, i) => ({
-    ...messages[0],
-    id: `demo-message-extra-${i}`,
-    chatId: c.id,
-    characterId: c.characterIds[0],
-    content: _first,
-  }));
+  const extraMessages = extraChats.flatMap((chat) => {
+    const lines = [firstMes[chat.characterIds[0]], ...(history[chat.id] ?? [])];
+    return lines.map((content, i) => {
+      // Group chats name the speaker as "[Name] text"; pick that character's id.
+      const speaker = /^\[([^\]]+)\]/.exec(content)?.[1];
+      const characterId = extraChars.find((c) => speaker && c.name.includes(speaker))?.id ?? chat.characterIds[0];
+      return {
+        ...messages[0],
+        id: `demo-message-${chat.id}-${i}`,
+        chatId: chat.id,
+        role: i % 2 && !speaker ? "user" : "assistant",
+        characterId: i % 2 && !speaker ? null : characterId,
+        content: speaker ? content.replace(/^\[[^\]]+\]\s*/, "") : content,
+        createdAt: new Date(Date.parse(chat.lastMessageAt) - (lines.length - 1 - i) * 120_000).toISOString(),
+      };
+    });
+  });
+
   const entry = (id: string, lorebookId: string, name: string, content: string, keys: string[]) => ({
     ...lorebookEntries[0],
     id,
@@ -269,19 +466,18 @@ export function createSeed() {
     content,
     keys,
   });
+  const book = (id: string, name: string, description: string, category = "world") => ({
+    ...lorebooks[0],
+    id,
+    name,
+    description,
+    category,
+  });
   const extraLorebooks = [
-    {
-      ...lorebooks[0],
-      id: "demo-lorebook-ember",
-      name: "Ember Reach",
-      description: "Example ruins for the game mode demo.",
-    },
-    {
-      ...lorebooks[0],
-      id: "demo-lorebook-deck4",
-      name: "Deck 4",
-      description: "Example station notes for Mira's chat.",
-    },
+    book("demo-lorebook-ember", "Ember Reach", "Example ruins for the game mode demo."),
+    book("demo-lorebook-deck4", "Deck 4", "Example station notes for Mira's chat."),
+    book("demo-lorebook-hollowmere", "Hollowmere Court", "Example nobles and rumors for Seraphine's masquerade."),
+    book("demo-lorebook-rain", "Rain City Case Files", "Example clues for Detective Rook."),
   ];
   const extraEntries = [
     entry(
@@ -299,6 +495,13 @@ export function createSeed() {
       ["ship", "brig", "gull"],
     ),
     entry(
+      "demo-entry-salt-rat",
+      "demo-lorebook-harbor",
+      "The Salt Rat",
+      "The harbor tavern. Low beams, loud songs, and a cat that steals fish.",
+      ["tavern", "salt rat"],
+    ),
+    entry(
       "demo-entry-ruins",
       "demo-lorebook-ember",
       "Ember Reach Ruins",
@@ -312,6 +515,10 @@ export function createSeed() {
       "A spiral stair that ends in black water. A map of the reach glows on the wall at the bottom.",
       ["stair", "stairs", "map"],
     ),
+    entry("demo-entry-door", "demo-lorebook-ember", "The Handleless Door", "It opens to a spoken word: ember.", [
+      "door",
+      "ember",
+    ]),
     entry(
       "demo-entry-coffee",
       "demo-lorebook-deck4",
@@ -319,27 +526,112 @@ export function createSeed() {
       "The coffee machine on deck 4 hums at night and makes tea when nobody asked. Mira thinks it is haunted.",
       ["coffee", "machine", "haunted"],
     ),
+    entry(
+      "demo-entry-medbay",
+      "demo-lorebook-deck4",
+      "Medbay",
+      "Dr. Vale's domain. Always smells of mint. Naps are prescribed often.",
+      ["medbay", "vale", "doctor"],
+    ),
+    entry("demo-entry-k7", "demo-lorebook-deck4", "K-7", "The maintenance robot. Names every light it fixes.", [
+      "k-7",
+      "robot",
+    ]),
+    entry(
+      "demo-entry-silver",
+      "demo-lorebook-hollowmere",
+      "The Man in Silver",
+      "Lord Ashcombe. Smiles at everyone, owes money to half the court.",
+      ["silver", "ashcombe"],
+    ),
+    entry(
+      "demo-entry-masks",
+      "demo-lorebook-hollowmere",
+      "Masks",
+      "At Hollowmere, removing your mask before midnight is an insult.",
+      ["mask", "masks"],
+    ),
+    entry(
+      "demo-entry-balcony",
+      "demo-lorebook-hollowmere",
+      "The East Balcony",
+      "Where secrets are traded. The guards are paid to look at the moon.",
+      ["balcony"],
+    ),
+    entry(
+      "demo-entry-clock",
+      "demo-lorebook-rain",
+      "The Clock Tower",
+      "Stopped at 3:12. The caretaker was found inside.",
+      ["clock", "tower"],
+    ),
+    entry("demo-entry-umbrella", "demo-lorebook-rain", "The Red Umbrella", "Seen near every crime scene this month.", [
+      "umbrella",
+      "red",
+    ]),
+    entry(
+      "demo-entry-precinct",
+      "demo-lorebook-rain",
+      "Precinct 9",
+      "Rook's office. The coffee is worse than the crime rate.",
+      ["precinct", "office"],
+    ),
   ];
-  // A second persona, so the Personas panel shows switching.
+  // More personas, so the Personas panel shows switching.
+  const persona = (id: string, name: string, description: string, bg: string) => ({
+    ...personas[0],
+    id,
+    name,
+    comment: "",
+    description,
+    avatarPath: portrait(bg, name[0]!),
+    isActive: "false",
+  });
   const extraPersonas = [
+    persona(
+      "demo-persona-wren",
+      "Wren",
+      "A cartographer mapping the coast near Saltmere. Example persona for the demo.",
+      "#5b8a6b",
+    ),
+    persona(
+      "demo-persona-ash",
+      "Captain Ash",
+      "A retired pilot who now runs a cargo ship. Example persona for the demo.",
+      "#9a3412",
+    ),
+    persona("demo-persona-nova", "Nova", "A new crew member on the station. Example persona for the demo.", "#6d28d9"),
+  ];
+  // Example connections show the list; they have no keys and only the scripted one is used.
+  const extraConnections = [
     {
-      ...personas[0],
-      id: "demo-persona-wren",
-      name: "Wren",
-      comment: "",
-      description: "A cartographer mapping the coast near Saltmere. Example persona for the demo.",
-      avatarPath: portrait("#5b8a6b", "W"),
-      isActive: "false",
+      ...connections[0],
+      id: "demo-connection-openrouter",
+      name: "Example: OpenRouter (no key)",
+      provider: "openrouter",
+      model: "",
+      isDefault: false,
+    },
+    {
+      ...connections[0],
+      id: "demo-connection-local",
+      name: "Example: local model (not connected)",
+      provider: "custom",
+      baseUrl: "http://localhost:11434/v1",
+      model: "",
+      isDefault: false,
+      treatAsLocalEndpoint: true,
     },
   ];
   return {
     settings,
-    connections,
+    connections: [...connections, ...extraConnections],
     characters: [...characters, ...extraChars],
     personas: [...personas, ...extraPersonas],
     lorebooks: [...lorebooks, ...extraLorebooks],
     lorebookEntries: [...lorebookEntries, ...extraEntries],
-    chats: [...chats, ...extraChats.map(({ _first, ...c }) => c)],
-    messages: [...messages, ...extraMessages],
+    chats: [{ ...chats[0], lastMessageAt: ago(2), updatedAt: ago(2) }, ...extraChats],
+    chatFolders,
+    messages: [{ ...messages[0], createdAt: ago(2) }, ...extraMessages],
   };
 }
