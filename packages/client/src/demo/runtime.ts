@@ -103,7 +103,7 @@ function generate(body: Row, signal: AbortSignal | null): Response {
     });
   }
   const lastUser = [...state.messages].reverse().find((m) => m.chatId === chatId && m.role === "user");
-  const reply = pickDemoReply(userText || lastUser?.content || "");
+  const reply = pickDemoReply(userText || lastUser?.content || "", characterId);
 
   const encoder = new TextEncoder();
   let timer: ReturnType<typeof setTimeout> | undefined;
