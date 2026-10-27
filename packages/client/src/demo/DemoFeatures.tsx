@@ -2,7 +2,7 @@
 // Static demo: #/features, every documented feature by category
 // ──────────────────────────────────────────────
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { ArrowLeft, ArrowRight, BookOpen, Check, Download, LayoutGrid, Play } from "lucide-react";
+import { ArrowRight, BookOpen, Check, Download, LayoutGrid, Play } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { cn } from "../lib/utils";
 import { docHref } from "./docs";
@@ -169,10 +169,6 @@ export function DemoFeatures({ category }: { category: string }) {
       className="mx-auto flex w-full max-w-[75rem] scroll-mt-12 flex-col gap-14 px-4 pb-20 pt-6 sm:px-8 sm:pt-16"
     >
       <header className="flex flex-col gap-4">
-        <a href="#/" className={`${TEXT_LINK} text-[var(--muted-foreground)]`}>
-          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-          {t("demo.download.home")}
-        </a>
         <span className={EYEBROW}>{t("demo.features.eyebrow", { count: FEATURE_COUNT })}</span>
         <h1 className="text-balance text-[2.125rem] font-bold leading-[1.08] tracking-tight text-[var(--foreground)] sm:text-5xl">
           {t("demo.features.title")}

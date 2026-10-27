@@ -1632,7 +1632,10 @@ export function HomeBrowserHub({ pageActive, onOpenCredits, hideProfessor, websi
     >
       <div className="flex h-full min-h-0 w-full flex-col overflow-hidden border border-[var(--border)]/75 bg-[var(--marinara-home-page-wash)] shadow-2xl shadow-black/25 sm:rounded-xl">
         <header className="mari-home-browser-chrome relative z-40 shrink-0 border-b border-[var(--marinara-topbar-border)] bg-[var(--marinara-topbar-surface)] shadow-[0_8px_28px_-26px_rgba(0,0,0,0.8)] backdrop-blur-sm">
-          <div className="mari-home-browser-tab-row flex h-10 min-w-0 items-end gap-1 border-b border-[var(--border)]/45 px-2 sm:gap-2 sm:px-3">
+          <div
+            data-website={website ? "" : undefined}
+            className="mari-home-browser-tab-row flex h-10 min-w-0 items-end gap-1 border-b border-[var(--border)]/45 px-2 sm:gap-2 sm:px-3"
+          >
             <div
               className="relative z-10 flex shrink-0 self-center items-center gap-2 pr-1 sm:pr-3"
               data-component="HomeBrowserHub.Brand"
@@ -1649,12 +1652,20 @@ export function HomeBrowserHub({ pageActive, onOpenCredits, hideProfessor, websi
                   {versionLabel}
                 </span>
               </div>
+              {website && (
+                <button
+                  type="button"
+                  onClick={() => selectTab("home")}
+                  aria-label={t("home.browser.homeTab")}
+                  className="absolute inset-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--marinara-chat-chrome-focus-ring)]"
+                />
+              )}
             </div>
             {/* #5743: a SIBLING of the tab list, never a child - a tablist may
                 only contain tabs, and two independent reviews flagged the
                 nesting. In the phone shell (portrait or landscape) this is the
                 only way to the bookmarks, and only on the Home tab. */}
-            {mobileShell && homeSelected ? (
+            {mobileShell && homeSelected && !website ? (
               <button
                 ref={mobileBookmarksTriggerRef}
                 type="button"
@@ -1775,7 +1786,7 @@ export function HomeBrowserHub({ pageActive, onOpenCredits, hideProfessor, websi
             {website?.links}
           </div>
 
-          {showHomeBrowserAddressBar && !mobileShell ? (
+          {showHomeBrowserAddressBar && !mobileShell && !website ? (
             <div
               className="mari-home-browser-address-row flex h-8 shrink-0 items-center gap-1.5 px-2 py-0.5 sm:h-10 sm:gap-2 sm:px-3"
               data-component="HomeBrowserHub.AddressRow"
@@ -1835,7 +1846,7 @@ export function HomeBrowserHub({ pageActive, onOpenCredits, hideProfessor, websi
             </div>
           ) : null}
 
-          {homeSelected && !mobileShell ? (
+          {homeSelected && !mobileShell && !website ? (
             <nav
               className="flex min-h-8 items-center border-t border-[var(--border)]/45 px-2 sm:min-h-9 sm:px-3"
               aria-label={t("home.browser.bookmarksLabel")}

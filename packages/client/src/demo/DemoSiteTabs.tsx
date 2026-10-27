@@ -79,11 +79,11 @@ export function DemoSiteTabs({ tab }: { tab: string | null }) {
   });
 }
 
-/** After the tab list: the guided tour, then GitHub and Discord as small icon links. */
+/** After the tab list: the guided tour, then GitHub and Discord. Phones reach them through the Demo menu. */
 export function DemoSiteLinks() {
   const { t } = useTranslation();
   return (
-    <div className="ml-auto flex shrink-0 items-center gap-0.5 self-center pl-1">
+    <div className="ml-auto flex shrink-0 items-center gap-0.5 self-center pl-1 max-sm:hidden">
       <button
         type="button"
         data-testid="demo-tab-tour"
@@ -100,7 +100,7 @@ export function DemoSiteLinks() {
         {...external(GITHUB_URL)}
         aria-label={t("demo.landing.community.github")}
         title={t("demo.landing.community.github")}
-        className={cn(ICON_LINK, "max-sm:hidden")}
+        className={ICON_LINK}
       >
         <GithubIcon className="h-4 w-4" />
       </a>
@@ -109,7 +109,7 @@ export function DemoSiteLinks() {
         {...external(DISCORD_URL)}
         aria-label={t("demo.landing.community.discord")}
         title={t("demo.landing.community.discord")}
-        className={cn(ICON_LINK, "max-sm:hidden")}
+        className={ICON_LINK}
       >
         <DiscordIcon className="h-4 w-4" />
       </a>

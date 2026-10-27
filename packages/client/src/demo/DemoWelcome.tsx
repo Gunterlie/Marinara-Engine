@@ -1,7 +1,7 @@
 // ──────────────────────────────────────────────
 // Static demo: Home lead row and the download view
 // ──────────────────────────────────────────────
-import { ArrowLeft, ArrowRight, BookOpen, Download } from "lucide-react";
+import { ArrowRight, BookOpen, Download } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 const APK_URL = "https://github.com/Pasta-Devs/Marinara-Engine/releases/latest/download/marinara-engine-android.apk";
@@ -38,11 +38,6 @@ export function DemoDownload() {
   const { t } = useTranslation();
   return (
     <div data-demo-page="" className="mx-auto flex w-full max-w-3xl flex-col gap-10 px-4 pb-20 pt-6 sm:px-8 sm:pt-16">
-      <a href="#/" className={`${TEXT_LINK} text-[var(--muted-foreground)]`}>
-        <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-        {t("demo.download.home")}
-      </a>
-
       <section aria-labelledby="demo-download-title" className="flex flex-col gap-3">
         <h1
           id="demo-download-title"

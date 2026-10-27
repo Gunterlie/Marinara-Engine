@@ -173,3 +173,32 @@
     transition: none;
   }
 }
+
+/* Phones: the website's Home tabs become one scrollable strip of labelled 44 px tabs, without the logo block. */
+@media (max-width: 39.99rem) {
+  .mari-home-browser-tab-row[data-website] {
+    height: auto;
+  }
+
+  [data-website] [data-component="HomeBrowserHub.Brand"] {
+    display: none;
+  }
+
+  [data-website] [role="tablist"] {
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  [data-website] [role="tab"] {
+    flex: none;
+    width: auto;
+    min-height: 2.75rem;
+    gap: 0.3125rem;
+    padding-inline: 0.4375rem;
+    font-size: 0.8125rem;
+  }
+
+  [data-website] [role="tab"] > span {
+    display: block;
+  }
+}

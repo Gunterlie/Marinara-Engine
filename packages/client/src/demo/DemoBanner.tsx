@@ -98,7 +98,8 @@ const BUTTON_CLASS =
 // The demo's only control in the Engine bar: a small badge whose menu holds the tours, reset and source.
 export function DemoSiteStart() {
   return (
-    <div className="flex shrink-0 items-center gap-1">
+    // Phones order the bar with CSS (the menu is order 10 and pushed right by ml-auto); the badge takes both, so it sits just before the menu.
+    <div className="flex shrink-0 items-center gap-1 max-sm:order-10 max-sm:ml-auto max-sm:[&+button]:ml-0">
       <span aria-hidden="true" className="mr-1 h-5 w-px bg-[var(--border)] max-md:hidden" />
       <DemoBanner />
     </div>
@@ -127,7 +128,11 @@ export function DemoBanner() {
     if (!lessonsOpen) return;
     const update = () => {
       const rect = lessonsButtonRef.current?.getBoundingClientRect();
-      if (rect) setPosition({ top: rect.bottom + 6, left: Math.max(8, Math.min(rect.left, window.innerWidth - 264)) });
+      if (rect)
+        setPosition({
+          top: rect.bottom + 6,
+          left: Math.max(8, Math.min(rect.left, window.innerWidth - (lessonsListRef.current?.offsetWidth ?? 264) - 8)),
+        });
     };
     update();
     window.addEventListener("resize", update);

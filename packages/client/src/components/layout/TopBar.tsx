@@ -488,7 +488,7 @@ export function TopBar({ mobileTopbarNavigation }: { mobileTopbarNavigation: boo
         >
           {mobileTopbarNavigation ? [homeButton, chatsButton] : [chatsButton, homeButton]}
         </div>
-        {DemoSiteStart && (
+        {DemoSiteStart && !phoneTopbar && (
           <Suspense fallback={null}>
             <DemoSiteStart />
           </Suspense>
@@ -597,6 +597,12 @@ export function TopBar({ mobileTopbarNavigation }: { mobileTopbarNavigation: boo
 
         <PersonalExtensionTopbarButtons className={PHONE_OVERFLOW_HIDDEN_CLASS} />
         <PersonalExtensionContributionsMenu />
+        {/* Phones: the demo badge sits next to the menu, so the left keeps the Engine's own controls. */}
+        {DemoSiteStart && phoneTopbar && (
+          <Suspense fallback={null}>
+            <DemoSiteStart />
+          </Suspense>
+        )}
         <TopbarMoreMenu items={overflowItems} headerRef={headerRef} phoneTopbar={phoneTopbar} />
       </nav>
     </header>

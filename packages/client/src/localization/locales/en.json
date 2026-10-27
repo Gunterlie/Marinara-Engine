@@ -1846,7 +1846,6 @@
   "demo.download.containers.steps.2": "Start the container in the background. The first download can take a few minutes.",
   "demo.download.containers.steps.3": "Open http://127.0.0.1:7860 in your browser.",
   "demo.download.guide": "Install guide",
-  "demo.download.home": "Home",
   "demo.download.installer": "Get the installer",
   "demo.download.ios.needs": "A computer, home server or Android device that runs Marinara on the same network or Tailscale. iOS cannot run the server itself.",
   "demo.download.ios.steps.1": "Find the LAN or Tailscale address of the device that runs Marinara.",
