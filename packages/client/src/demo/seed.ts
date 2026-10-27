@@ -15,8 +15,9 @@ export const DEMO_ASSETS = {
   lantern: `${import.meta.env.BASE_URL}demo-assets/lighthouse-lantern.webp`,
 } as const;
 
-// Generated portraits, keyed by seed id. Rows without art keep their letter placeholder.
+// Generated 256 px avatar crops, keyed by seed id. Rows without art keep their letter placeholder.
 const PORTRAITS: Record<string, string> = {
+  "demo-character-iris": "iris",
   "demo-character-mira": "mira-voss",
   "demo-character-orsolo": "captain-orsolo",
   "demo-character-kestrel": "kestrel",
@@ -31,9 +32,102 @@ const PORTRAITS: Record<string, string> = {
   "demo-persona-ash": "persona-captain-ash",
   "demo-persona-nova": "persona-nova",
 };
-const avatar = (id: string, fallback: string) =>
-  PORTRAITS[id] ? `${import.meta.env.BASE_URL}demo-assets/characters/${PORTRAITS[id]}.webp` : fallback;
+const avatar = <T extends string | null>(id: string, fallback: T) =>
+  PORTRAITS[id] ? `${import.meta.env.BASE_URL}demo-assets/avatars/${PORTRAITS[id]}.webp` : fallback;
 const scene = (slug: string) => `${import.meta.env.BASE_URL}demo-assets/backgrounds/${slug}.webp`;
+
+// Full-body sprites per character id, served as /sprites/:id. Characters without art show no sprite.
+const EXPRESSIONS = ["neutral", "happy", "serious"];
+export const DEMO_SPRITES: Record<string, { slug: string; expressions: string[] }> = Object.fromEntries(
+  [
+    ["demo-character-iris", "iris"],
+    ["demo-character-mira", "mira-voss"],
+    ["demo-character-orsolo", "captain-orsolo"],
+    ["demo-character-kestrel", "kestrel"],
+    ["demo-character-rook", "detective-rook"],
+    ["demo-character-vale", "dr-vale-okonkwo"],
+  ].map(([id, slug]) => [id, { slug: slug!, expressions: EXPRESSIONS }]),
+);
+
+type TrackerSeed = {
+  date: string;
+  time: string;
+  location: string;
+  weather: string;
+  temperature: string;
+  mood: string;
+  thoughts: string;
+  events: string[];
+  quest: [string, ...[string, boolean][]];
+  stats: [string, number, number, string][];
+};
+
+// One tracker snapshot in the Engine's GameState shape.
+const tracker = (chatId: string, characterId: string, name: string, t: TrackerSeed) => {
+  const [questName, ...objectives] = t.quest;
+  const stats = t.stats.map(([statName, value, max, color]) => ({ name: statName, value, max, color }));
+  return {
+    id: `${chatId}-state`,
+    chatId,
+    messageId: "",
+    swipeIndex: 0,
+    date: t.date,
+    time: t.time,
+    location: t.location,
+    weather: t.weather,
+    temperature: t.temperature,
+    worldCustomFields: [],
+    presentCharacters: [
+      {
+        characterId,
+        name,
+        emoji: "",
+        mood: t.mood,
+        appearance: null,
+        outfit: null,
+        avatarPath: avatar(characterId, null),
+        customFields: {},
+        stats: [],
+        thoughts: t.thoughts,
+      },
+    ],
+    recentEvents: t.events,
+    playerStats: {
+      stats,
+      attributes: null,
+      skills: {},
+      inventory: [],
+      activeQuests: [
+        {
+          questEntryId: `${chatId}-quest`,
+          name: questName,
+          currentStage: 0,
+          objectives: objectives.map(([text, completed]) => ({ text, completed })),
+          completed: false,
+        },
+      ],
+      status: "",
+      customTrackerFields: [],
+    },
+    personaStats: null,
+    committed: true,
+    createdAt: NOW,
+  };
+};
+
+// Chat metadata that turns on the Engine's tracker HUD and, when art exists, the sprite overlay.
+const agentMeta = (characterIds: string[], trackers: boolean) => {
+  const sprites = characterIds.filter((id) => DEMO_SPRITES[id]);
+  if (!trackers && !sprites.length) return {};
+  return {
+    enableAgents: true,
+    activeAgentIds: [
+      ...(trackers ? ["world-state", "character-tracker", "quest"] : []),
+      ...(sprites.length ? ["expression"] : []),
+    ],
+    ...(sprites.length ? { spriteCharacterIds: sprites, spriteDisplayModes: ["full-body"] } : {}),
+  };
+};
 
 const NOW = "2026-01-01T00:00:00.000Z";
 
@@ -65,7 +159,7 @@ export function createSeed() {
       id: DEMO_SEED_IDS.characterId,
       data: JSON.stringify(characterData),
       comment: "Demo example",
-      avatarPath: DEMO_ASSETS.iris,
+      avatarPath: avatar(DEMO_SEED_IDS.characterId, DEMO_ASSETS.iris),
       name: "Iris",
       favorite: false,
       createdAt: NOW,
@@ -156,7 +250,7 @@ export function createSeed() {
       lastMessageAt: NOW,
       createdAt: NOW,
       updatedAt: NOW,
-      metadata: { background: DEMO_ASSETS.harbor },
+      metadata: { background: DEMO_ASSETS.harbor, ...agentMeta([DEMO_SEED_IDS.characterId], true) },
     },
   ];
   const messages = [
@@ -376,7 +470,15 @@ export function createSeed() {
       null,
     ],
     ["demo-chat-vale", "Chat with Dr. Vale", "conversation", ["demo-character-vale"], 190, "demo-folder-station", null],
-    ["demo-chat-juniper", "Chat with Juniper", "conversation", ["demo-character-juniper"], 75, null, null],
+    [
+      "demo-chat-juniper",
+      "Chat with Juniper",
+      "conversation",
+      ["demo-character-juniper"],
+      75,
+      null,
+      scene("cozy-cafe-interior"),
+    ],
     ["demo-chat-k7", "Chat with K-7", "conversation", ["demo-character-k7"], 1500, null, null],
     [
       "demo-chat-orsolo",
@@ -394,7 +496,7 @@ export function createSeed() {
       ["demo-character-tamsin", "demo-character-orsolo"],
       300,
       "demo-folder-saltmere",
-      DEMO_ASSETS.lantern,
+      scene("moonlit-tavern"),
     ],
     ["demo-chat-seraphine", "The Hollowmere masquerade", "roleplay", ["demo-character-seraphine"], 130, null, null],
     [
@@ -475,6 +577,7 @@ export function createSeed() {
     metadata: {
       ...(background ? { background } : {}),
       ...(mode === "game" ? { gameId: id, gameSessionStatus: "active" } : {}),
+      ...(mode !== "conversation" ? agentMeta(characterIds, id === "demo-chat-kestrel") : {}),
     },
   }));
   const extraMessages = extraChats.flatMap((chat) => {
@@ -762,5 +865,37 @@ export function createSeed() {
     chats: [{ ...chats[0], lastMessageAt: ago(2), updatedAt: ago(2) }, ...extraChats],
     chatFolders,
     messages: [{ ...messages[0], createdAt: ago(2) }, ...extraMessages],
+    gameStates: [
+      tracker(DEMO_SEED_IDS.chatId, DEMO_SEED_IDS.characterId, "Iris", {
+        date: "Day 3 of the herring run",
+        time: "Late evening",
+        location: "Saltmere lighthouse, lamp room",
+        weather: "Thick fog",
+        temperature: "9°C",
+        mood: "Cheerful",
+        thoughts: "A visitor on a night like this. I hope they like tea.",
+        events: ["The fog rolled in at dusk.", "Iris lit the lamp early."],
+        quest: ["The ninety-year lamp", ["Climb to the lamp room", true], ["Ask Iris about the lamp", false]],
+        stats: [
+          ["Warmth", 6, 10, "#f29744"],
+          ["Energy", 8, 10, "#4a9fd8"],
+        ],
+      }),
+      tracker("demo-chat-kestrel", "demo-character-kestrel", "Kestrel", {
+        date: "Third night in the Ember Reach",
+        time: "Midnight",
+        location: "The rope bridge to the far gate",
+        weather: "Ash on the wind",
+        temperature: "31°C",
+        mood: "Watchful",
+        thoughts: "They rolled a 15. The gate will not stay open for long.",
+        events: ["The party crossed the swaying bridge.", "The far gate opened by itself."],
+        quest: ["Reach the Ember Heart", ["Cross the bridge", true], ["Find out who opened the gate", false]],
+        stats: [
+          ["HP", 18, 24, "#d94f4f"],
+          ["Torches", 3, 5, "#f2b544"],
+        ],
+      }),
+    ],
   };
 }

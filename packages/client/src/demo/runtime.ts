@@ -11,7 +11,7 @@ import {
 } from "@marinara-engine/shared";
 import { i18n } from "../localization/i18n";
 import { UI_PERSISTENCE } from "../lib/ui-persistence";
-import { createSeed, DEMO_ASSETS } from "./seed";
+import { createSeed, DEMO_ASSETS, DEMO_SPRITES } from "./seed";
 import { pickDemoReply } from "./scenarios";
 import { loadDemoDocs } from "./docs";
 
@@ -30,6 +30,7 @@ type State = {
   chatFolders: Row[];
   presets: Row[];
   promptSections: Row[];
+  gameStates: Row[];
   messages: Row[];
 };
 type Handler = (m: RegExpMatchArray, url: URL, body: any, signal: AbortSignal | null) => Response | Promise<Response>;
@@ -335,7 +336,7 @@ function registerRoutes() {
     json(
       state.characters
         .filter((c) => (b?.ids as string[] | undefined)?.includes(c.id))
-        .map((c) => ({ id: c.id, name: c.name, avatarPath: c.avatarPath })),
+        .map((c) => ({ id: c.id, name: c.name, avatarUrl: c.avatarPath, avatarCrop: null })),
     ),
   );
   on("GET", "/characters/personas/list", (_m, u) => json(page(state.personas, u)));
@@ -485,7 +486,9 @@ function registerRoutes() {
   );
   on("GET", "/game/scene-videos/:id", () => json({ videos: [] }));
   on("GET", "/game/storyboards/:id", () => json({ storyboards: [] }));
-  on("GET", "/chats/:id/game-state", () => json(null));
+  on("GET", "/chats/:id/game-state", (m) => json(state.gameStates.find((g) => g.chatId === m[1]) ?? null));
+  // The game screen logs each new location to its journal; the demo keeps no journal.
+  on("POST", "/game/journal/entry", () => json({ ok: true }));
   on("GET", "/tts/config", () => json(ttsConfigSchema.parse({})));
   on("GET", "/chats/:id/advanced-memory", () =>
     json({
@@ -543,9 +546,43 @@ function registerRoutes() {
         enabledByDefault: true,
         category: "tracker",
       },
+      {
+        id: "character-tracker",
+        name: "Character Tracker",
+        description: "Notes who is in the scene, their mood and what they are thinking.",
+        phase: "post_processing",
+        enabledByDefault: true,
+        category: "tracker",
+      },
+      {
+        id: "quest",
+        name: "Quest Tracker",
+        description: "Keeps your goals and their steps in a list you can check off.",
+        phase: "post_processing",
+        enabledByDefault: true,
+        category: "tracker",
+      },
+      {
+        id: "expression",
+        name: "Expression Engine",
+        description: "Changes a character's sprite to match the mood of each reply.",
+        phase: "post_processing",
+        enabledByDefault: true,
+        category: "misc",
+      },
     ]),
   );
-  on("GET", "/sprites/:id", () => json([]));
+  // Full-body sprites use the Engine's "full_" expression prefix.
+  on("GET", "/sprites/:id", (m) => {
+    const sprites = DEMO_SPRITES[m[1]!];
+    return json(
+      (sprites?.expressions ?? []).map((expression) => ({
+        expression: `full_${expression}`,
+        filename: `${expression}.webp`,
+        url: `${import.meta.env.BASE_URL}demo-assets/sprites/${sprites!.slug}/${expression}.webp`,
+      })),
+    );
+  });
   on("POST", "/chats/:id/touch", (m) => json(byId(state.chats, m[1]!) ?? { success: true }));
   on("GET", "/characters/personas/:id", (m) =>
     json(byId(state.personas, m[1]!) ?? { error: "Not found" }, byId(state.personas, m[1]!) ? 200 : 404),

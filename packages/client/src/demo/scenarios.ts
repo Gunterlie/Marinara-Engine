@@ -26,6 +26,10 @@ const SCENARIOS: { match: RegExp; reply: string }[] = [
 ];
 
 const HARBOR = new URL(DEMO_ASSETS.harbor, window.location.href).href;
+const RAIN_STREET = new URL(
+  `${import.meta.env.BASE_URL}demo-assets/backgrounds/rain-city-street.webp`,
+  window.location.href,
+).href;
 
 // Per-character replies, tried before the Iris ones. Each points at a feature the demo shows.
 const BY_CHARACTER: Record<string, { match: RegExp; reply: string }[]> = {
@@ -199,8 +203,7 @@ const BY_CHARACTER: Record<string, { match: RegExp; reply: string }[]> = {
     },
     {
       match: /\bumbrella\b/i,
-      reply:
-        "That's the question. *He turns up his collar.* With a real model, the twist is yours to find. (Scripted.)",
+      reply: `That's the question. *He turns up his collar.* With a real model, the twist is yours to find. (Scripted. In your Engine, the Illustrator agent can draw the scene like this.)\n\n![The street with the red umbrella](${RAIN_STREET})`,
     },
   ],
 };
