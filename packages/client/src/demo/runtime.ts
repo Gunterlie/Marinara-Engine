@@ -43,6 +43,18 @@ let state!: State; // set by installDemoRuntime / resetDemo
 let installed = false;
 const generations = new Map<string, AbortController>();
 
+// Stands in for the Expression agent: the reply's wording picks the sprite.
+const spriteExtra = (characterId: string | null, text: string) => {
+  const expression = /grin|smil|laugh|happy|cheer/i.test(text)
+    ? "happy"
+    : /clench|frown|grim|stern/i.test(text)
+      ? "serious"
+      : null;
+  return characterId && expression && DEMO_SPRITES[characterId]
+    ? { spriteExpressions: { [characterId]: expression } }
+    : {};
+};
+
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 const notFound = () => json({ error: "Not found" }, 404);
@@ -154,7 +166,7 @@ function generate(body: Row, signal: AbortSignal | null): Response {
             activeSwipeIndex: 0,
             swipeCount: 0,
             createdAt: nowIso(),
-            extra: {},
+            extra: spriteExtra(characterId, reply),
           };
           state.messages.push(saved);
         }
@@ -854,14 +866,22 @@ function isolateLocalStorage() {
           chatHelpSeenModes: ["conversation", "roleplay", "game"],
           chatSettingsMoveTipDismissed: true,
           defaultRoleplayBackground,
-          // Desktop opens with the seeded chats in view; set before the first paint, so nothing shifts.
-          sidebarOpen: window.innerWidth >= 1024,
+          // Wide screens open with the seeded chats in view; set before the first paint, so nothing shifts.
+          // Below 1600px the open list would squeeze the docked Tracker Panel to its 96px minimum.
+          sidebarOpen: window.innerWidth >= 1600,
+          // Desktop shows the Tracker Panel; phones keep the inline tracker bar.
+          trackerPanelOpen: window.innerWidth >= 1024,
+          // Dock the panel left, clear of the window buttons on the right, with the chat beside it.
+          trackerPanelSide: "left",
+          roleplayChatPosition: window.innerWidth >= 1024 ? "right" : "center",
         },
         version: UI_PERSISTENCE.version,
       }),
     );
   }
   proxy.setItem("marinara:whats-new:seen-version", APP_VERSION);
+  // The demo ships no sound files; muted game audio avoids 404s for every UI click sound.
+  if (proxy.getItem("game-audio-muted") === null) proxy.setItem("game-audio-muted", "true");
 }
 
 export function installDemoRuntime(): void {

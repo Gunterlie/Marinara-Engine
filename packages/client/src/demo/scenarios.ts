@@ -12,7 +12,7 @@ const SCENARIOS: { match: RegExp; reply: string }[] = [
   {
     match: /\b(?:fog|weather|storm)\b/i,
     reply:
-      "*She checks a brass barometer.* Fog until midnight, I'd say. The ships will sound their horns. Stay for tea until it lifts.",
+      "*She checks a brass barometer, jaw clenched.* Fog until midnight, I'd say. The ships will sound their horns. Stay for tea until it lifts.",
   },
   {
     match: /\b(?:harbor|ships?|boats?|saltmere)\b/i,
@@ -21,11 +21,12 @@ const SCENARIOS: { match: RegExp; reply: string }[] = [
   },
   {
     match: /^\s*(hi|hello|hey)\b/i,
-    reply: "*Iris waves.* Hello again! Ask me about the lighthouse, the fog, or the harbor.",
+    reply: "*Iris grins and waves.* Hello again! Ask me about the lighthouse, the fog, or the harbor.",
   },
 ];
 
 const HARBOR = new URL(DEMO_ASSETS.harbor, window.location.href).href;
+const MIRA_SELFIE = new URL(`${import.meta.env.BASE_URL}demo-assets/avatars/mira-voss.webp`, window.location.href).href;
 const RAIN_STREET = new URL(
   `${import.meta.env.BASE_URL}demo-assets/backgrounds/rain-city-street.webp`,
   window.location.href,
@@ -65,8 +66,7 @@ const BY_CHARACTER: Record<string, { match: RegExp; reply: string }[]> = {
     },
     {
       match: /\b(?:selfie|photo|picture)\b/i,
-      reply:
-        "*Mira sends a blurry photo of the coffee machine on deck 4.* Proof. It hums at night. In your own Engine, characters can send real selfies once you connect an image model. (Scripted.)",
+      reply: `*Mira sends a selfie from deck 4.* Proof I am still awake. In your own Engine, characters can send real selfies once you connect an image model. (Scripted.)\n\n![Mira on deck 4](${MIRA_SELFIE})`,
     },
   ],
   "demo-character-orsolo": [
@@ -90,7 +90,7 @@ const BY_CHARACTER: Record<string, { match: RegExp; reply: string }[]> = {
     {
       match: /\b(?:stair|down)/i,
       reply:
-        "*You descend.* Water drips. A glowing map hangs on the wall, which is the game mode map. Roll for perception. (Scripted.)",
+        '*You descend.* Water drips. A glowing map hangs on the wall, which is the game mode map. Roll for perception. (Scripted.)\n[Kestrel] [serious]: "Stay close. Something lives down here."',
     },
     {
       match: /\b(?:bridge|cross)/i,
@@ -105,7 +105,7 @@ const BY_CHARACTER: Record<string, { match: RegExp; reply: string }[]> = {
     {
       match: /\b(?:roll|dice|perception)\b/i,
       reply:
-        "*The dice clatter: 13 + 3 = 16.* Success. You spot a loose stone in the wall, and behind it a rusted key. In a real game the roll is random and the game master reacts to it. (Scripted roll.)",
+        '*The dice clatter: 13 + 3 = 16.* Success. You spot a loose stone in the wall, and behind it a rusted key. In a real game the roll is random and the game master reacts to it. (Scripted roll.)\n[Kestrel] [happy]: "A key! Good eyes."',
     },
   ],
   "demo-character-vale": [

@@ -554,7 +554,11 @@ export function createSeed() {
     ],
     "demo-chat-kestrel": [
       "I take the bridge.",
-      "The bridge sways. Roll a skill check, difficulty 12. *The dice show 15.* You cross, and the far gate is already open.",
+      'The bridge sways. Roll a skill check, difficulty 12. *The dice show 15.* You cross, and the far gate is already open.\n[Kestrel] [happy]: "Nice footwork. The gate is open, so somebody got here first."',
+    ],
+    "demo-chat-smugglers": [
+      "We row for the cove.",
+      'The oars creak. Fog closes behind the boat, and a lantern blinks twice from the rocks.\n[Kestrel] [serious]: "Two blinks. Someone expects us."',
     ],
     "demo-chat-juniper": [
       "Surprise me.",
