@@ -29,9 +29,6 @@ const goHome = () => {
   if (window.location.hash !== "#/") window.location.hash = "#/";
 };
 
-// Professor Mari needs a live model, so her card offers the guided tours instead.
-const openTours = () => window.dispatchEvent(new Event("marinara-demo-lessons"));
-
 // The website is the Engine's own Home: its hero and story wrap the real widgets, and its pages are more Home tabs.
 export function DemoHome() {
   const { t } = useTranslation();
@@ -77,7 +74,6 @@ export function DemoHome() {
       <HomeBrowserHub
         pageActive={pageActive}
         onOpenCredits={() => setCreditsOpen(true)}
-        hideProfessor
         website={{
           tab,
           tabs: <DemoSiteTabs tab={tab} />,
@@ -97,7 +93,6 @@ export function DemoHome() {
             </div>
           ),
           onHome: goHome,
-          onProfessor: openTours,
         }}
       />
     </div>

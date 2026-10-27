@@ -11,11 +11,16 @@ import {
   clampParsedDiceToLimits,
   parseDiceNotation,
   rollParsedDice,
+  PROFESSOR_MARI_ID,
+  mariWorkspaceSessionId,
+  type MariDbPendingApproval,
+  type MariWorkspaceActionResult,
 } from "@marinara-engine/shared";
 import { i18n } from "../localization/i18n";
 import { UI_PERSISTENCE } from "../lib/ui-persistence";
-import { createSeed, DEMO_ASSETS, DEMO_SPRITES } from "./seed";
+import { createSeed, DEMO_ASSETS, DEMO_SEED_IDS, DEMO_SPRITES } from "./seed";
 import { pickDemoReply } from "./scenarios";
+import { MARI_CHARACTER, MARI_ENTRY, MARI_STARTER_CHIPS, MARI_WELCOME, pickMariScript, type MariAction } from "./mari";
 import { loadDemoDocs } from "./docs";
 
 // Browser-only stand-in for the Engine backend. It replaces window.fetch, so the real API client,
@@ -229,6 +234,213 @@ function generate(body: Row, signal: AbortSignal | null): Response {
   return new Response(stream, { headers: { "Content-Type": "text/event-stream" } });
 }
 
+// --- Professor Mari: prewritten answers, real change cards ----------------------
+
+const MARI_CHAT_ID = "demo-mari-chat";
+let mariPending: MariDbPendingApproval[] = [];
+const mariUndo = new Map<string, () => void>();
+
+const mariMessage = (role: "user" | "assistant", content: string, extra: Row = {}): Row => ({
+  id: uid("demo-message"),
+  chatId: MARI_CHAT_ID,
+  role,
+  characterId: role === "assistant" ? PROFESSOR_MARI_ID : null,
+  content,
+  activeSwipeIndex: 0,
+  swipeCount: 0,
+  createdAt: nowIso(),
+  extra,
+});
+
+function mariChat(): Row {
+  let chat = byId(state.chats, MARI_CHAT_ID);
+  if (chat) return chat;
+  const now = nowIso();
+  chat = {
+    id: MARI_CHAT_ID,
+    name: "Professor Mari",
+    mode: "conversation",
+    characterIds: [PROFESSOR_MARI_ID],
+    groupId: null,
+    personaId: null,
+    promptPresetId: null,
+    connectionId: DEMO_SEED_IDS.connectionId,
+    connectedChatId: null,
+    folderId: null,
+    sortOrder: 0,
+    lastMessageAt: now,
+    createdAt: now,
+    updatedAt: now,
+    metadata: { professorMariActive: true },
+  };
+  state.chats.push(chat);
+  state.messages.push(mariMessage("assistant", MARI_WELCOME, { mariSuggestions: MARI_STARTER_CHIPS }));
+  return chat;
+}
+
+/** Makes the change for real (so Undo has something to remove) and returns its card. */
+function mariApply(action: MariAction): MariWorkspaceActionResult {
+  const id = uid("demo-review");
+  const now = nowIso();
+  const undoUntil = new Date(Date.now() + 86_400_000).toISOString();
+  let row: Row, list: Row[], table: string, result: Omit<MariWorkspaceActionResult, "reviewIds">;
+  if (action === "character") {
+    row = {
+      id: uid("demo-character"),
+      data: JSON.stringify(MARI_CHARACTER),
+      comment: "",
+      avatarPath: null,
+      name: MARI_CHARACTER.name,
+      favorite: false,
+      createdAt: now,
+      updatedAt: now,
+    };
+    [list, table] = [state.characters, "characters"];
+    result = {
+      status: "created",
+      resource: { kind: "character", id: row.id, label: MARI_CHARACTER.name },
+      changedFields: ["name", "description", "personality", "first_mes"],
+      summary: `Created ${MARI_CHARACTER.name}`,
+      reason: "You asked for a cozy café character.",
+      changes: (["description", "personality", "first_mes"] as const).map((field) => ({
+        field,
+        kind: "text" as const,
+        before: "",
+        after: MARI_CHARACTER[field],
+      })),
+    };
+  } else {
+    const template = state.lorebookEntries.find((e) => e.lorebookId === DEMO_SEED_IDS.lorebookId) ?? {};
+    row = {
+      ...template,
+      id: uid("demo-entry"),
+      lorebookId: DEMO_SEED_IDS.lorebookId,
+      name: MARI_ENTRY.name,
+      content: MARI_ENTRY.content,
+      keys: MARI_ENTRY.keys,
+      createdAt: now,
+      updatedAt: now,
+    };
+    [list, table] = [state.lorebookEntries, "lorebook_entries"];
+    result = {
+      status: "updated",
+      resource: {
+        kind: "lorebook",
+        id: DEMO_SEED_IDS.lorebookId,
+        label: byId(state.lorebooks, DEMO_SEED_IDS.lorebookId)?.name ?? "Lorebook",
+      },
+      changedFields: ["entries"],
+      summary: `Added ${MARI_ENTRY.name}`,
+      reason: "You asked for an entry about the lighthouse.",
+      changes: [
+        {
+          field: "entries",
+          kind: "list",
+          added: [MARI_ENTRY.name],
+          edited: [],
+          removed: [],
+          count: { added: 1, edited: 0, removed: 0 },
+          items: [{ name: MARI_ENTRY.name, keys: MARI_ENTRY.keys, text: MARI_ENTRY.content }],
+        },
+      ],
+    };
+  }
+  list.push(row);
+  mariUndo.set(id, () => remove(list, row.id));
+  mariPending.push({
+    kind: "applied_review",
+    id,
+    sessionId: mariWorkspaceSessionId(MARI_CHAT_ID),
+    command: `${table}.insert`,
+    reason: result.reason ?? null,
+    operationHash: id,
+    requestedAt: now,
+    expiresAt: undoUntil,
+    affectedTables: { [table]: 1 },
+    affectedRows: 1,
+    validationStatus: "passed",
+    diffPreview: [{ table, id: row.id, action: "insert", before: null, after: row }],
+    diffTruncated: false,
+  });
+  return { ...result, reviewIds: [id], undoUntil };
+}
+
+/** Keep or Undo: settle the review and write the outcome onto the card, as the Engine does. */
+function mariAnswer(id: string, outcome: "kept" | "undone"): Response {
+  const approval = mariPending.find((a) => a.id === id);
+  if (!approval) return json({ ok: false, outcome: "state_changed" });
+  mariPending = mariPending.filter((a) => a.id !== id);
+  if (outcome === "undone") mariUndo.get(id)?.();
+  mariUndo.delete(id);
+  for (const message of state.messages) {
+    const results = message.extra?.mariWorkspaceActionResults as MariWorkspaceActionResult[] | undefined;
+    for (const result of results ?? []) if (result.reviewIds?.includes(id)) result.outcome = outcome;
+  }
+  const status = outcome === "kept" ? "kept" : "restored";
+  return json({
+    ok: true,
+    completed: true,
+    approval,
+    history: { ...approval, status, createdAt: approval.requestedAt, completedAt: nowIso() },
+  });
+}
+
+function mariPrompt(body: Row, signal: AbortSignal | null): Response {
+  const chat = mariChat();
+  const text = String(body.message ?? "").trim();
+  if (text && !body.existingUserMessageId) state.messages.push(mariMessage("user", text));
+  const script = pickMariScript(text);
+  const encoder = new TextEncoder();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let result: MariWorkspaceActionResult | null = null;
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      const send = (type: string, data?: unknown) =>
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type, data })}\n\n`));
+      const steps: (() => void)[] = [() => send("status", "Reading your request…")];
+      const action = script.action;
+      if (action) {
+        const tool = {
+          id: uid("demo-tool"),
+          name: "app_data",
+          input: action === "character" ? "Create a character" : "Add a lorebook entry",
+        };
+        steps.push(
+          () => send("tool_start", tool),
+          () => {
+            result = mariApply(action);
+            send("tool_end", { ...tool, output: result.summary, isError: false, durationMs: 420 });
+          },
+        );
+      }
+      for (const word of script.reply.match(/\S+\s*/g) ?? [script.reply]) steps.push(() => send("token", word));
+      steps.push(() => {
+        const extra: Row = { mariSuggestions: script.chips };
+        if (result) {
+          extra.mariWorkspaceActionResults = [result];
+          send("metadata", { actionResult: result });
+        }
+        send("suggestions", script.chips);
+        state.messages.push(mariMessage("assistant", script.reply, extra));
+        chat.lastMessageAt = chat.updatedAt = nowIso();
+        send("done");
+        controller.close();
+      });
+      let i = 0;
+      const tick = () => {
+        if (signal?.aborted) return;
+        steps[i++]!();
+        if (i < steps.length) timer = setTimeout(tick, i <= 3 ? 400 : TOKEN_DELAY_MS);
+      };
+      tick();
+    },
+    cancel() {
+      clearTimeout(timer);
+    },
+  });
+  return new Response(stream, { headers: { "Content-Type": "text/event-stream" } });
+}
+
 // --- Routes --------------------------------------------------------------------------------------
 
 const routes: [string, RegExp, Handler][] = [];
@@ -339,11 +551,11 @@ function registerRoutes() {
   on("GET", "/capability-packages/updates/pending", () => json([]));
   on("GET", "/capability-packages/rulesets", () => json([]));
   on("GET", "/chats/autonomous-candidates", () => json([]));
-  on("GET", "/chats/internal/professor-mari/chats", () => json([]));
   on("GET", "/chats/home-feed", () =>
     json({
       generatedAt: nowIso(),
       recentChats: state.chats
+        .filter((c) => c.id !== MARI_CHAT_ID)
         .filter((c) => c.lastMessageAt)
         .sort((a, b) => String(b.lastMessageAt).localeCompare(String(a.lastMessageAt)))
         .slice(0, 8)
@@ -433,6 +645,7 @@ function registerRoutes() {
     json({ trusted: true, origin: window.location.origin, source: "demo", code: null, hint: null }),
   );
   on("GET", "/personal-extensions/runtime/client", () => json([]));
+  on("POST", "/achievements/track", () => json({ newlyUnlocked: [] }));
   on("GET", "/achievements", () => json({ definitions: [], progress: [], unlockedCount: 0, totalCount: 0 }));
   on("GET", "/game-assets/manifest", () => json({ scannedAt: nowIso(), count: 0, assets: {}, byCategory: {} }));
   on("GET", "/custom-tools/capabilities", () => json({ scriptExecutionEnabled: false }));
@@ -486,16 +699,33 @@ function registerRoutes() {
       failedRuntimeVariant: null,
     }),
   );
-  on("GET", "/professor-mari/workspace/status", () =>
-    json({
-      enabled: false,
+  // Professor Mari: the real pane, fed with prewritten answers from ./mari.
+  on("GET", "/chats/internal/professor-mari", () => json(mariChat()));
+  on("POST", "/chats/internal/professor-mari/restart", () => json(mariChat()));
+  on("GET", "/chats/internal/professor-mari/chats", () =>
+    json([{ ...mariChat(), messageCount: state.messages.filter((m) => m.chatId === MARI_CHAT_ID).length }]),
+  );
+  on("POST", "/chats/internal/professor-mari/chats/:id/activate", () => json(mariChat()));
+  on("PATCH", "/chats/internal/professor-mari/chats/:id", (_m, _u, b) => json(patchRow(mariChat(), b)));
+  on("GET", "/professor-mari/workspace/status", () => {
+    const connection = byId(state.connections, DEMO_SEED_IDS.connectionId);
+    return json({
+      enabled: true,
       piAvailable: false,
       workspace: "",
       dataDir: "",
       tools: [],
       shellSandbox: { available: false, backend: null },
       dbAccess: "server-managed",
-      connection: null,
+      connection: connection
+        ? {
+            id: connection.id,
+            name: connection.name,
+            provider: connection.provider,
+            model: connection.model,
+            maxContext: 0,
+          }
+        : null,
       skills: [],
       skillDiagnostics: [],
       active: false,
@@ -506,12 +736,27 @@ function registerRoutes() {
       runtimeActive: DEFAULT_MARI_RUNTIME,
       runtimeNote: null,
       latestUnderstoodRequest: null,
-      pendingApprovals: [],
+      pendingApprovals: mariPending,
       history: [],
       latestRun: null,
       error: null,
-    }),
-  );
+    });
+  });
+  on("GET", "/professor-mari/workspace/skills", () => json({ skills: [], diagnostics: [] }));
+  on("GET", "/professor-mari/workspace/instructions", () => json({ instructions: [] }));
+  on("GET", "/professor-mari/workspace/context", () => json({ context: [] }));
+  on("PUT", "/professor-mari/workspace/permissions-mode", () => json({ ok: true }));
+  on("PUT", "/professor-mari/workspace/runtime", () => json({ ok: true }));
+  on("POST", "/professor-mari/workspace/abort", () => json({ ok: true }));
+  on("POST", "/professor-mari/workspace/reset", () => {
+    state.messages = state.messages.filter((m) => m.chatId !== MARI_CHAT_ID);
+    remove(state.chats, MARI_CHAT_ID);
+    mariChat();
+    return json({ ok: true });
+  });
+  on("POST", "/professor-mari/workspace/prompt", (_m, _u, b, signal) => mariPrompt(b ?? {}, signal));
+  on("POST", "/professor-mari/workspace/approvals/:id/approve", (m) => mariAnswer(m[1]!, "kept"));
+  on("POST", "/professor-mari/workspace/approvals/:id/reject", (m) => mariAnswer(m[1]!, "undone"));
   on("GET", "/decision/options", () =>
     json({ selected: null, options: [], calibration: DEFAULT_DECISION_CALIBRATION }),
   );
@@ -674,7 +919,7 @@ function registerRoutes() {
   on("DELETE", "/characters/:id", (m) => (remove(state.characters, m[1]!) ? json({ success: true }) : notFound()));
 
   // Chats and messages.
-  on("GET", "/chats", () => json(state.chats));
+  on("GET", "/chats", () => json(state.chats.filter((c) => c.id !== MARI_CHAT_ID)));
   on("GET", "/chats/:id", (m) =>
     json(byId(state.chats, m[1]!) ?? { error: "Chat not found" }, byId(state.chats, m[1]!) ? 200 : 404),
   );

@@ -386,7 +386,7 @@ type HomeBrowserHubProps = {
     page: ReactNode;
     onHome: () => void;
     /** Replaces opening Professor Mari, where no live Mari runtime exists. */
-    onProfessor: () => void;
+    onProfessor?: () => void;
   };
 };
 

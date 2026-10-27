@@ -23,11 +23,13 @@ import {
   ChevronDown,
   LayoutGrid,
   ShieldCheck,
+  Sparkles,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { APP_VERSION } from "@marinara-engine/shared";
 import { HOME_CHAT_MODE_ACCENTS } from "../lib/home-chat-mode-style";
 import { cn } from "../lib/utils";
+import { requestProfessorMariOpen } from "../lib/professor-mari-open";
 import { FeedModule, HOME_MODULE_ACCENTS, MarinaraWordmark } from "../components/chat/HomeBrowserHub";
 import { GITHUB_URL, GithubIcon, asset } from "./DemoSiteTabs";
 import { useMariAppearancePack } from "../hooks/use-mari-appearance-pack";
@@ -289,9 +291,13 @@ export function DemoLandingHero() {
                 draggable={false}
                 className="demo-wave h-24 w-auto select-none object-contain drop-shadow-[0_10px_18px_rgba(0,0,0,0.35)] sm:h-32"
               />
-              <p className="mb-6 max-w-[15rem] max-sm:hidden rounded-2xl rounded-bl-sm border border-[var(--border)] bg-[var(--card)] px-3.5 py-2.5 text-xs font-medium leading-snug text-[var(--card-foreground)] shadow-lg sm:mb-12 sm:text-sm">
+              <button
+                type="button"
+                onClick={() => requestProfessorMariOpen()}
+                className={`mb-6 max-w-[15rem] max-sm:hidden rounded-2xl rounded-bl-sm border border-[var(--border)] bg-[var(--card)] px-3.5 py-2.5 text-left text-xs font-medium leading-snug text-[var(--card-foreground)] shadow-lg transition-colors hover:border-[var(--primary)] sm:mb-12 sm:text-sm ${FOCUS}`}
+              >
                 {t("demo.product.mariHello")}
-              </p>
+              </button>
             </div>
           </div>
           {/* Phones: the product shows first, then the second way in. */}
@@ -649,6 +655,14 @@ export function DemoLanding() {
             <p className="w-fit max-w-[48ch] rounded-2xl rounded-tl-sm bg-[var(--secondary)] px-4 py-3 text-sm leading-relaxed text-[var(--secondary-foreground)]">
               {t("demo.product.guideBubble")}
             </p>
+            <button
+              type="button"
+              onClick={() => requestProfessorMariOpen()}
+              className={`inline-flex min-h-11 w-fit items-center gap-2 rounded-xl bg-[var(--primary)] px-4 text-sm font-semibold text-[var(--primary-foreground)] transition-opacity hover:opacity-90 ${FOCUS}`}
+            >
+              <Sparkles className="h-4 w-4" aria-hidden="true" />
+              {t("demo.landing.askMari")}
+            </button>
             <ul className="grid grid-cols-[minmax(0,1fr)] gap-2 sm:grid-cols-2">
               {GUIDES.map((guide) => (
                 <li key={guide.key}>
