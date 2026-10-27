@@ -1,23 +1,23 @@
 import { DEMO_ASSETS } from "./seed";
 
-// Scripted replies. Matching is keyword based; this is not a language model.
+// Prewritten replies, matched by keyword. Every bubble stays in character; the honesty note lives in DemoPrompts.
 export const DEMO_FALLBACK_REPLY =
-  "*Smiles and tips their head.* This is a scripted demo, so I only know a few topics. Try asking about the lighthouse, the fog, the harbor, agents, presets or the ruins. In your own Engine, a real model would answer anything.";
+  "*Iris tilts her head and smiles.* Hm, that one is beyond me. I keep a lighthouse, I don't read minds. Ask me about the lighthouse, the fog or the harbor, and I'll talk all night.";
 
 const SCENARIOS: { match: RegExp; reply: string }[] = [
   {
-    match: /\b(?:lighthouse|lantern|lamp|light)\b/i,
-    reply: `*Iris leads you up the spiral stairs.* The lamp has burned for ninety years. On clear nights you can see it from ten miles out. *(This reply is scripted. The lorebook entry about the lighthouse shows how world notes can feed a real reply.)*\n\n![Iris’s lantern beside the lighthouse stairs](${new URL(DEMO_ASSETS.lantern, window.location.href).href})`,
+    match: /\b(?:lighthouse|lantern|lamps?|light|tower)\b/i,
+    reply: `*Iris leads you up the spiral stairs, grinning.* Ninety years this lamp has burned. On clear nights ships see it from ten miles out. Tonight it flickers, and I think something in the oil is wrong.\n\n![Iris’s lantern beside the lighthouse stairs](${new URL(DEMO_ASSETS.lantern, window.location.href).href})`,
   },
   {
-    match: /\b(?:fog|weather|storm)\b/i,
+    match: /\b(?:fog|foggy|weather|storm|mist)\b/i,
     reply:
-      "*She checks a brass barometer, jaw clenched.* Fog until midnight, I'd say. The ships will sound their horns. Stay for tea until it lifts.",
+      "*She checks a brass barometer, jaw clenched.* Fog until midnight, I'd say. The ships will sound their horns. If the Gull's Promise is still out there, she is sailing blind.",
   },
   {
-    match: /\b(?:harbor|ships?|boats?|saltmere)\b/i,
+    match: /\b(?:harbou?r|ships?|boats?|saltmere|town)\b/i,
     reply:
-      "Saltmere is small, but the harbor never sleeps. Fishing boats at dawn, traders at noon, and stories all night.",
+      "Saltmere is small, but the harbor never sleeps. Fishing boats at dawn, traders at noon, and stories all night. Tonight half the town is on the pier, waiting for one late ship.",
   },
   {
     match: /^\s*(hi|hello|hey)\b/i,
@@ -32,183 +32,237 @@ const RAIN_STREET = new URL(
   window.location.href,
 ).href;
 
-// Per-character replies, tried before the Iris ones. Each points at a feature the demo shows.
+// Per-character replies. Characters without a list (Iris) use SCENARIOS above.
 const BY_CHARACTER: Record<string, { match: RegExp; reply: string }[]> = {
+  // Mira also speaks first in the Deck 4 crew chat, so her list covers both chats.
   "demo-character-mira": [
     {
-      match: /\b(?:crew|who'?s on)\b/i,
+      match: /\b(?:roll ?call|everyone|who'?s here)\b/i,
       reply:
-        "Me, Vale and K-7. This is a group chat, so everyone here gets a turn, and you can mute or nudge anyone from the chat header. (Scripted.)",
+        "*Mira:* here, armed with a wrench. *Vale:* here, and hydrated. *K-7:* PRESENT. ALSO BOLT IS PRESENT. *Vale:* Who is Bolt? *K-7:* NO COMMENT.",
     },
     {
-      match: /\broll call\b/i,
+      match: /\b(?:vents?|check|flashlight|torch|moving|noise)\b/i,
       reply:
-        "*Mira:* here. *Vale:* here, and hydrated. *K-7:* PRESENT. In a real group chat each of us answers in our own voice. (Scripted.)",
+        "*Mira:* Flashlight on. Two green eyes blink back. *Vale:* It is a cat. Why is there a cat on a space station? *K-7:* HER NAME IS BOLT. I ADOPTED HER LAST TUESDAY. *Mira:* K-7!",
     },
     {
-      match: /\bjoke\b/i,
+      match: /\b(?:jokes?|funny|puns?)\b/i,
       reply:
-        'K-7 tried one: "Why did the robot cross the deck? It was programmed to." We are still recovering. Running jokes like this can live in a character\'s lorebook. (Scripted.)',
+        "*K-7:* WHY DID THE ROBOT CROSS THE DECK? IT WAS PROGRAMMED TO. *Vale:* I am prescribing silence. *Mira:* Don't encourage him. He has forty more.",
     },
     {
-      match: /\b(?:agent|help|track)/i,
+      match: /\b(?:selfie|photo|pic|picture|proof)\b/i,
+      reply: `*Mira holds the phone up and grins.* Proof. Me, deck 4, and the haunted machine behind me, steaming like it knows something. Don't zoom in on my hair.\n\n![Mira on deck 4](${MIRA_SELFIE})`,
+    },
+    {
+      match: /\b(?:haunt\w*|ghosts?|machine|coffee|tea)\b/i,
       reply:
-        "Agents run beside a chat and keep notes for you, like a tracker for my repair log. Open the Agents panel to see the examples.",
+        "It just drew a smiley in the foam. A SMILEY. I unplugged it and it kept humming for ten seconds. Filing this under 'not my problem'. Also under 'definitely my problem'.",
     },
     {
-      match: /\b(?:preset|prompt)/i,
+      match: /\b(?:awake|who else|crew|vale|k-?7)\b/i,
       reply:
-        "Presets decide how the prompt is built. Swap one in the Presets panel and I would talk differently. (Scripted demo reply.)",
+        "Vale is on night shift, pretending not to be tired. K-7 is polishing light 14 and talking to it. Want me to drag them both into the Deck 4 crew chat? Chaos guaranteed.",
     },
     {
-      match: /\b(?:hi|hello|hey)\b/i,
-      reply: "Hey! Ask me about agents or presets. This is a scripted demo, so I only know a few topics.",
-    },
-    {
-      match: /\b(?:selfie|photo|picture)\b/i,
-      reply: `*Mira sends a selfie from deck 4.* Proof I am still awake. In your own Engine, characters can send real selfies once you connect an image model. (Scripted.)\n\n![Mira on deck 4](${MIRA_SELFIE})`,
+      match: /^\s*(?:hi|hello|hey)\b/i,
+      reply: "Hey! You're up late too? Good. Someone has to witness the haunted coffee machine with me.",
     },
   ],
   "demo-character-orsolo": [
     {
-      match: /\b(?:ship|sail|sea|brig|gull)/i,
+      match: /\b(?:cove|chest|treasure|smuggl\w*|seal|teeth)\b/i,
       reply:
-        "*Orsolo grins.* The Gull's Promise! Her entry sits in the Saltmere Harbor lorebook, and a keyword like 'ship' pulls it into the prompt. (Scripted.)",
+        "*He unrolls a salt-stained chart.* Two rocks guard the way in. Sailors call them the Teeth. Low tide gives us one hour, no more. Roll well, friend, because the Teeth have eaten better sailors than us.",
     },
     {
-      match: /\b(?:sprite|face|look)/i,
+      match: /\b(?:ship|sail\w*|sea|brig|gull'?s?|boat|crew)\b/i,
       reply:
-        "In roleplay mode, a character can show sprites that change with the mood. Check the Characters panel. (Scripted.)",
+        "*Orsolo pats the mast like an old dog and grins.* The Gull's Promise. Patched sails, a leaky hold, and she has never sunk once. My crew swears she is lucky. I swear she is stubborn, like her captain.",
     },
     {
-      match: /\b(?:lorebook|lore)\b/i,
+      match: /\b(?:lorebook|lore|legends?|tales?|stor(?:y|ies))\b/i,
       reply:
-        "*Orsolo unrolls a sea chart.* The Saltmere Harbor lorebook holds the fog, the lighthouse and my ship. Mention one of them and its entry joins the prompt. Open Lorebooks in the top bar to read every entry. (Scripted.)",
+        "*Orsolo taps his temple.* Every tale of this harbor lives up here: the fog, the lighthouse, the Salt Rat, my ship. Say one of their names and I'll tell you all of it, with only some lies.",
     },
   ],
   "demo-character-kestrel": [
     {
-      match: /\b(?:stair|down)/i,
+      match: /\bember\b/i,
       reply:
-        '*You descend.* Water drips. A glowing map hangs on the wall, which is the game mode map. Roll for perception. (Scripted.)\n[Kestrel] [serious]: "Stay close. Something lives down here."',
+        'The carved flame glows red and the door sighs open. Warm air rolls out, smelling of ash and old honey.\n[Kestrel] [happy]: "Ember! Of course it was ember. Nice."',
     },
     {
-      match: /\b(?:bridge|cross)/i,
+      match: /\b(?:stairs?|down|descend)\b/i,
       reply:
-        "The bridge sways. A skill check appears: dice roll, difficulty 12. In a real game the dice are rolled for you. (Scripted.)",
+        'You descend. Water drips from the ceiling, and a glowing map of the Reach covers the far wall. Something scrapes in the dark below. Roll for perception.\n[Kestrel] [serious]: "Stay close. Something lives down here."',
     },
     {
-      match: /\b(?:door|open)/i,
+      match: /\b(?:bridge|cross)\b/i,
       reply:
-        "The door has no handle, but the Ember Reach lorebook says it opens to a spoken word. Try 'ember'. (Scripted.)",
+        'The bridge sways over a river of slow fire. Planks crack under your boots. Skill check, difficulty 12. Roll the dice.\n[Kestrel] [happy]: "Do not look down. I looked down. Bad idea."',
     },
     {
-      match: /\b(?:roll|dice|perception)\b/i,
+      match: /\b(?:door|open|handle)\b/i,
       reply:
-        '*The dice clatter: 13 + 3 = 16.* Success. You spot a loose stone in the wall, and behind it a rusted key. In a real game the roll is random and the game master reacts to it. (Scripted roll.)\n[Kestrel] [happy]: "A key! Good eyes."',
+        'The door has no handle, only a carved flame. Old words circle it: speak, and be warmed. Say a word.\n[Kestrel] [serious]: "I tried please. It did not care."',
+    },
+    {
+      match: /\b(?:pack|bag|inventory|items?|gear)\b/i,
+      reply:
+        'Your pack holds a coil of rope, two torches and a brass key that hums when you face east. The Ember Heart is east.\n[Kestrel] [serious]: "Keys that hum are never good news. Keep it close."',
+    },
+    {
+      match: /\b(?:ladder|climb)\b/i,
+      reply:
+        "You climb. Wet rungs, cold rope, and at the top a lantern in a stranger's fist. Behind him, crates stamped with the harbor master's seal.\n[Kestrel] [happy]: \"Well. Now we know what the cove hides.\"",
+    },
+    {
+      match: /\b(?:lanterns?|blink\w*|signal)\b/i,
+      reply:
+        'You blink the lantern three times. Silence. Then a rope ladder drops from the cliff, and a voice hisses: "You are late, and you are not Captain Orsolo."\n[Kestrel] [happy]: "They are expecting us now."',
+    },
+    {
+      match: /\b(?:roll|dice|perception|search|look)\b/i,
+      reply:
+        'Dust hangs in the torchlight. Roll the dice and tell the Reach what you are looking for.\n[Kestrel] [happy]: "I bet on a high number. No pressure."',
     },
   ],
   "demo-character-vale": [
     {
-      match: /\b(?:schedule|today|shift)\b/i,
+      match: /\b(?:blunt|honest|straight|harsh)\b/i,
       reply:
-        "Clinic until six, then a long walk around the ring. In conversation mode every character has a daily schedule, so I might be busy when you text. (Scripted.)",
+        "Blunt? Fine. You run on coffee, spite and three hours of sleep, and your hands shake when you lie about it. Bed by eleven, or I tell Mira you cried at the cat video.",
     },
     {
-      match: /\b(?:sleep|tired)\b/i,
+      match: /\b(?:gentl\w*|soft\w*|kind\w*|calm|nice)\b/i,
       reply:
-        "Then put the screen down soon. Doctor's orders. Characters can also message you first, so I'll check in tomorrow. (Scripted.)",
+        "*Vale's voice drops, slow and warm.* Hey. You are doing fine. Breathe in for four, out for six. The station hums, the cat sleeps, and nothing needs you until morning.",
     },
     {
-      match: /\b(?:remember|allerg\w*)\b/i,
+      match: /\b(?:schedule|today|shift|busy|plans?)\b/i,
       reply:
-        "Noted: no peanuts. In your Engine, memory and lorebook entries carry facts like this into later chats. (Scripted.)",
+        "Clinic until six, then a long walk around the ring. Then I read the same page of my book four times and fall asleep. If you text after nine, expect a very tired emoji.",
+    },
+    {
+      match: /\b(?:sleep|tired|insomnia)\b/i,
+      reply: "Then put the screen down soon. Doctor's orders. I'll check in tomorrow, and I will know if you lied.",
     },
   ],
   "demo-character-juniper": [
     {
-      match: /\busual\b/i,
+      match: /\b(?:usual|same|regular|order)\b/i,
       reply:
-        "*Juniper starts your oat latte before you finish.* Extra cinnamon, like last time. I remember because the chat keeps its history. (Scripted.)",
+        "*Juniper starts your oat latte before you finish.* Oat latte, extra cinnamon, no lid, because you always burn your lip anyway. And a pear tart, since it's Thursday. I know my regulars.",
     },
     {
-      match: /\b(?:menu|new)\b/i,
+      match: /\b(?:remember|about me|know me)\b/i,
       reply:
-        "Cinnamon knots, and a pear tart if you're quick. Everything I know about this place comes from my character card, so I never mix it up. (Scripted.)",
+        "You're the traveler from the lighthouse road. Window seat, you hate jazz and pretend you don't. Tuesday you came in with a map you kept hiding from me. *She grins.* I notice things.",
     },
     {
-      match: /\b(?:caf[eé]|show|picture|photo)\b/i,
-      reply: `*She points out the window.* Best view in Saltmere. Characters can share pictures in chat. (Scripted.)\n\n![The harbor from the café window](${HARBOR})`,
+      match: /\b(?:gr[ae]y|man|stranger|coat|window|view)\b/i,
+      reply: `*She lowers her voice.* 8:14, every morning. Black coffee, two sugars, never drinks it. He just stares at this view until the lighthouse blinks.\n\n![The harbor from the café window](${HARBOR})`,
     },
   ],
   "demo-character-k7": [
     {
-      match: /\bjoke\b/i,
-      reply: "WHY DID THE ROBOT GO ON VACATION? TO RECHARGE. *K-7's lights blink proudly.* (Scripted.)",
-    },
-    {
-      match: /\b(?:working|doing|up to)\b/i,
+      match: /\b(?:scan|tools?|run|sensors?)\b/i,
       reply:
-        "REPAIRING LIGHT 14. I HAVE NAMED IT GERALD. My character card says I name things, so I always will. (Scripted.)",
+        "RUNNING STATION_SCAN. BEEP. DECK 4: ONE HAUNTED COFFEE MACHINE. CARGO BAY 2: ONE CAT, ONE LIGHT, BOTH WARM. CONCLUSION: BOLT IS SLEEPING ON GERALD.",
     },
     {
-      match: /\bdream\w*\b/i,
-      reply: "I DREAM OF FRESHLY OILED HINGES. Edit my character card and you change how I talk. (Scripted.)",
+      match: /\b(?:light|gerald|14|missing|where)\b/i,
+      reply:
+        "LIGHT 14 IS NAMED GERALD. GERALD WAS UNSCREWED AT 03:12. THE CAMERA LOG SHOWS A SMALL FURRY THIEF. I SUSPECT BOLT. I DO NOT HAVE THE HEART TO ARREST HER.",
+    },
+    {
+      match: /\b(?:jokes?|funny|puns?)\b/i,
+      reply:
+        "NEW JOKE. I AM READING A BOOK ON ANTI-GRAVITY. I CANNOT PUT IT DOWN. *K-7's lights blink proudly.* PLEASE LAUGH AT THE USUAL VOLUME.",
     },
   ],
   "demo-character-tamsin": [
     {
-      match: /\b(?:song|play|sing)\b/i,
+      match: /\b(?:spooky|scary|ghosts?|sad|slow|dark)\b/i,
       reply:
-        "*Tamsin strikes a chord and the whole tavern stamps along.* In roleplay, a music agent can pick tracks to fit the scene. (Scripted.)",
+        "*Tamsin hushes the room and plucks one low string.* The candles gutter. Rain taps the shutters. Somewhere outside a bell rings twice, though the harbor has no bell. *She smiles.* Too much?",
     },
     {
-      match: /\b(?:orsolo|story)\b/i,
+      match: /\b(?:orsolo|story|tale)\b/i,
       reply:
-        "*Orsolo is already on his feet, telling the one about the giant squid.* Two characters, one scene: each speaks in their own voice. (Scripted.)",
+        "*Orsolo is already on his feet.* The squid was THIS big, I tell ye! *Tamsin plays a dramatic chord on every lie.* By the end the squid is the size of the harbor, and somehow he married it.",
     },
     {
-      match: /\b(?:salt rat|tavern)\b/i,
+      match: /\b(?:jig|fast\w*|dance|happy|play|songs?|sing|music|tune)\b/i,
       reply:
-        "Low beams, loud songs and a cat that steals fish. That's the Saltmere Harbor lorebook: say 'tavern' and the entry joins the prompt. (Scripted.)",
+        "*Tamsin stamps a beat and the whole Salt Rat joins in.* Mugs bang the tables, the cat leaps onto the bar, and Orsolo dances like a bear on a rolling deck. *She laughs.* Faster? Gladly!",
     },
   ],
   "demo-character-seraphine": [
     {
-      match: /\b(?:silver|ashcombe)\b/i,
+      match: /\b(?:silver|ashcombe|man)\b/i,
       reply:
-        "Lord Ashcombe. He owes money to half the court. *She smiles.* The Hollowmere Court lorebook makes sure I never forget it. (Scripted.)",
+        "*She leans closer, voice like silk.* Lord Ashcombe. He owes money to half the court and a duel to the other half. Tonight he wears silver so nobody remembers he sold his family's swords.",
     },
     {
-      match: /\bdance\b/i,
+      match: /\b(?:balcony|secrets?|east|guards?)\b/i,
       reply:
-        "*She takes your hand and leads you onto the floor.* Roleplay chats can set the mood with a background and sprites. (Scripted.)",
+        "*Seraphine glances at the guards.* The east balcony is where secrets change hands. The guards are paid to watch the moon. Bring me a name, and I will trade you one.",
     },
     {
-      match: /\bmask\b/i,
+      match: /\bmasks?\b/i,
       reply:
-        "Before midnight? How rude. *She laughs.* A lorebook entry for 'mask' tells me the court's rules. (Scripted.)",
+        "*She catches your wrist, smiling.* Before midnight? How rude. At Hollowmere, the one who unmasks first loses everything. Wait for the bells, darling, and perhaps you will see my face.",
+    },
+    {
+      match: /\bdanc\w*\b/i,
+      reply:
+        "*She takes your hand and leads you onto the floor.* One, two, three. Whisper while we turn. The walls have ears, but the music is loud.",
     },
   ],
   "demo-character-rook": [
     {
-      match: /\b(?:know|clues?|case)\b/i,
+      match: /\b(?:know|clues?|case|facts?)\b/i,
       reply:
-        "Clock stopped at 3:12. Caretaker inside. A red umbrella near every scene. The Rain City Case Files lorebook keeps the clues straight. (Scripted.)",
+        "*Rook ticks them off on his fingers.* Clock stopped at 3:12. Caretaker dead inside. A key that fits nothing. A red umbrella near every scene. Four facts, zero answers, and my coffee went cold an hour ago.",
     },
     {
-      match: /\b(?:clock|tower)\b/i,
+      match: /\b(?:clock|tower|gears?|keys?)\b/i,
       reply:
-        "*Rook shines his torch on the gears.* Someone jammed them with a key. Clues like this wake up when a keyword shows up in the chat. (Scripted.)",
+        "*Rook shines his torch on the gears and frowns.* Someone jammed them with a second key. Same cut as the one in the caretaker's hand. Two keys, one lock, somewhere in this city.",
     },
     {
-      match: /\bumbrella\b/i,
-      reply: `That's the question. *He turns up his collar.* With a real model, the twist is yours to find. (Scripted. In your Engine, the Illustrator agent can draw the scene like this.)\n\n![The street with the red umbrella](${RAIN_STREET})`,
+      match: /\b(?:umbrella|red|woman|witness)\b/i,
+      reply: `*He turns up his collar and points down the street.* There. Red umbrella, under the lamp, gone before I could shout. I sketched it fast, before the rain washed it off.\n\n![The street with the red umbrella](${RAIN_STREET})`,
     },
   ],
 };
 
-/** Suggested messages per example chat. Each one reaches a different scripted reply above. */
+// In-character answers when no keyword matches; each nudges toward the chips.
+const FALLBACKS: Record<string, string> = {
+  "demo-character-mira":
+    "Ha. You lost me there, and I just pulled a double shift. Ask me about the haunted machine, or make me send a selfie.",
+  "demo-character-orsolo":
+    "*Orsolo scratches his beard.* Ye've lost me, landlubber. Ask about my ship or the smugglers' cove, or throw the dice and let the sea decide.",
+  "demo-character-kestrel":
+    'The torches flicker while you think. Three ways lie open: the stair down, the bridge, and the door with no handle.\n[Kestrel] [serious]: "Pick one. Standing still in ruins is how people become ruins."',
+  "demo-character-vale":
+    "Hmm. I'll file that under 'interesting, not urgent'. Ask about my day, or tell me how you want me to talk: blunt or gentle.",
+  "demo-character-juniper":
+    "*She tilts her head.* You lost me, hon. Want your usual, or shall I tell you about the man in the grey coat?",
+  "demo-character-k7":
+    "INPUT NOT UNDERSTOOD. I CAN RUN A STATION SCAN, LOOK FOR LIGHT 14, OR TELL A JOKE. PLEASE SELECT. BEEP.",
+  "demo-character-tamsin":
+    "*Tamsin strums a chord that sounds like a question.* No song for that one, friend. Something spooky, a jig, or one of Orsolo's tall tales?",
+  "demo-character-seraphine":
+    "*Seraphine snaps her fan shut.* Dull questions bore me, darling. Ask about the man in silver, the east balcony, or my mask.",
+  "demo-character-rook":
+    "*Rook tries to light a cigarette in the rain.* Doesn't help the case, kid. Ask what we know, check the clock tower, or find that umbrella.",
+};
+
+/** Suggested messages per example chat. Each one reaches a different reply above. */
 export const DEMO_PROMPTS: Record<string, { tip: string; prompts: string[] }> = {
   "demo-chat-iris": {
     tip: "lorebook",
@@ -216,27 +270,31 @@ export const DEMO_PROMPTS: Record<string, { tip: string; prompts: string[] }> = 
   },
   "demo-chat-mira": {
     tip: "conversation",
-    prompts: ["What does an agent do?", "What is a preset?", "Send me a selfie!"],
+    prompts: ["Send me a selfie!", "Is the machine still haunted?", "Who else is awake?"],
   },
   "demo-chat-orsolo": {
     tip: "roleplay",
-    prompts: ["Tell me about your ship.", "Show me your sprite.", "What is in the lorebook?", "/roll 2d6+2"],
+    prompts: ["Tell me about your ship.", "Tell me about the cove.", "What tales do you know?", "/roll 2d6+2"],
   },
-  "demo-chat-kestrel": { tip: "game", prompts: ["Take the stairs down.", "Cross the bridge.", "Roll for perception."] },
-  "demo-chat-crew": { tip: "crew", prompts: ["Who's on the crew?", "Everyone, roll call!", "Ask K-7 for a joke."] },
+  "demo-chat-kestrel": { tip: "game", prompts: ["Take the stairs down.", "Cross the bridge.", "Check my pack."] },
+  "demo-chat-smugglers": { tip: "game", prompts: ["Blink the lantern back.", "Climb the ladder.", "Check my pack."] },
+  "demo-chat-crew": { tip: "crew", prompts: ["Check the vents.", "Everyone, roll call!", "K-7, tell us a joke."] },
   "demo-chat-vale": {
     tip: "schedules",
-    prompts: ["What's your schedule today?", "I can't sleep.", "Remember my allergy: peanuts."],
+    prompts: ["Be blunt with me, doc.", "Talk to me gently.", "What's your schedule today?"],
   },
-  "demo-chat-juniper": { tip: "cafe", prompts: ["The usual, please.", "What's new on the menu?", "Show me the café."] },
-  "demo-chat-k7": { tip: "robot", prompts: ["Tell me a joke.", "What are you working on?", "Do you dream?"] },
+  "demo-chat-juniper": {
+    tip: "cafe",
+    prompts: ["The usual, please.", "What do you remember about me?", "Tell me about the man in grey."],
+  },
+  "demo-chat-k7": { tip: "robot", prompts: ["Run the station scan.", "Where is light 14?", "Tell me a joke."] },
   "demo-chat-tavern": {
     tip: "tavern",
-    prompts: ["Play us a song!", "Orsolo, tell us a story.", "What's the Salt Rat like?"],
+    prompts: ["Play something spooky.", "Play us a jig!", "Orsolo, tell us a story."],
   },
   "demo-chat-seraphine": {
     tip: "court",
-    prompts: ["Who is the man in silver?", "Shall we dance?", "Take off your mask."],
+    prompts: ["Who is the man in silver?", "What happens on the balcony?", "Take off your mask."],
   },
   "demo-chat-rook": {
     tip: "noir",
@@ -248,7 +306,7 @@ export function pickDemoReply(userText: string, characterId?: string | null): st
   // Game dice arrive as "[dice: 1d20 = 14 ...]"; the roll is real, so the reply uses its total.
   const dice = userText.match(/\[dice: ([^\]=]+?) = (-?\d+)/);
   if (dice)
-    return `*The dice land on ${dice[2]}.* ${Number(dice[2]) >= 10 ? "It works. The way ahead is clear." : "Not this time. Something shifts in the dark."} (Real roll, scripted reply.)`;
-  const list = [...(BY_CHARACTER[characterId ?? ""] ?? []), ...SCENARIOS];
-  return list.find((s) => s.match.test(userText))?.reply ?? DEMO_FALLBACK_REPLY;
+    return `The dice land on ${dice[2]}. ${Number(dice[2]) >= 10 ? "It works. The way ahead is clear." : "Not this time. Something shifts in the dark."}`;
+  const list = BY_CHARACTER[characterId ?? ""] ?? SCENARIOS;
+  return list.find((s) => s.match.test(userText))?.reply ?? FALLBACKS[characterId ?? ""] ?? DEMO_FALLBACK_REPLY;
 }

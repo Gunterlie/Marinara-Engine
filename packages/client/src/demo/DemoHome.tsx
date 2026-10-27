@@ -10,6 +10,16 @@ import { DemoSiteFooter, DemoSiteLinks, DemoSiteTabs } from "./DemoSiteTabs";
 
 const DemoDocs = lazy(() => import("./DemoDocs").then((module) => ({ default: module.DemoDocs })));
 
+// Short links people guess, mapped to the guide they mean.
+const DOC_ALIASES = new Map([
+  ["getting-started", "home/welcome.md"],
+  ["welcome", "home/welcome.md"],
+  ["install", "INSTALLATION.md"],
+  ["installation", "INSTALLATION.md"],
+  ["faq", "FAQ.md"],
+  ["troubleshooting", "TROUBLESHOOTING.md"],
+]);
+
 const subscribe = (notify: () => void) => {
   window.addEventListener("hashchange", notify);
   return () => window.removeEventListener("hashchange", notify);
@@ -47,6 +57,7 @@ export function DemoHome() {
     } catch {
       path = rawPath;
     }
+    path = DOC_ALIASES.get(path.toLowerCase()) ?? path;
     page = (
       <Suspense
         fallback={

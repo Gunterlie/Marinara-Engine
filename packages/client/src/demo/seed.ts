@@ -498,7 +498,15 @@ export function createSeed() {
       "demo-folder-saltmere",
       scene("moonlit-tavern"),
     ],
-    ["demo-chat-seraphine", "The Hollowmere masquerade", "roleplay", ["demo-character-seraphine"], 130, null, null],
+    [
+      "demo-chat-seraphine",
+      "The Hollowmere masquerade",
+      "roleplay",
+      ["demo-character-seraphine"],
+      130,
+      null,
+      scene("moonlit-tavern"),
+    ],
     [
       "demo-chat-rook",
       "The clock that stopped",
@@ -530,39 +538,92 @@ export function createSeed() {
 
   // Longer scripted histories, so a few chats look lived in. user / assistant lines alternate after the first message.
   const history: Record<string, string[]> = {
+    "demo-chat-iris": [
+      "Just passing through. Is the lamp always this dim?",
+      "*Iris frowns up at the tower, jaw clenched.* No. It flickered last night, for the first time in ninety years. And the Gull's Promise is late.",
+      "Can I help?",
+      "*She brightens and grins.* You can carry the oil can. Climb with me to the lamp room, and keep an eye out for ships.",
+    ],
     "demo-chat-mira": [
       "Haunted how?",
       "It made tea. Nobody asked for tea. It does not have a tea setting.",
       "Maybe it likes you.",
-      "Great. A machine with a crush. Vale says I need more sleep.",
+      "Great. A machine with a crush. Vale says I need more sleep. K-7 says the machine is 'expressing itself'.",
+      "Send proof or it didn't happen.",
+      "Working on it. Hold still, the lighting on deck 4 is a crime.",
     ],
     "demo-chat-crew": [
       "Status report, everyone?",
       "[Mira] Coffee machine still haunted. Filing a ticket with the ghost.",
       "[Vale] Everyone drink water. That is my status.",
       "[K-7] I HAVE FIXED THE LIGHTS. I HAVE ALSO NAMED THEM.",
+      "Wait. Something is moving in the vents.",
+      "[K-7] THAT IS NOT ME. I AM TOO TALL FOR VENTS.",
+      "[Mira] Okay, nobody panic. Vale, you have the flashlight.",
+    ],
+    "demo-chat-vale": [
+      "I slept four hours. Maybe three.",
+      "Three is not a number of hours. It is a cry for help. What kept you up?",
+      "The vents on deck 4 were meowing.",
+      "Ah. You met Bolt. K-7 swears she is a 'maintenance assistant'. She has bitten two engineers and me.",
+      "Is that bad?",
+      "Medically? No. But I now have a form called 'Feline Incident, Zero Gravity'. Drink water. Sleep tonight.",
+    ],
+    "demo-chat-juniper": [
+      "Surprise me.",
+      "*She slides over a cup with a cinnamon heart on top.* On the house. Tell me if it is too sweet.",
+      "It's perfect. Has the man in the grey coat been back?",
+      "*She lowers her voice.* Every day. Black coffee, two sugars, never drinks it. Detective Rook asked about him yesterday.",
+      "What did you tell Rook?",
+      "That he tips well. *She winks.* And that he always takes the window seat with the best view of the lighthouse.",
+    ],
+    "demo-chat-k7": [
+      "Go on then.",
+      "WHY DID THE ROBOT GO ON VACATION? TO RECHARGE. *K-7's lights blink proudly.*",
+      "Okay, that was bad.",
+      "THANK YOU. ALSO, URGENT: LIGHT 14 IS MISSING. THE STATION LOG SAYS IT WAS LAST SEEN IN CARGO BAY 2.",
+      "How does a light go missing?",
+      "UNKNOWN. I HAVE OPENED A REPAIR TICKET. I HAVE ALSO NAMED THE TICKET. ITS NAME IS DAVE.",
     ],
     "demo-chat-orsolo": [
       "Where are we sailing?",
       "*Orsolo jabs a finger at the chart.* North, past the lighthouse, where the fog hides the old smugglers' cove.",
       "Is it safe?",
       "*He laughs until the lantern swings.* Safe? No. Worth it? Aye.",
+      "What's in the cove?",
+      "*He lowers his voice and grins.* A chest with the harbor master's seal, sunk forty years ago. Nobody who went looking came back with dry boots.",
+    ],
+    "demo-chat-tavern": [
+      "Play something for the harbor.",
+      "[Tamsin] *She plays a slow tune, soft as fog on the water.* This one is called 'The Lamp That Waits'.",
+      "[Orsolo] *Orsolo wipes his eye.* Who put salt in my ale? Nobody saw that.",
+      "[Tamsin] *She grins.* Captain, that was the sad one. Want the happy one?",
+      "Something faster!",
+      "[Tamsin] *She kicks a stool aside and the strings snap into a jig.* Up, all of you! Orsolo, mind the cat.",
     ],
     "demo-chat-seraphine": [
       "Who should I fear?",
       "*She tilts her mask toward the balcony.* The man in silver. He smiles at everyone, which means he trusts no one.",
+      "And who do you trust?",
+      "*Her laugh is soft behind the fan.* Trust is a currency, darling, and I am very rich. Ask the right question and I might spend some on you.",
+    ],
+    "demo-chat-rook": [
+      "Who was he?",
+      "*Rook opens a soggy notebook.* Elias Wren, caretaker. Forty years winding that clock. He had a key in his hand that fits nothing in the tower.",
+      "Any witnesses?",
+      "*Rook frowns, jaw tight.* A woman with a red umbrella, seen near every scene this month. Nobody saw her face. Everybody saw the umbrella.",
     ],
     "demo-chat-kestrel": [
       "I take the bridge.",
-      'The bridge sways. Roll a skill check, difficulty 12. *The dice show 15.* You cross, and the far gate is already open.\n[Kestrel] [happy]: "Nice footwork. The gate is open, so somebody got here first."',
+      'The bridge sways. Roll a skill check, difficulty 12. The dice show 15. You cross, and the far gate is already open.\n[Kestrel] [happy]: "Nice footwork. The gate is open, so somebody got here first."',
+      "I check my pack.",
+      'Your pack holds a coil of rope, two torches and a brass key that hums when you face east. The Ember Heart is east.\n[Kestrel] [serious]: "Keys that hum are never good news. Keep it close."',
     ],
     "demo-chat-smugglers": [
-      "We row for the cove.",
+      "Forget the ruins. We row for the smugglers' cove instead.",
       'The oars creak. Fog closes behind the boat, and a lantern blinks twice from the rocks.\n[Kestrel] [serious]: "Two blinks. Someone expects us."',
-    ],
-    "demo-chat-juniper": [
-      "Surprise me.",
-      "*She slides over a cup with a cinnamon heart on top.* On the house. Tell me if it is too sweet.",
+      "I blink our lantern back. Three times.",
+      'Silence. Then a rope ladder drops from the cliff, and a voice above hisses: "You are late, and you are not Captain Orsolo."\n[Kestrel] [happy]: "Well. They are expecting us now."',
     ],
   };
 
@@ -868,10 +929,20 @@ export function createSeed() {
     lorebookEntries: [...lorebookEntries, ...extraEntries],
     chats: [{ ...chats[0], lastMessageAt: ago(2), updatedAt: ago(2) }, ...extraChats],
     chatFolders,
-    messages: [{ ...messages[0], createdAt: ago(2) }, ...extraMessages],
+    messages: [
+      ...[characterData.first_mes, ...history["demo-chat-iris"]].map((content, i, all) => ({
+        ...messages[0],
+        id: i ? `demo-message-iris-${i}` : messages[0].id,
+        role: i % 2 ? "user" : "assistant",
+        characterId: i % 2 ? null : DEMO_SEED_IDS.characterId,
+        content,
+        createdAt: ago(2 + (all.length - 1 - i) * 2),
+      })),
+      ...extraMessages,
+    ],
     gameStates: [
       tracker(DEMO_SEED_IDS.chatId, DEMO_SEED_IDS.characterId, "Iris", {
-        date: "Day 3 of the herring run",
+        date: "Late autumn, day 3 of the herring run",
         time: "Late evening",
         location: "Saltmere lighthouse, lamp room",
         weather: "Thick fog",
@@ -886,7 +957,7 @@ export function createSeed() {
         ],
       }),
       tracker("demo-chat-kestrel", "demo-character-kestrel", "Kestrel", {
-        date: "Third night in the Ember Reach",
+        date: "Midwinter, third night in the Ember Reach",
         time: "Midnight",
         location: "The rope bridge to the far gate",
         weather: "Ash on the wind",

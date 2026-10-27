@@ -177,7 +177,9 @@ export function DemoBanner() {
   // Until a first lesson ends (done or skipped), opening the workspace starts Mari's welcome lesson.
   useEffect(() => {
     const welcome = () => {
-      if (window.location.hash === "#/demo" && !localStorage.getItem(WELCOMED_KEY)) setLesson("chat");
+      // Tours point at the chat UI, so leaving the workspace pauses them; the welcome comes back on return.
+      if (!window.location.hash.startsWith("#/demo")) setLesson(null);
+      else if (window.location.hash === "#/demo" && !localStorage.getItem(WELCOMED_KEY)) setLesson("chat");
     };
     welcome();
     window.addEventListener("hashchange", welcome);

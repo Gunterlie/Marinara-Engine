@@ -1224,7 +1224,13 @@ export function ChatRoleplaySurface({
   useLayoutEffect(() => {
     const measure = () => {
       // The Chat Settings button starts in a row at the top of the chat, so text starts below that row.
-      const buttonRow = WINDOW_MARGIN_PX + (phoneLayout ? PHONE_BUBBLE_SIZE_PX : WINDOW_BUBBLE_SIZE_PX);
+      // Demo phones also park the tracker bubble in a second row, so text starts below that one too.
+      const phoneRows = import.meta.env.VITE_MARINARA_DEMO === "1" && chatMeta.enableAgents ? 2 : 1;
+      const buttonRow =
+        WINDOW_MARGIN_PX +
+        (phoneLayout
+          ? (PHONE_BUBBLE_SIZE_PX + WINDOW_MARGIN_PX) * phoneRows - WINDOW_MARGIN_PX
+          : WINDOW_BUBBLE_SIZE_PX);
       let top = Math.max(buttonRow, Math.ceil(topChromeRef.current?.getBoundingClientRect().height ?? 0));
       let bottom = Math.ceil(inputChromeRef.current?.getBoundingClientRect().height ?? 0);
       if (vnMediaTarget) {

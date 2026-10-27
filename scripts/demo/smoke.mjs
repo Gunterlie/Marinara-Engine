@@ -98,7 +98,7 @@ async function openSeedChat(page) {
     () => false,
   );
   if (welcomed) {
-    await card.getByRole("button", { name: "Skip Tutorial", exact: true }).click();
+    await card.getByRole("button", { name: "Skip tutorial", exact: true }).click();
     await expect(card).toBeHidden();
   }
   const toggle = page.locator('[data-tour="sidebar-toggle"]');
@@ -316,7 +316,7 @@ try {
     return { last, older };
   });
   assert.equal(pagination.last.length, 2);
-  assert.equal(pagination.older.length, 1);
+  assert.equal(pagination.older.length, 2);
   assert.ok(
     !pagination.last.some((item) => item.id === pagination.older[0].id),
     "Message cursor repeated a loaded page",
@@ -474,7 +474,7 @@ try {
   await pages[0].screenshot({ path: resolve(evidence, "lesson-chat.png"), fullPage: true });
   const card = pages[0].locator('[data-component="OnboardingTutorial.Card"]');
   for (let step = 1; step < 4; step++) await card.getByRole("button", { name: "Next", exact: true }).click();
-  await card.getByRole("button", { name: "Get Started", exact: true }).click();
+  await card.getByRole("button", { name: "Get started", exact: true }).click();
   assert.ok(
     await pages[0].evaluate(
       (version) => JSON.parse(localStorage.getItem(`marinara-demo:lessons-done:${version}`) ?? "[]").includes("chat"),

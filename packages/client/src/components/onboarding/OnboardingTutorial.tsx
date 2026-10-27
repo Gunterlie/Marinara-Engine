@@ -232,8 +232,13 @@ const MOBILE_BREAKPOINT = 640;
 const TOPBAR_FALLBACK_HEIGHT = 48;
 const TUTORIAL_TOP_GAP = 12;
 const TUTORIAL_DESKTOP_WIDTH = 340;
+const DEMO_BUILD = import.meta.env.VITE_MARINARA_DEMO === "1";
 const TUTORIAL_CARD_CLASS =
-  "mari-chrome-token-scope pointer-events-auto overflow-x-hidden overflow-y-auto rounded-2xl border border-[var(--marinara-chat-chrome-panel-border)] bg-[var(--marinara-chat-chrome-panel-bg)] p-5 shadow-2xl ring-1 ring-[var(--marinara-chat-chrome-focus-ring)]";
+  "mari-chrome-token-scope pointer-events-auto overflow-x-hidden overflow-y-auto rounded-2xl border border-[var(--marinara-chat-chrome-panel-border)] bg-[var(--marinara-chat-chrome-panel-bg)] p-5 shadow-2xl ring-1 ring-[var(--marinara-chat-chrome-focus-ring)]" +
+  // The demo tour sits over busy chat art, so its card gets an opaque base under the panel tint.
+  (DEMO_BUILD
+    ? " bg-[color:var(--sidebar)] bg-[linear-gradient(var(--marinara-chat-chrome-panel-bg),var(--marinara-chat-chrome-panel-bg))]"
+    : "");
 const TUTORIAL_SECONDARY_BUTTON_CLASS =
   "rounded-lg px-3 py-1.5 text-xs text-[var(--marinara-chat-chrome-panel-muted)] transition-colors hover:bg-[var(--marinara-chat-chrome-highlight-bg)] hover:text-[var(--marinara-chat-chrome-panel-text)]";
 const TUTORIAL_PRIMARY_BUTTON_CLASS =
@@ -535,10 +540,10 @@ function TourCardContent({
       {/* Buttons */}
       <div className="flex items-center justify-between">
         <button onClick={onSkip} className={TUTORIAL_SECONDARY_BUTTON_CLASS}>
-          {localize(step === 0 ? "Skip Tutorial" : "Skip")}
+          {DEMO_BUILD ? localizeUi("demo.tour.skip") : localize(step === 0 ? "Skip Tutorial" : "Skip")}
         </button>
         <button onClick={onNext} className={TUTORIAL_PRIMARY_BUTTON_CLASS}>
-          {localize(isLast ? "Get Started" : "Next")}
+          {isLast && DEMO_BUILD ? localizeUi("demo.tour.done") : localize(isLast ? "Get Started" : "Next")}
           {!isLast && <ChevronRight size="0.75rem" />}
         </button>
       </div>

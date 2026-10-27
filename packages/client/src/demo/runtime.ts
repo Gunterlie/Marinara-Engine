@@ -173,7 +173,8 @@ function generate(body: Row, signal: AbortSignal | null): Response {
     start(controller) {
       const sendEvent = (event: unknown) => controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
       const send = (type: string, data?: unknown) => sendEvent({ type, data });
-      const words = reply.match(/\S+\s*/g) ?? [reply];
+      // Images and *italic* runs arrive whole, so half-typed markdown never shows.
+      const words = reply.match(/!\[[^\]]*\]\([^)]*\)\s*|\*[^*\n]+\*\S*\s*|\S+\s*/g) ?? [reply];
       let i = 0;
       const finish = () => {
         if (generations.get(chatId) === run) generations.delete(chatId);
@@ -921,14 +922,19 @@ function isolateLocalStorage() {
           chatHelpSeenModes: ["conversation", "roleplay", "game"],
           chatSettingsMoveTipDismissed: true,
           defaultRoleplayBackground,
-          // Wide screens open with the seeded chats in view; set before the first paint, so nothing shifts.
-          // Below 1600px the open list would squeeze the docked Tracker Panel to its 96px minimum.
-          sidebarOpen: window.innerWidth >= 1600,
-          // Desktop shows the Tracker Panel; phones keep the inline tracker bar.
-          trackerPanelOpen: window.innerWidth >= 1024,
+          // The roleplay column is up to 986px wide; the docked Tracker Panel needs 280px beside it to stay readable,
+          // and the open chat list takes about 320px more. Narrower windows keep the tracker bar and a centred chat.
+          sidebarOpen: window.innerWidth >= 1760,
+          trackerPanelOpen: window.innerWidth >= 1420,
           // Dock the panel left, clear of the window buttons on the right, with the chat beside it.
           trackerPanelSide: "left",
-          roleplayChatPosition: window.innerWidth >= 1024 ? "right" : "center",
+          roleplayChatPosition: window.innerWidth >= 1420 ? "right" : "center",
+          // Visitors expect Enter to send, also for "/roll 1d20".
+          enterToSendRP: true,
+          // The runtime already paces words; the letter typewriter would split *italics* and image markdown.
+          streamingSpeed: 100,
+          // Conversation chats open as messenger bubbles; roleplay and game keep their own look.
+          conversationMessageStyle: "bubble",
         },
         version: UI_PERSISTENCE.version,
       }),

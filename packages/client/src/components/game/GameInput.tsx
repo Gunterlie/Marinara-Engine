@@ -1,7 +1,7 @@
 // ──────────────────────────────────────────────
 // Game: Input Bar (send message, roll dice, attach files, emoji)
 // ──────────────────────────────────────────────
-import { useState, useRef, useEffect, useCallback, useMemo, type KeyboardEvent } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo, lazy, Suspense, type KeyboardEvent } from "react";
 import {
   Send,
   Dices,
@@ -76,6 +76,12 @@ interface GameInputProps {
   onStartNewSession?: () => void;
   startNewSessionPending?: boolean;
 }
+
+// Static demo: suggested moves above the game input, like the chat composer's.
+const DemoPrompts =
+  import.meta.env.VITE_MARINARA_DEMO === "1"
+    ? lazy(() => import("../../demo/DemoPrompts").then((module) => ({ default: module.DemoPrompts })))
+    : null;
 
 const QUICK_DICE = ["d20", "d6", "2d6", "d10", "d100", "d4", "d8", "d12"];
 
@@ -153,6 +159,7 @@ export function GameInput({
   const speechToTextEnabled = useUIStore((s) => s.speechToTextEnabled);
   const quoteFormat = useUIStore((s) => s.quoteFormat);
   const storageKey = draftKey ? `game-input-draft:${draftKey}` : null;
+  const demoChatId = useChatStore((s) => (DemoPrompts ? s.activeChatId : null));
   const [text, setText] = useState(() => readGameInputDraft(storageKey));
   const [showDice, setShowDice] = useState(false);
   const [customDice, setCustomDice] = useState("");
@@ -419,6 +426,13 @@ export function GameInput({
       className={cn(inline ? "" : "px-3 pt-2 pb-3")}
       style={inline ? undefined : { minHeight: 61 }}
     >
+      {DemoPrompts && demoChatId && (
+        <Suspense fallback={null}>
+          <div className="mb-2">
+            <DemoPrompts chatId={demoChatId} disabled={disabled} onPick={(prompt) => void onSend(prompt)} />
+          </div>
+        </Suspense>
+      )}
       {spatialCapabilityEnabled && draftKey ? (
         <CapabilityElement
           packageId="hierarchical-maps"

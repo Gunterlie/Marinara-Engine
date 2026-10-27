@@ -42,9 +42,10 @@ export function DemoPrompts({
   return (
     <div data-testid="demo-prompts">
       {demo && (
-        <p className="mb-1 hidden items-center gap-1.5 px-0.5 text-xs text-[var(--muted-foreground)] sm:flex">
+        <p className="mb-1 hidden flex-wrap items-center gap-x-1.5 px-0.5 text-xs text-[var(--muted-foreground)] sm:flex">
           <Sparkles size="0.75rem" className="shrink-0 text-[var(--primary)]" aria-hidden="true" />
           <span>{t(`demo.prompts.tip.${demo.tip}`)}</span>
+          <span className="opacity-70">{t("demo.prompts.honesty")}</span>
         </p>
       )}
       <MariSuggestionChips

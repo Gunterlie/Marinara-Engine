@@ -63,7 +63,9 @@ function collectDocs(dir, prefix = "") {
   }
 }
 collectDocs(resolve(root, "docs"));
-docs.sort((a, b) => a.path.localeCompare(b.path));
+// Home opens with the welcome guide and ends with achievements; the rest stay alphabetical.
+const sortKey = (path) => ({ "home/welcome.md": "home/0", "home/achievements.md": "home/zzz" })[path] ?? path;
+docs.sort((a, b) => sortKey(a.path).localeCompare(sortKey(b.path)));
 mkdirSync(resolve(root, "packages/client/dist-demo/demo-docs"), { recursive: true });
 // The full corpus is only fetched for search. Readers load the small index and one guide at a time.
 writeFileSync(resolve(root, "packages/client/dist-demo/demo-docs/guides.json"), JSON.stringify(docs));
@@ -93,3 +95,13 @@ for (const image of [
     .webp({ quality: 82, effort: 4 })
     .toFile(resolve(root, "packages/client/dist-demo/website", image.replace(/\.png$/, ".webp")));
 }
+
+// Pages serves HTML with max-age=600; ask browsers to revalidate so a redeploy never pairs old HTML with deleted chunks.
+const indexHtml = resolve(root, "packages/client/dist-demo/index.html");
+writeFileSync(
+  indexHtml,
+  readFileSync(indexHtml, "utf8").replace(
+    "<head>",
+    '<head>\n    <meta http-equiv="Cache-Control" content="no-cache" />',
+  ),
+);

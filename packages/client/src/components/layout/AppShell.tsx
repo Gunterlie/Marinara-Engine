@@ -1249,8 +1249,11 @@ export function AppShell({
       trackerPanelHost,
     );
 
+  // Demo only: a side panel can squeeze the docked Tracker to unreadable widths, so it steps aside until room returns.
+  const trackerPanelTooNarrow =
+    import.meta.env.VITE_MARINARA_DEMO === "1" && trackerPanelResolvedWidth < Math.min(280, trackerPanelWidth);
   const trackerPanelDesktop = (side: "left" | "right") =>
-    trackerPanelVisible && trackerPanelWidthMeasured && trackerPanelSide === side ? (
+    trackerPanelVisible && trackerPanelWidthMeasured && !trackerPanelTooNarrow && trackerPanelSide === side ? (
       <motion.aside
         key={`tracker-${side}`}
         initial={{
