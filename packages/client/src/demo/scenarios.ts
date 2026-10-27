@@ -220,7 +220,7 @@ export const DEMO_PROMPTS: Record<string, { tip: string; prompts: string[] }> = 
   },
   "demo-chat-orsolo": {
     tip: "roleplay",
-    prompts: ["Tell me about your ship.", "Show me your sprite.", "What is in the lorebook?"],
+    prompts: ["Tell me about your ship.", "Show me your sprite.", "What is in the lorebook?", "/roll 2d6+2"],
   },
   "demo-chat-kestrel": { tip: "game", prompts: ["Take the stairs down.", "Cross the bridge.", "Roll for perception."] },
   "demo-chat-crew": { tip: "crew", prompts: ["Who's on the crew?", "Everyone, roll call!", "Ask K-7 for a joke."] },
@@ -240,11 +240,15 @@ export const DEMO_PROMPTS: Record<string, { tip: string; prompts: string[] }> = 
   },
   "demo-chat-rook": {
     tip: "noir",
-    prompts: ["What do we know?", "Check the clock tower.", "Who has the red umbrella?"],
+    prompts: ["What do we know?", "Check the clock tower.", "Who has the red umbrella?", "/roll 1d20"],
   },
 };
 
 export function pickDemoReply(userText: string, characterId?: string | null): string {
+  // Game dice arrive as "[dice: 1d20 = 14 ...]"; the roll is real, so the reply uses its total.
+  const dice = userText.match(/\[dice: ([^\]=]+?) = (-?\d+)/);
+  if (dice)
+    return `*The dice land on ${dice[2]}.* ${Number(dice[2]) >= 10 ? "It works. The way ahead is clear." : "Not this time. Something shifts in the dark."} (Real roll, scripted reply.)`;
   const list = [...(BY_CHARACTER[characterId ?? ""] ?? []), ...SCENARIOS];
   return list.find((s) => s.match.test(userText))?.reply ?? DEMO_FALLBACK_REPLY;
 }

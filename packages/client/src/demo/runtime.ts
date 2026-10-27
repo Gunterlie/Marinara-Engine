@@ -8,6 +8,9 @@ import {
   DEFAULT_DECISION_PROMPT_QUESTION_LIMIT,
   MAX_DECISION_PROMPT_QUESTION_LIMIT,
   ttsConfigSchema,
+  clampParsedDiceToLimits,
+  parseDiceNotation,
+  rollParsedDice,
 } from "@marinara-engine/shared";
 import { i18n } from "../localization/i18n";
 import { UI_PERSISTENCE } from "../lib/ui-persistence";
@@ -515,6 +518,13 @@ function registerRoutes() {
   on("GET", "/agents/import-policy", () => json({ enabled: false }));
   on("GET", "/agents/runs/:id/custom", () => json([]));
   on("POST", "/game/weather/update", () => json({ changed: false, weather: null }));
+  // Same steps as the server's dice route: parse, clamp to the caps, roll.
+  on("POST", "/game/dice/roll", (_m, _u, b) => {
+    const parsed = parseDiceNotation(String(b?.notation ?? ""));
+    return parsed
+      ? json({ result: rollParsedDice(clampParsedDiceToLimits(parsed)) })
+      : json({ error: "Invalid dice notation" }, 400);
+  });
   on("GET", "/game-tile-packs", () => json({ packs: [], builtIn: [], selection: {} }));
   for (const path of [
     "/characters/:id/gallery",
