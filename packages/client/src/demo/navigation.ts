@@ -4,6 +4,19 @@ import { useChatStore } from "../stores/chat.store";
 import { isMobileShellViewport, useUIStore } from "../stores/ui.store";
 import { DEMO_SEED_IDS } from "./seed";
 import { docHref } from "./docs";
+import { i18n } from "../localization/i18n";
+
+// Docs pages refine this title once their guide loads.
+const ROUTE_TITLES: [string, string][] = [
+  ["#/demo", "demo.controls.short"],
+  ["#/features", "demo.site.features"],
+  ["#/download", "demo.site.download"],
+  ["#/docs", "demo.docs.title"],
+];
+function setRouteTitle(hash: string) {
+  const key = ROUTE_TITLES.find(([prefix]) => hash.startsWith(prefix))?.[1];
+  document.title = key ? `${i18n.t(key)} – Marinara Engine` : "Marinara Engine";
+}
 
 // Hash routes work on Pages without a server-side rewrite or a second router for the Engine.
 export function useDemoNavigation() {
@@ -20,6 +33,7 @@ export function useDemoNavigation() {
     };
     const followRoute = () => {
       const hash = window.location.hash;
+      setRouteTitle(hash);
       if (hash && !hash.startsWith("#/")) return;
       const known = window.history.state?.demoEntry;
       entry = typeof known === "number" ? known : Date.now();
@@ -65,6 +79,7 @@ export function useDemoNavigation() {
         // A deep link becomes plain #/demo in place, so Back does not reopen it.
         const swap = state.activeChatId && current.startsWith("#/demo?") ? "replaceState" : "pushState";
         window.history[swap](window.history.state, "", window.location.pathname + window.location.search + hash);
+        setRouteTitle(hash);
       }
     });
     const unsubscribeDocs = useUIStore.subscribe((state, previous) => {

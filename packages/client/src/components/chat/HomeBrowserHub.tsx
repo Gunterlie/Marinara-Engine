@@ -2121,78 +2121,79 @@ export function HomeBrowserHub({ pageActive, onOpenCredits, hideProfessor, websi
                 </section>
               )}
               <div className={cn("relative z-[1] w-full p-[clamp(0.65rem,1vw,1.25rem)]", website && "max-sm:px-5")}>
-                <section
-                  ref={website ? undefined : heroRef}
-                  hidden={!!website}
-                  className="mari-home-hero relative flex min-w-0 flex-col items-center gap-2 px-[clamp(0.35rem,0.8vw,0.9rem)] pb-[clamp(0.7rem,1.1vw,1rem)] pt-[clamp(0.4rem,0.7vw,0.7rem)] text-center"
-                  data-tour="home-hub"
-                >
-                  {/* Painted only while a seasonal theme is on (styles/themes/seasonal-*.css). */}
-                  <div className="mari-seasonal-home" aria-hidden="true">
-                    <span className="mari-seasonal-home__sky" />
-                    <span className="mari-seasonal-home__sky" />
-                    <span className="mari-seasonal-home__sky" />
-                    <span className="mari-seasonal-home__ground" />
-                  </div>
-                  <div className="min-w-0 max-w-5xl">
-                    <div className="flex min-w-0 flex-col items-center">
-                      <img
-                        src="/logo.png"
-                        alt=""
-                        aria-hidden="true"
-                        className="mb-1 h-[clamp(1.8rem,2.4vw,2.35rem)] w-auto object-contain"
-                      />
-                      <MarinaraWordmark className="block truncate text-[clamp(1.35rem,1.9vw,2.15rem)] leading-none" />
-                      <span className="mt-1 block text-[0.5625rem] font-semibold tracking-[0.14em] text-[var(--muted-foreground)]">
-                        {versionLabel}
-                      </span>
+                {!website && (
+                  <section
+                    ref={heroRef}
+                    className="mari-home-hero relative flex min-w-0 flex-col items-center gap-2 px-[clamp(0.35rem,0.8vw,0.9rem)] pb-[clamp(0.7rem,1.1vw,1rem)] pt-[clamp(0.4rem,0.7vw,0.7rem)] text-center"
+                    data-tour="home-hub"
+                  >
+                    {/* Painted only while a seasonal theme is on (styles/themes/seasonal-*.css). */}
+                    <div className="mari-seasonal-home" aria-hidden="true">
+                      <span className="mari-seasonal-home__sky" />
+                      <span className="mari-seasonal-home__sky" />
+                      <span className="mari-seasonal-home__sky" />
+                      <span className="mari-seasonal-home__ground" />
                     </div>
-                    <h1 className="mt-1.5 text-[clamp(1.15rem,1.6vw,1.7rem)] font-black tracking-tight text-[var(--foreground)]">
-                      {t("home.hero.title")}
-                    </h1>
-                    <p className="mx-auto mt-1 text-[clamp(0.75rem,0.8vw,0.875rem)] leading-snug text-[var(--muted-foreground)]">
-                      {t("home.hero.description")}
-                    </p>
-                  </div>
-                  <div className="grid w-full max-w-md grid-cols-3 gap-2" aria-label={t("home.shortcuts.label")}>
-                    <HomeNewChatLauncher
-                      mode="conversation"
-                      className="group !h-auto !min-h-11 !w-full !gap-1.5 !border-[color-mix(in_srgb,var(--home-chat-mode-accent)_35%,var(--border))] !bg-[color-mix(in_srgb,var(--home-chat-mode-accent)_7%,var(--card))] !px-2 !py-1 !text-center sm:!min-h-9"
-                      ariaLabel={t("home.shortcuts.newConversation")}
-                    >
-                      <ShortcutIcon tone={HOME_CHAT_MODE_ACCENTS.conversation}>
-                        <ChatModeIcon mode="conversation" size="1rem" className="mari-rgb-static-icon" />
-                      </ShortcutIcon>
-                      <span className="text-[0.65rem] font-bold text-[var(--foreground)] sm:text-xs">
-                        {t("home.recentChats.mode.conversation")}
-                      </span>
-                    </HomeNewChatLauncher>
-                    <HomeNewChatLauncher
-                      mode="roleplay"
-                      className="group !h-auto !min-h-11 !w-full !gap-1.5 !border-[color-mix(in_srgb,var(--home-chat-mode-accent)_35%,var(--border))] !bg-[color-mix(in_srgb,var(--home-chat-mode-accent)_7%,var(--card))] !px-2 !py-1 !text-center sm:!min-h-9"
-                      ariaLabel={t("home.shortcuts.newRoleplay")}
-                    >
-                      <ShortcutIcon tone={HOME_CHAT_MODE_ACCENTS.roleplay}>
-                        <ChatModeIcon mode="roleplay" size="1rem" className="mari-rgb-static-icon" />
-                      </ShortcutIcon>
-                      <span className="text-[0.65rem] font-bold text-[var(--foreground)] sm:text-xs">
-                        {t("home.recentChats.mode.roleplay")}
-                      </span>
-                    </HomeNewChatLauncher>
-                    <HomeNewChatLauncher
-                      mode="game"
-                      className="group !h-auto !min-h-11 !w-full !gap-1.5 !border-[color-mix(in_srgb,var(--home-chat-mode-accent)_35%,var(--border))] !bg-[color-mix(in_srgb,var(--home-chat-mode-accent)_7%,var(--card))] !px-2 !py-1 !text-center sm:!min-h-9"
-                      ariaLabel={t("home.shortcuts.newGame")}
-                    >
-                      <ShortcutIcon tone={HOME_CHAT_MODE_ACCENTS.game}>
-                        <ChatModeIcon mode="game" size="1rem" className="mari-rgb-static-icon" />
-                      </ShortcutIcon>
-                      <span className="text-[0.65rem] font-bold text-[var(--foreground)] sm:text-xs">
-                        {t("home.recentChats.mode.game")}
-                      </span>
-                    </HomeNewChatLauncher>
-                  </div>
-                </section>
+                    <div className="min-w-0 max-w-5xl">
+                      <div className="flex min-w-0 flex-col items-center">
+                        <img
+                          src="/logo.png"
+                          alt=""
+                          aria-hidden="true"
+                          className="mb-1 h-[clamp(1.8rem,2.4vw,2.35rem)] w-auto object-contain"
+                        />
+                        <MarinaraWordmark className="block truncate text-[clamp(1.35rem,1.9vw,2.15rem)] leading-none" />
+                        <span className="mt-1 block text-[0.5625rem] font-semibold tracking-[0.14em] text-[var(--muted-foreground)]">
+                          {versionLabel}
+                        </span>
+                      </div>
+                      <h1 className="mt-1.5 text-[clamp(1.15rem,1.6vw,1.7rem)] font-black tracking-tight text-[var(--foreground)]">
+                        {t("home.hero.title")}
+                      </h1>
+                      <p className="mx-auto mt-1 text-[clamp(0.75rem,0.8vw,0.875rem)] leading-snug text-[var(--muted-foreground)]">
+                        {t("home.hero.description")}
+                      </p>
+                    </div>
+                    <div className="grid w-full max-w-md grid-cols-3 gap-2" aria-label={t("home.shortcuts.label")}>
+                      <HomeNewChatLauncher
+                        mode="conversation"
+                        className="group !h-auto !min-h-11 !w-full !gap-1.5 !border-[color-mix(in_srgb,var(--home-chat-mode-accent)_35%,var(--border))] !bg-[color-mix(in_srgb,var(--home-chat-mode-accent)_7%,var(--card))] !px-2 !py-1 !text-center sm:!min-h-9"
+                        ariaLabel={t("home.shortcuts.newConversation")}
+                      >
+                        <ShortcutIcon tone={HOME_CHAT_MODE_ACCENTS.conversation}>
+                          <ChatModeIcon mode="conversation" size="1rem" className="mari-rgb-static-icon" />
+                        </ShortcutIcon>
+                        <span className="text-[0.65rem] font-bold text-[var(--foreground)] sm:text-xs">
+                          {t("home.recentChats.mode.conversation")}
+                        </span>
+                      </HomeNewChatLauncher>
+                      <HomeNewChatLauncher
+                        mode="roleplay"
+                        className="group !h-auto !min-h-11 !w-full !gap-1.5 !border-[color-mix(in_srgb,var(--home-chat-mode-accent)_35%,var(--border))] !bg-[color-mix(in_srgb,var(--home-chat-mode-accent)_7%,var(--card))] !px-2 !py-1 !text-center sm:!min-h-9"
+                        ariaLabel={t("home.shortcuts.newRoleplay")}
+                      >
+                        <ShortcutIcon tone={HOME_CHAT_MODE_ACCENTS.roleplay}>
+                          <ChatModeIcon mode="roleplay" size="1rem" className="mari-rgb-static-icon" />
+                        </ShortcutIcon>
+                        <span className="text-[0.65rem] font-bold text-[var(--foreground)] sm:text-xs">
+                          {t("home.recentChats.mode.roleplay")}
+                        </span>
+                      </HomeNewChatLauncher>
+                      <HomeNewChatLauncher
+                        mode="game"
+                        className="group !h-auto !min-h-11 !w-full !gap-1.5 !border-[color-mix(in_srgb,var(--home-chat-mode-accent)_35%,var(--border))] !bg-[color-mix(in_srgb,var(--home-chat-mode-accent)_7%,var(--card))] !px-2 !py-1 !text-center sm:!min-h-9"
+                        ariaLabel={t("home.shortcuts.newGame")}
+                      >
+                        <ShortcutIcon tone={HOME_CHAT_MODE_ACCENTS.game}>
+                          <ChatModeIcon mode="game" size="1rem" className="mari-rgb-static-icon" />
+                        </ShortcutIcon>
+                        <span className="text-[0.65rem] font-bold text-[var(--foreground)] sm:text-xs">
+                          {t("home.recentChats.mode.game")}
+                        </span>
+                      </HomeNewChatLauncher>
+                    </div>
+                  </section>
+                )}
                 <div ref={feedShellRef} className="mari-home-feed-shell">
                   <div
                     className="mari-home-feed-grid"

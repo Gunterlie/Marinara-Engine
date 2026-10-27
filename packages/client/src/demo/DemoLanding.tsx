@@ -318,10 +318,6 @@ export function DemoLanding() {
   const [actionBar, setActionBar] = useState(false);
   const stepRefs = useRef<Record<string, HTMLLIElement | null>>({});
 
-  useEffect(() => {
-    document.title = "Marinara Engine";
-  }, []);
-
   // The mode in the middle band of the viewport drives the pinned window. Observing never moves the scroll.
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -349,14 +345,19 @@ export function DemoLanding() {
     return () => observer.disconnect();
   }, []);
 
-  // Phones get a bottom action bar once the hero is gone, and lose it again at the closing call to action.
+  // Phones get a bottom action bar once the hero is gone, and lose it again at the closing call to action and the footer.
   useEffect(() => {
     const inView = new Map<Element, boolean>();
     const observer = new IntersectionObserver((entries) => {
       for (const entry of entries) inView.set(entry.target, entry.isIntersecting);
       setActionBar(![...inView.values()].some(Boolean));
     });
-    for (const node of [document.querySelector("[data-demo-hero]"), ctaRef.current]) if (node) observer.observe(node);
+    const nodes = [
+      document.querySelector("[data-demo-hero]"),
+      ctaRef.current,
+      document.querySelector("[data-demo-footer]"),
+    ];
+    for (const node of nodes) if (node) observer.observe(node);
     return () => observer.disconnect();
   }, []);
 

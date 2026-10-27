@@ -129,10 +129,6 @@ export function DemoFeatures({ category }: { category: string }) {
 
   useEffect(() => {
     topRef.current?.scrollIntoView({ block: "start" });
-    document.title = `${t("demo.features.title")} · Marinara Engine`;
-    return () => {
-      document.title = "Marinara Engine";
-    };
   }, [t]);
 
   const choose = (key: string) => {

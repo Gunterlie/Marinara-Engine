@@ -58,8 +58,16 @@ const observe = () => {
 const settle = (page) => page.waitForLoadState("networkidle").then(() => page.waitForTimeout(1_500));
 const take = (page) => page.evaluate(() => window.__shifts.splice(0));
 const sum = (shifts) => Number(shifts.reduce((total, shift) => total + shift.value, 0).toFixed(4));
+// Chat histories open at their newest message on purpose, so only page scrollers count.
 const scrolled = (page) =>
-  page.evaluate(() => Math.max(0, ...[...document.querySelectorAll("*")].map((node) => node.scrollTop)));
+  page.evaluate(() =>
+    Math.max(
+      0,
+      ...[...document.querySelectorAll("*")]
+        .filter((node) => !node.closest(".mari-messages-scroll"))
+        .map((node) => node.scrollTop),
+    ),
+  );
 
 const browser = await chromium.launch({ args: ["--mute-audio"] });
 const results = [];

@@ -415,15 +415,8 @@ export function DemoDocs({ path, section }: { path: string; section: string }) {
     }
   }, [reader, rendered, path, t]);
 
-  useEffect(
-    () => () => {
-      document.title = "Marinara Engine";
-    },
-    [],
-  );
-
   useEffect(() => {
-    document.title = `${current ? current.title : t("demo.docs.title")} · Marinara Engine`;
+    document.title = `${current ? current.title : t("demo.docs.title")} – Marinara Engine`;
     if (!reader || !rendered) return;
     const target = section
       ? [...reader.querySelectorAll<HTMLElement>("[id]")].find((node) => node.id === section)

@@ -21,7 +21,7 @@ const external = (href: string) => (href.startsWith("http") ? { target: "_blank"
 
 // The Engine's Home tab look, so the website pages read as more Home tabs.
 const TAB =
-  "relative flex min-h-9 min-w-0 items-center justify-center rounded-t-lg border border-b-0 text-[0.65rem] font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--marinara-chat-chrome-focus-ring)] sm:min-w-[6.5rem] sm:w-auto sm:flex-none sm:gap-1.5 sm:px-3 sm:text-xs";
+  "relative flex min-h-9 min-w-0 items-center justify-center rounded-t-lg border border-b-0 text-[0.65rem] font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--marinara-chat-chrome-focus-ring)] sm:min-w-[6rem] sm:w-auto sm:flex-none sm:gap-1.5 sm:px-3 sm:text-xs";
 const TAB_ICON = "h-[1.125rem] w-[1.125rem] object-contain";
 const ICON_LINK = `flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[var(--muted-foreground)] transition-colors hover:bg-[var(--accent)] hover:text-[var(--foreground)] ${FOCUS}`;
 
@@ -93,7 +93,7 @@ export function DemoSiteLinks() {
         className={cn(ICON_LINK, "sm:w-auto sm:gap-1.5 sm:px-3 sm:text-xs sm:font-semibold")}
       >
         <img src={asset("home/tab-icons/tutorial.png")} alt="" className={TAB_ICON} />
-        <span className="hidden sm:inline">{t("demo.site.tours")}</span>
+        <span className="hidden min-[1400px]:inline">{t("demo.site.tours")}</span>
       </button>
       <a
         href={GITHUB_URL}
@@ -157,7 +157,10 @@ const FOOTER = [
 export function DemoSiteFooter() {
   const { t } = useTranslation();
   return (
-    <footer className="mx-auto grid w-full max-w-[75rem] grid-cols-2 gap-x-6 gap-y-8 px-5 pb-28 sm:px-8 md:pb-16 lg:grid-cols-[minmax(0,1.5fr)_repeat(4,minmax(0,1fr))]">
+    <footer
+      data-demo-footer=""
+      className="mx-auto grid w-full max-w-[75rem] grid-cols-2 gap-x-6 gap-y-8 px-5 pb-28 sm:px-8 md:pb-16 lg:grid-cols-[minmax(0,1.5fr)_repeat(4,minmax(0,1fr))]"
+    >
       <div className="col-span-2 flex flex-col gap-3 border-t border-[var(--border)] pt-10 lg:col-span-1">
         <a href="#/" className={`flex w-fit items-center gap-2 rounded-md ${FOCUS}`}>
           <img src={asset("logo.png")} alt="" width={32} height={32} className="h-8 w-8 object-contain" />

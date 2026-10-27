@@ -253,3 +253,41 @@
     transform: rotate(6deg);
   }
 }
+
+/* The Engine Home page clips with overflow: hidden, which would make it the pinned story's scroll box. Clip keeps the panel scroller in charge. */
+[data-website] [data-component="HomeBrowserHub.HomePage"] {
+  overflow: clip;
+}
+
+/* Professor Mari opens the guided tours here, so her card keeps title and button and drops the tiny live-help text. */
+[data-website] [data-home-professor-description] {
+  display: none;
+}
+
+[data-website] [data-home-professor-action] {
+  height: 2.75rem;
+  font-size: 0.8125rem;
+}
+
+@media (max-width: 39.99rem) {
+  [data-website] [data-home-professor-action] {
+    font-size: 0.9375rem;
+  }
+}
+
+[data-website] [data-home-professor-content] > p:first-child {
+  font-size: 0.75rem;
+}
+
+@media (max-width: 39.99rem) {
+  [data-website] [data-home-professor-content] h2 {
+    font-size: 0.9375rem;
+  }
+}
+
+/* Tablets and small laptops (often with the chat sidebar open): the logo mark alone leaves room for every tab. */
+@media (min-width: 40rem) and (max-width: 79.99rem) {
+  [data-website] [data-component="HomeBrowserHub.Brand"] > div {
+    display: none;
+  }
+}
