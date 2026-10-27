@@ -13,7 +13,7 @@ export function useDemoNavigation() {
     // A new link opens at the top; back and forward return to the offset the visitor left.
     const offsets = new Map<number, number>();
     let entry = 0;
-    const pageScroller = () => document.querySelector<HTMLElement>("[data-demo-site] .flex-1.overflow-y-auto");
+    const pageScroller = () => document.getElementById("marinara-home-browser-panel");
     const remember = (event: Event) => {
       const scroller = pageScroller();
       if (scroller && event.target === scroller) offsets.set(entry, scroller.scrollTop);

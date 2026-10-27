@@ -182,7 +182,7 @@ export function DemoFeatures({ category }: { category: string }) {
         </p>
       </header>
 
-      <div className="sticky top-2 z-10 -my-6 rounded-2xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--background)_88%,transparent)] px-2 pt-2 pb-1 backdrop-blur-md [[data-demo-site]_&]:top-14">
+      <div className="sticky top-2 z-10 -my-6 rounded-2xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--background)_88%,transparent)] px-2 pt-2 pb-1 backdrop-blur-md">
         <div
           role="group"
           aria-label={t("demo.features.filter")}

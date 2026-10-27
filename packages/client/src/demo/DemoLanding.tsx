@@ -12,7 +12,6 @@ import {
   Dices,
   Download,
   Drama,
-  ExternalLink,
   HardDrive,
   Laptop,
   MessageCircle,
@@ -28,7 +27,8 @@ import {
 import { useTranslation } from "react-i18next";
 import { HOME_CHAT_MODE_ACCENTS } from "../lib/home-chat-mode-style";
 import { cn } from "../lib/utils";
-import { FeedModule, HOME_MODULE_ACCENTS, MarinaraWordmark } from "../components/chat/HomeBrowserHub";
+import { FeedModule, HOME_MODULE_ACCENTS } from "../components/chat/HomeBrowserHub";
+import { GITHUB_URL, asset } from "./DemoSiteHeader";
 import { useMariAppearancePack } from "../hooks/use-mari-appearance-pack";
 import { DEMO_ASSETS } from "./seed";
 import { DemoFeatures } from "./DemoFeatures";
@@ -58,11 +58,6 @@ const LOCAL_FIRST = [
   { key: "free", icon: Code, href: docHref("FAQ.md", "do-i-have-to-pay-to-use-marinara") },
   { key: "portable", icon: Archive, href: docHref("data/backup-and-restore.md") },
 ] as const;
-
-export const asset = (path: string) => `${import.meta.env.BASE_URL}${path}`;
-
-export const GITHUB_URL = "https://github.com/Pasta-Devs/Marinara-Engine";
-export const DISCORD_URL = "https://discord.com/invite/KdAkTg94ME";
 
 const MODES = [
   {
@@ -151,43 +146,6 @@ const PLATFORMS = [
   { key: "android", icon: Smartphone, href: "#/docs/installation/android-termux.md" },
   { key: "ios", icon: Tablet, href: "#/docs/installation/ios-pwa.md" },
   { key: "containers", icon: Boxes, href: "#/docs/installation/containers.md" },
-] as const;
-
-// Footer columns: the same pages as the bar, grouped the way visitors look for them.
-const FOOTER = [
-  {
-    key: "product",
-    links: [
-      { label: "demo.site.features", href: "#/features" },
-      { label: "demo.site.download", href: "#/download" },
-      { label: "demo.site.try", href: "#/demo" },
-      { label: "demo.landing.guides.mari.title", href: "#/docs/home/professor-mari.md" },
-    ],
-  },
-  {
-    key: "docs",
-    links: [
-      { label: "demo.landing.footer.gettingStarted", href: "#/docs/home/welcome.md" },
-      { label: "demo.landing.footer.installation", href: docHref("INSTALLATION.md") },
-      { label: "demo.landing.footer.faq", href: docHref("FAQ.md") },
-      { label: "demo.landing.footer.troubleshooting", href: docHref("TROUBLESHOOTING.md") },
-    ],
-  },
-  {
-    key: "community",
-    links: [
-      { label: "demo.landing.community.github", href: GITHUB_URL },
-      { label: "demo.landing.community.discord", href: DISCORD_URL },
-      { label: "demo.landing.footer.issues", href: `${GITHUB_URL}/issues` },
-    ],
-  },
-  {
-    key: "legal",
-    links: [
-      { label: "demo.landing.footer.license", href: `${GITHUB_URL}/blob/main/LICENSE` },
-      { label: "demo.banner.source", href: GITHUB_URL },
-    ],
-  },
 ] as const;
 
 const GUIDES = [
@@ -284,17 +242,14 @@ export function DemoLanding() {
 
   return (
     <div data-testid="demo-product-home" data-demo-page="" className="relative isolate w-full overflow-x-clip">
-      <div
-        aria-hidden="true"
-        className="demo-progress sticky top-0 z-20 h-0.5 bg-[var(--primary)] [[data-demo-site]_&]:top-12"
-      />
+      <div aria-hidden="true" className="demo-progress sticky top-0 z-20 h-0.5 bg-[var(--primary)]" />
       {/* Ambient light, behind every section */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[56rem] [[data-demo-site]_&]:-top-12 bg-[radial-gradient(55%_45%_at_78%_18%,color-mix(in_srgb,var(--primary)_22%,transparent),transparent_70%),radial-gradient(40%_35%_at_8%_8%,color-mix(in_srgb,var(--primary)_10%,transparent),transparent_70%)]"
+        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[56rem] bg-[radial-gradient(55%_45%_at_78%_18%,color-mix(in_srgb,var(--primary)_22%,transparent),transparent_70%),radial-gradient(40%_35%_at_8%_8%,color-mix(in_srgb,var(--primary)_10%,transparent),transparent_70%)]"
       />
 
-      <div className="mx-auto flex w-full max-w-[75rem] flex-col gap-20 px-4 pb-28 pt-6 sm:gap-24 sm:px-8 sm:pt-16 md:pb-20">
+      <div className="mx-auto flex w-full max-w-[75rem] flex-col gap-20 px-4 pb-20 pt-4 sm:gap-24 sm:px-8 sm:pt-14">
         {/* Hero: one promise, one action, and a scripted story playing beside it */}
         <section
           ref={heroRef}
@@ -307,21 +262,6 @@ export function DemoLanding() {
           className="grid grid-cols-[minmax(0,1fr)] items-center gap-8 sm:gap-12 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:gap-10"
         >
           <div className="flex flex-col gap-5 sm:gap-7">
-            <a
-              href={GITHUB_URL}
-              target="_blank"
-              rel="noreferrer"
-              className="group inline-flex w-fit items-center gap-2.5 rounded-full border max-sm:hidden border-[color-mix(in_srgb,var(--primary)_35%,var(--border))] bg-[color-mix(in_srgb,var(--primary)_8%,transparent)] py-1 pl-1 pr-3 text-[0.8125rem] font-medium text-[var(--foreground)] transition-colors hover:border-[var(--primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--marinara-app-accent-solid)]"
-            >
-              <span className="shrink-0 whitespace-nowrap rounded-full bg-[var(--primary)] px-2 py-0.5 text-[0.6875rem] font-semibold tracking-wide text-[var(--primary-foreground)]">
-                {t("demo.product.license")}
-              </span>
-              {t("demo.product.badge")}
-              <ExternalLink
-                className="h-3.5 w-3.5 text-[var(--muted-foreground)] transition-colors group-hover:text-[var(--foreground)]"
-                aria-hidden="true"
-              />
-            </a>
             <h1
               id="demo-product-title"
               className="text-balance text-[2.125rem] font-bold leading-[1.08] tracking-tight text-[var(--foreground)] sm:text-5xl xl:text-[4rem]"
@@ -346,7 +286,7 @@ export function DemoLanding() {
           </div>
 
           {/* Stage: a scripted chat plays in the app frame, a real screen behind, Mari at the edge */}
-          <div ref={stageRef} className="demo-hero-stage relative pt-12 sm:pb-20 sm:pt-0 lg:pl-6">
+          <div ref={stageRef} className="demo-hero-stage relative pt-6 sm:pb-20 sm:pt-0 lg:pl-6">
             <div
               aria-hidden="true"
               className="demo-hero-glow pointer-events-none absolute -inset-4 -z-10 sm:-inset-12"
@@ -876,38 +816,6 @@ export function DemoLanding() {
             </a>
           </div>
         </section>
-
-        <footer className="grid grid-cols-2 gap-x-6 gap-y-8 border-t border-[var(--border)] pt-10 lg:grid-cols-[minmax(0,1.5fr)_repeat(4,minmax(0,1fr))]">
-          <div className="col-span-2 flex flex-col gap-3 lg:col-span-1">
-            <a href="#/" className={`flex w-fit items-center gap-2 rounded-md ${FOCUS}`}>
-              <img src={asset("logo.png")} alt="" width={32} height={32} className="h-8 w-8 object-contain" />
-              <MarinaraWordmark className="text-base" />
-            </a>
-            <p className="max-w-[34ch] text-sm leading-relaxed text-[var(--muted-foreground)]">
-              {t("demo.landing.footer.tagline")}
-            </p>
-          </div>
-          {FOOTER.map((column) => (
-            <nav key={column.key} aria-labelledby={`demo-footer-${column.key}`} className="flex flex-col gap-1">
-              <h2 id={`demo-footer-${column.key}`} className={EYEBROW}>
-                {t(`demo.landing.footer.${column.key}`)}
-              </h2>
-              <ul className="flex flex-col">
-                {column.links.map((link) => (
-                  <li key={link.label}>
-                    <a
-                      href={link.href}
-                      {...external(link.href)}
-                      className={`inline-flex min-h-11 items-center text-sm text-[var(--foreground)] transition-colors hover:text-[var(--primary)] ${FOCUS}`}
-                    >
-                      {t(link.label)}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </nav>
-          ))}
-        </footer>
       </div>
 
       <div
@@ -956,7 +864,7 @@ function HeroTeaser() {
     <div
       aria-hidden="true"
       // Fixed height and top-aligned: the typing reply grows into reserved space instead of moving the page or the bubbles.
-      className="relative flex h-[22rem] flex-col gap-3 overflow-hidden p-4 pb-12 sm:h-[25rem] sm:p-5 sm:pb-16"
+      className="relative flex h-[20.75rem] flex-col gap-2.5 overflow-hidden p-4 sm:h-[25rem] sm:gap-3 sm:p-5 sm:pb-16"
     >
       <div className="flex items-end gap-2.5">
         <img

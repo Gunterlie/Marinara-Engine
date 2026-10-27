@@ -290,7 +290,7 @@ try {
   for (const page of pages) {
     assert.ok(await openSeedChat(page), "Mari's welcome did not open on the first demo visit");
   }
-  await expect(pages[0].getByTestId("demo-back-to-site")).toBeVisible();
+  await expect(pages[0].locator('[data-component="TopBar"]')).toBeVisible();
   await Promise.all(
     pages.map(async (page, i) => {
       const composer = page.locator("textarea[data-chat-composer]");
@@ -452,10 +452,9 @@ try {
           path: resolve(evidence, `demo-${width}-${visualTheme}-${theme}.png`),
           fullPage: true,
         });
-        // Home opens the Engine's own Home screen; the bar's Website link goes back to the site.
+        // The Engine's Home button returns to the landing, which is the Home content.
         await pages[0].getByRole("button", { name: "Home", exact: true }).click();
-        await expect(pages[0]).toHaveURL(/#\/home$/);
-        await pages[0].getByTestId("demo-back-to-site").click();
+        await expect(pages[0]).toHaveURL(/#\/$/);
         await expect(pages[0].getByTestId("demo-product-home")).toBeVisible();
         await pages[0].screenshot({
           path: resolve(evidence, `landing-${width}-${visualTheme}-${theme}.png`),

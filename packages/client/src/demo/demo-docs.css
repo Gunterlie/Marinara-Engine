@@ -24,16 +24,9 @@
   color: var(--foreground);
 }
 
-[data-demo-site] .demo-docs-reader .mari-md-heading {
-  scroll-margin-top: 8rem;
-}
-
 @media (min-width: 80rem) {
   .demo-docs-reader .mari-md-heading {
     scroll-margin-top: 1.5rem;
-  }
-  [data-demo-site] .demo-docs-reader .mari-md-heading {
-    scroll-margin-top: 4.5rem;
   }
 }
 

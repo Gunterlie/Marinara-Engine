@@ -432,7 +432,7 @@ export function DemoDocs({ path, section }: { path: string; section: string }) {
       target.scrollIntoView({ block: "start" });
       target.focus({ preventScroll: true });
     } else {
-      reader.closest('[data-testid="demo-docs"]')?.scrollTo({ top: 0 });
+      document.getElementById("marinara-home-browser-panel")?.scrollTo({ top: 0 });
       (headingRef.current ?? reader.querySelector<HTMLElement>("h1"))?.focus({ preventScroll: true });
     }
   }, [reader, rendered, section, current, t]);
@@ -440,7 +440,7 @@ export function DemoDocs({ path, section }: { path: string; section: string }) {
   // Scrollspy: the table of contents marks the last heading that passed the top of the page.
   useEffect(() => {
     if (!reader || contents.length < 2) return;
-    const root = reader.closest<HTMLElement>('[data-testid="demo-docs"]');
+    const root = document.getElementById("marinara-home-browser-panel");
     const observer = new IntersectionObserver(
       (entries) => {
         const hit = entries.find((entry) => entry.isIntersecting);
@@ -537,10 +537,7 @@ export function DemoDocs({ path, section }: { path: string; section: string }) {
   const updated = formatDate(current?.updatedAt);
 
   return (
-    <section
-      data-testid="demo-docs"
-      className="min-h-0 flex-1 overflow-y-auto bg-[var(--background)] text-[var(--foreground)] [[data-demo-site]_&]:pt-12"
-    >
+    <section data-testid="demo-docs" className="text-[var(--foreground)]">
       <dialog
         ref={paletteRef}
         aria-label={t("demo.docs.search")}
@@ -673,7 +670,7 @@ export function DemoDocs({ path, section }: { path: string; section: string }) {
             <aside
               ref={sidebarRef}
               aria-label={t("demo.docs.guides")}
-              className="relative hidden lg:sticky lg:top-0 lg:block lg:max-h-[calc(100dvh-2rem)] lg:overflow-y-auto lg:overscroll-contain [[data-demo-site]_&]:lg:max-h-[calc(100dvh-5rem)]"
+              className="relative hidden lg:sticky lg:top-0 lg:block lg:overflow-y-auto lg:overscroll-contain lg:max-h-[calc(100dvh-5rem)]"
             >
               <div className="sticky top-0 z-10 bg-[var(--background)] pb-3">
                 <SearchTrigger onOpen={openPalette} />
@@ -896,7 +893,7 @@ export function DemoDocs({ path, section }: { path: string; section: string }) {
             {contents.length > 1 ? (
               <aside
                 aria-label={t("demo.docs.onThisPage")}
-                className="hidden xl:sticky xl:top-0 xl:block xl:max-h-[calc(100dvh-2rem)] xl:overflow-y-auto [[data-demo-site]_&]:xl:max-h-[calc(100dvh-5rem)]"
+                className="hidden xl:sticky xl:top-0 xl:block xl:overflow-y-auto xl:max-h-[calc(100dvh-5rem)]"
               >
                 <h2 className="px-3 pb-2 text-xs font-semibold uppercase tracking-wide text-[var(--muted-foreground)]">
                   {t("demo.docs.onThisPage")}

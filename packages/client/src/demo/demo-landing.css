@@ -53,7 +53,7 @@
     .demo-progress {
       display: block;
       animation: demo-progress linear both;
-      animation-timeline: scroll(nearest block);
+      animation-timeline: --demo-page;
     }
   }
 
@@ -109,12 +109,14 @@
 }
 
 /* Website page scrollers keep their scrollbar space, so a short or loading page does not shift sideways. */
-[data-demo-site] .flex-1.overflow-y-auto {
+#marinara-home-browser-panel {
   scrollbar-gutter: stable;
+  /* Named, because the Home page wrappers clip overflow and would capture scroll(nearest). */
+  scroll-timeline: --demo-page block;
 }
 
 /* Stars sit at a percentage of their field. Sized to the long page, they moved whenever the page height changed. */
-[data-demo-site] .mari-home-browser-starfield {
+[data-component="HomeBrowserHub.HomePage"] .mari-home-browser-starfield {
   bottom: auto;
   height: 100svh;
 }
@@ -166,7 +168,7 @@
     flex: 0 0 85%;
     scroll-snap-align: start;
   }
-  [data-demo-page] :is(.text-xs, .text-sm):not(.uppercase, .tabular-nums) {
+  [data-demo-page] :is(.text-xs, .text-sm):not(.uppercase, .tabular-nums, [aria-hidden="true"] *) {
     font-size: 0.9375rem;
   }
 }

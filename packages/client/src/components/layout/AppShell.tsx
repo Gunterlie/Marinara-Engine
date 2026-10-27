@@ -61,7 +61,6 @@ import {
   useRef,
   useCallback,
   useMemo,
-  useSyncExternalStore,
   type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
@@ -235,11 +234,6 @@ function SidePanelFallback() {
   );
 }
 
-const subscribeHashChange = (notify: () => void) => {
-  window.addEventListener("hashchange", notify);
-  return () => window.removeEventListener("hashchange", notify);
-};
-
 export function AppShell({
   chatWindowIntroAllowed = false,
   onChatWindowIntroOpenChange,
@@ -401,18 +395,7 @@ export function AppShell({
     };
   }, []);
 
-  // Static demo: the website pages (no chat, editor or panel open) bring their own header instead of the Engine chrome.
-  const demoNoWorkspace = useUIStore(
-    (s) => import.meta.env.VITE_MARINARA_DEMO === "1" && !s.hasAnyDetailOpen() && !s.rightPanelOpen,
-  );
-  const demoNoChat = useChatStore((s) => !s.activeChatId);
-  // #/home is the Engine's own Home screen, so it keeps the workspace bar.
-  const demoEngineHome = useSyncExternalStore(
-    subscribeHashChange,
-    () => import.meta.env.VITE_MARINARA_DEMO === "1" && window.location.hash === "#/home",
-  );
-  const demoSite = demoNoWorkspace && demoNoChat && !demoEngineHome;
-  const sidebarOpen = useUIStore(selectSidebarShown) && !demoSite;
+  const sidebarOpen = useUIStore(selectSidebarShown);
   const setSidebarOpen = useUIStore((s) => s.setSidebarOpen);
   const sidebarWidth = useUIStore((s) => s.sidebarWidth);
   const setSidebarWidth = useUIStore((s) => s.setSidebarWidth);
@@ -1410,7 +1393,6 @@ export function AppShell({
         ref={mainRef}
         data-tour="chat-area"
         data-component="CenterContent"
-        data-demo-site={demoSite ? "" : undefined}
         data-center-compact={centerCompact ? "true" : undefined}
         data-shell-overlay-mode={shellOverlayMode ? "true" : undefined}
         aria-label={localizeUi("ui.layout.appshell.mainContent")}
@@ -1419,7 +1401,7 @@ export function AppShell({
           shellOverlayMode && hasDetailView && "z-50",
         )}
       >
-        <TopBar mobileTopbarNavigation={shellOverlayMode} demoSite={demoSite} />
+        <TopBar mobileTopbarNavigation={shellOverlayMode} />
         <div className="mari-app-background-paint relative flex flex-1 flex-col overflow-hidden">
           {/* Browser — kept mounted once opened so state persists across close/reopen */}
           <MountOnceWhenOpened open={botBrowserOpen} overlay>
@@ -1434,8 +1416,6 @@ export function AppShell({
             data-chat-covered={chatSurfaceActive ? undefined : "true"}
             className={cn(
               "mari-app-background-paint flex flex-1 flex-col overflow-hidden",
-              // The demo bar is out of flow everywhere (see TopBar); website pages pad themselves.
-              import.meta.env.VITE_MARINARA_DEMO === "1" && !demoSite && "pt-12",
               (botBrowserOpen || gameAssetsBrowserOpen || (!shellOverlayMode && hasDetailView)) && "hidden",
             )}
             style={

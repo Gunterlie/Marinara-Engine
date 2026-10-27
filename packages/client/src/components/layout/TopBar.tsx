@@ -129,14 +129,7 @@ const TOPBAR_ACCENT_ICON_CLASS = "mari-topbar-accent-icon mari-accent-animated";
 const CHAT_TOPBAR_GRADIENT_ID = "mari-topbar-chats-gradient";
 const HOME_LONG_PRESS_MS = 550;
 
-export function TopBar({
-  mobileTopbarNavigation,
-  demoSite = false,
-}: {
-  mobileTopbarNavigation: boolean;
-  // Static demo website routes: only the site part of the bar shows, the Engine controls hide.
-  demoSite?: boolean;
-}) {
+export function TopBar({ mobileTopbarNavigation }: { mobileTopbarNavigation: boolean }) {
   const localize = useLocalizedUiText();
   const mariEdgeGlow = useMariEdgeGlow();
   const { contributions } = usePersonalExtensionContributions();
@@ -273,7 +266,8 @@ export function TopBar({
 
     window.dispatchEvent(new Event("marinara:home-professor-mari-close"));
     setActiveChatId(null);
-    if (import.meta.env.VITE_MARINARA_DEMO === "1") window.location.hash = "#/home";
+    // Static demo: Home is the product page.
+    if (import.meta.env.VITE_MARINARA_DEMO === "1") window.location.hash = "#/";
     closeAllDetails();
     if (!mobileTopbarNavigation) return;
     setSidebarOpen(false);
@@ -470,20 +464,12 @@ export function TopBar({
       onPointerLeave={clearTopbarHover}
       onPointerOver={handleTopbarPointerOver}
       className={cn(
-        "mari-topbar flex h-12 flex-shrink-0 items-center justify-between px-3",
-        // Website pages scroll under a see-through bar; under [data-demo-site] they pad themselves by its height.
-        demoSite
-          ? "absolute inset-x-0 top-[env(safe-area-inset-top)] z-30 bg-[color-mix(in_srgb,var(--background)_35%,transparent)]! backdrop-blur-xl sm:px-4"
-          : cn(
-              // The demo keeps the bar out of flow on every route, so entering the workspace moves nothing.
-              import.meta.env.VITE_MARINARA_DEMO === "1" ? "absolute inset-x-0 top-0" : "relative",
-              "z-10 bg-[var(--marinara-topbar-surface)] backdrop-blur-sm",
-            ),
+        "mari-topbar relative z-10 flex h-12 flex-shrink-0 items-center justify-between bg-[var(--marinara-topbar-surface)] px-3 backdrop-blur-sm",
         mobileTopbarNavigation ? "touch-none" : "select-none",
       )}
     >
       {/* Subtle bottom border only */}
-      {!demoSite && <div className="absolute inset-x-0 bottom-0 h-px bg-[var(--marinara-topbar-border)]" />}
+      <div className="absolute inset-x-0 bottom-0 h-px bg-[var(--marinara-topbar-border)]" />
       {/* Mari is busy or has a result you have not seen: a thin line in her state colour (P2). */}
       {mariEdgeGlow ? (
         <span
@@ -498,18 +484,13 @@ export function TopBar({
       <div className="mari-topbar-left flex min-w-0 flex-1 items-center gap-2">
         <div
           ref={leftControlsRef}
-          className={cn(
-            "mari-topbar-left-controls mari-rgb-icon-scope flex shrink-0 items-center gap-2",
-            // Important beats the phone rule that sets display: contents.
-            demoSite && "!hidden",
-          )}
+          className="mari-topbar-left-controls mari-rgb-icon-scope flex shrink-0 items-center gap-2"
         >
           {mobileTopbarNavigation ? [homeButton, chatsButton] : [chatsButton, homeButton]}
         </div>
-        {/* Static demo: the site start follows the Engine controls, so they stay where the installed app has them. */}
         {DemoSiteStart && (
           <Suspense fallback={null}>
-            <DemoSiteStart site={demoSite} />
+            <DemoSiteStart />
           </Suspense>
         )}
         {musicDjInstalled ? (
@@ -528,10 +509,7 @@ export function TopBar({
         ref={rightNavRef}
         data-tour="panel-buttons"
         aria-label={localize("Panel navigation")}
-        className={cn(
-          "mari-topbar-panel-nav mari-rgb-icon-scope flex shrink-0 items-center justify-end gap-0.5 rounded-xl p-1 max-sm:gap-0 max-sm:p-0.5",
-          demoSite && "!hidden",
-        )}
+        className="mari-topbar-panel-nav mari-rgb-icon-scope flex shrink-0 items-center justify-end gap-0.5 rounded-xl p-1 max-sm:gap-0 max-sm:p-0.5"
       >
         <button
           onClick={() => handleRightPanelClick("characters")}
