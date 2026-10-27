@@ -1,6 +1,9 @@
 name: Static demo Pages trial
 
 on:
+  # Weekly refresh onto the latest upstream staging (runs from the default branch, which is this website branch).
+  schedule:
+    - cron: "17 4 * * 1"
   push:
     branches: [feat/static-demo-tutorial]
   workflow_dispatch:
@@ -27,7 +30,7 @@ jobs:
     if: github.repository == 'Gunterlie/Marinara-Engine' && github.ref == 'refs/heads/feat/static-demo-tutorial'
     runs-on: ubuntu-latest
     env:
-      SOURCE_REF: ${{ inputs.source_ref || 'current' }}
+      SOURCE_REF: ${{ inputs.source_ref || (github.event_name == 'schedule' && 'staging') || 'current' }}
       PREPARED_BRANCH: ${{ inputs.prepared_branch }}
     steps:
       # Values reach the shell only through env. A candidate must sit under website-refresh/ and have been reviewed before publication.

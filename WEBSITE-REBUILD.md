@@ -48,3 +48,7 @@ upstream commit, the overlay base and commits, and the prepared head.
 ## Check
 
 `node scripts/demo/refresh-check.mjs` tests the helper against a throw-away git fixture under `~/scratch`.
+
+## Weekly refresh
+
+The workflow also runs every Monday at 04:17 UTC (`schedule`). It rebuilds the website onto the latest upstream `staging` (`source_ref=staging`), runs the build and smoke tests, and deploys. A conflict or a red check stops the job and the old site stays online. GitHub only runs schedules from the default branch, so the fork's default branch must stay `feat/static-demo-tutorial`.
