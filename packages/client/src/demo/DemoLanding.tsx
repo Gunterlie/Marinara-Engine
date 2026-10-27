@@ -28,7 +28,7 @@ import { useTranslation } from "react-i18next";
 import { HOME_CHAT_MODE_ACCENTS } from "../lib/home-chat-mode-style";
 import { cn } from "../lib/utils";
 import { FeedModule, HOME_MODULE_ACCENTS } from "../components/chat/HomeBrowserHub";
-import { GITHUB_URL, asset } from "./DemoSiteHeader";
+import { GITHUB_URL, GithubIcon, asset } from "./DemoSiteHeader";
 import { useMariAppearancePack } from "../hooks/use-mari-appearance-pack";
 import { DEMO_ASSETS } from "./seed";
 import { DemoFeatures } from "./DemoFeatures";
@@ -121,7 +121,7 @@ const STORIES = [
 
 // True facts only: each one links to where a visitor can check it.
 const PROOF = [
-  { key: "open", icon: Code, href: GITHUB_URL },
+  { key: "open", icon: GithubIcon, href: GITHUB_URL },
   { key: "local", icon: HardDrive, href: "#/features?c=data" },
   { key: "models", icon: Cloud, href: "#/features?c=models" },
   { key: "platforms", icon: Monitor, href: "#/download" },
@@ -135,7 +135,7 @@ const TEASER_HOLD_TICKS = 70; // finished reply stays this long
 const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 const MODEL_OPTIONS = [
-  { key: "app", icon: Code, href: GITHUB_URL },
+  { key: "app", icon: GithubIcon, href: GITHUB_URL },
   { key: "provider", icon: Cloud, href: "#/docs/connections/connecting-to-a-provider.md" },
   { key: "local", icon: Cpu, href: "#/docs/connections/local-model.md" },
 ] as const;
