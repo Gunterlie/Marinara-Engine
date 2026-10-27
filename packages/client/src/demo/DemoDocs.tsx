@@ -579,10 +579,10 @@ export function DemoDocs({ path, section }: { path: string; section: string }) {
         </nav>
       </dialog>
 
-      <div className="mx-auto max-w-[75rem] px-4 pb-16 pt-6 sm:px-8">
+      <div className="mx-auto max-w-[75rem] px-5 pb-16 pt-6 sm:px-8">
         {!path ? (
           <>
-            <header className="relative flex flex-col gap-6 overflow-hidden rounded-3xl border border-[var(--border)] bg-[radial-gradient(70%_90%_at_10%_0%,color-mix(in_srgb,var(--primary)_16%,transparent),transparent_70%),var(--card)] p-6 sm:p-10">
+            <header className="relative flex flex-col gap-6 overflow-hidden rounded-3xl border border-[var(--border)] bg-[radial-gradient(70%_90%_at_10%_0%,color-mix(in_srgb,var(--primary)_16%,transparent),transparent_70%),var(--card)] p-6 max-sm:rounded-none max-sm:border-0 max-sm:p-0 max-sm:[background:none] sm:p-10">
               <div className="flex items-start gap-3">
                 <BookOpen className="mt-1.5 shrink-0 text-[var(--primary)]" size={28} aria-hidden="true" />
                 <div>

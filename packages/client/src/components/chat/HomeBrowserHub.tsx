@@ -1629,13 +1629,17 @@ export function HomeBrowserHub({ pageActive, onOpenCredits, hideProfessor, websi
     <div
       className="mari-chrome-token-scope relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-[var(--background)]"
       data-component="HomeBrowserHub"
+      data-website={website ? "" : undefined}
     >
-      <div className="flex h-full min-h-0 w-full flex-col overflow-hidden border border-[var(--border)]/75 bg-[var(--marinara-home-page-wash)] shadow-2xl shadow-black/25 sm:rounded-xl">
+      <div
+        className={cn(
+          "flex h-full min-h-0 w-full flex-col overflow-hidden bg-[var(--marinara-home-page-wash)]",
+          // The website is the page itself, so it gets no window frame.
+          !website && "border border-[var(--border)]/75 shadow-2xl shadow-black/25 sm:rounded-xl",
+        )}
+      >
         <header className="mari-home-browser-chrome relative z-40 shrink-0 border-b border-[var(--marinara-topbar-border)] bg-[var(--marinara-topbar-surface)] shadow-[0_8px_28px_-26px_rgba(0,0,0,0.8)] backdrop-blur-sm">
-          <div
-            data-website={website ? "" : undefined}
-            className="mari-home-browser-tab-row flex h-10 min-w-0 items-end gap-1 border-b border-[var(--border)]/45 px-2 sm:gap-2 sm:px-3"
-          >
+          <div className="mari-home-browser-tab-row flex h-10 min-w-0 items-end gap-1 border-b border-[var(--border)]/45 px-2 sm:gap-2 sm:px-3">
             <div
               className="relative z-10 flex shrink-0 self-center items-center gap-2 pr-1 sm:pr-3"
               data-component="HomeBrowserHub.Brand"
@@ -2102,8 +2106,13 @@ export function HomeBrowserHub({ pageActive, onOpenCredits, hideProfessor, websi
           ) : (
             <div className={HOME_PAGE_CLASS} data-component="HomeBrowserHub.HomePage">
               <HomeStarfield />
-              <div className="relative z-[1] w-full p-[clamp(0.65rem,1vw,1.25rem)]">
-                {website && <section ref={heroRef}>{website.hero}</section>}
+              {/* Outside the padded column, so the website hero runs edge to edge. */}
+              {website && (
+                <section ref={heroRef} className="relative z-[1]">
+                  {website.hero}
+                </section>
+              )}
+              <div className={cn("relative z-[1] w-full p-[clamp(0.65rem,1vw,1.25rem)]", website && "max-sm:px-5")}>
                 <section
                   ref={website ? undefined : heroRef}
                   hidden={!!website}
@@ -2690,8 +2699,8 @@ export function HomeBrowserHub({ pageActive, onOpenCredits, hideProfessor, websi
                     )}
                   </div>
                 </div>
-                {website?.story}
               </div>
+              {website && <div className="relative z-[1]">{website.story}</div>}
             </div>
           )}
         </main>

@@ -166,7 +166,7 @@ export function DemoFeatures({ category }: { category: string }) {
       ref={topRef}
       data-testid="demo-features"
       data-demo-page=""
-      className="mx-auto flex w-full max-w-[75rem] scroll-mt-12 flex-col gap-14 px-4 pb-20 pt-6 sm:px-8 sm:pt-16"
+      className="mx-auto flex w-full max-w-[75rem] scroll-mt-12 flex-col gap-14 px-5 pb-20 pt-6 sm:px-8 sm:pt-16"
     >
       <header className="flex flex-col gap-4">
         <span className={EYEBROW}>{t("demo.features.eyebrow", { count: FEATURE_COUNT })}</span>

@@ -37,7 +37,7 @@ const MODEL_OPTIONS = [
 export function DemoDownload() {
   const { t } = useTranslation();
   return (
-    <div data-demo-page="" className="mx-auto flex w-full max-w-3xl flex-col gap-10 px-4 pb-20 pt-6 sm:px-8 sm:pt-16">
+    <div data-demo-page="" className="mx-auto flex w-full max-w-3xl flex-col gap-10 px-5 pb-20 pt-6 sm:px-8 sm:pt-16">
       <section aria-labelledby="demo-download-title" className="flex flex-col gap-3">
         <h1
           id="demo-download-title"

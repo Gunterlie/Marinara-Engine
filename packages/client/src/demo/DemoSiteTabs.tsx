@@ -157,7 +157,7 @@ const FOOTER = [
 export function DemoSiteFooter() {
   const { t } = useTranslation();
   return (
-    <footer className="mx-auto grid w-full max-w-[75rem] grid-cols-2 gap-x-6 gap-y-8 px-4 pb-28 sm:px-8 md:pb-16 lg:grid-cols-[minmax(0,1.5fr)_repeat(4,minmax(0,1fr))]">
+    <footer className="mx-auto grid w-full max-w-[75rem] grid-cols-2 gap-x-6 gap-y-8 px-5 pb-28 sm:px-8 md:pb-16 lg:grid-cols-[minmax(0,1.5fr)_repeat(4,minmax(0,1fr))]">
       <div className="col-span-2 flex flex-col gap-3 border-t border-[var(--border)] pt-10 lg:col-span-1">
         <a href="#/" className={`flex w-fit items-center gap-2 rounded-md ${FOCUS}`}>
           <img src={asset("logo.png")} alt="" width={32} height={32} className="h-8 w-8 object-contain" />

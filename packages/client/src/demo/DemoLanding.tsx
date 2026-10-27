@@ -192,7 +192,7 @@ export function DemoLandingHero() {
         aria-hidden="true"
         className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[56rem] bg-[radial-gradient(55%_45%_at_78%_18%,color-mix(in_srgb,var(--primary)_22%,transparent),transparent_70%),radial-gradient(40%_35%_at_8%_8%,color-mix(in_srgb,var(--primary)_10%,transparent),transparent_70%)]"
       />
-      <div className="mx-auto w-full max-w-[75rem] px-3 pb-6 pt-3 sm:px-6 sm:pb-8 sm:pt-6">
+      <div className="mx-auto w-full max-w-[75rem] px-5 pb-6 pt-3 sm:px-6 sm:pb-8 sm:pt-6">
         {/* Hero: one promise, one action, and a scripted story playing beside it */}
         <section
           aria-labelledby="demo-product-title"
@@ -204,6 +204,7 @@ export function DemoLandingHero() {
           className="grid grid-cols-[minmax(0,1fr)] items-center gap-8 sm:gap-12 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:gap-10"
         >
           <div className="flex flex-col gap-5 sm:gap-7">
+            <p className={`${EYEBROW} -mb-2 sm:-mb-4`}>{t("demo.landing.eyebrow")}</p>
             <h1
               id="demo-product-title"
               className="text-balance text-[2.125rem] font-bold leading-[1.08] tracking-tight text-[var(--foreground)] sm:text-5xl xl:text-[3.5rem]"
@@ -352,7 +353,7 @@ export function DemoLanding() {
 
   return (
     <div data-demo-page="" className="relative isolate w-full overflow-x-clip">
-      <div className="mx-auto flex w-full max-w-[75rem] flex-col gap-20 px-4 pb-20 pt-10 sm:gap-24 sm:px-8 sm:pt-14">
+      <div className="mx-auto flex w-full max-w-[75rem] flex-col gap-20 px-5 pb-20 pt-10 sm:gap-24 sm:px-8 sm:pt-14">
         {/* Proof: four true facts, each links to where you can check it */}
         <ul
           aria-label={t("demo.landing.proof.label")}

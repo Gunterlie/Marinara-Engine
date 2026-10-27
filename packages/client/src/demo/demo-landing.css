@@ -176,15 +176,32 @@
 
 /* Phones: the website's Home tabs become one scrollable strip of labelled 44 px tabs, without the logo block. */
 @media (max-width: 39.99rem) {
-  .mari-home-browser-tab-row[data-website] {
-    height: auto;
+  [data-website] .mari-home-browser-chrome {
+    background: transparent;
+    box-shadow: none;
+    border-bottom: 0;
+    backdrop-filter: none;
   }
 
+  [data-website] .mari-home-browser-tab-row {
+    height: auto;
+    flex-wrap: wrap;
+    padding-inline: 1.25rem 0;
+  }
+
+  /* The brand gets its own row on phones, so the name is the first thing on every page. */
   [data-website] [data-component="HomeBrowserHub.Brand"] {
-    display: none;
+    width: 100%;
+    padding-block: 0.625rem 0.25rem;
+  }
+
+  [data-website] [data-component="HomeBrowserHub.Brand"] > div {
+    display: block;
   }
 
   [data-website] [role="tablist"] {
+    flex-basis: 100%;
+    margin-inline-start: -0.4375rem;
     overflow-x: auto;
     scrollbar-width: none;
   }
