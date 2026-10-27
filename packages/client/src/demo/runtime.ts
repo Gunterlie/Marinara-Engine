@@ -55,6 +55,39 @@ const spriteExtra = (characterId: string | null, text: string) => {
     : {};
 };
 
+// Scripted agent outputs for the Agent Activity list; resultType "sample" skips every real side effect.
+const sampleAgentResults = (chatId: string, characterName: string, sprites?: Record<string, string>) => {
+  // Only the chats with trackers (Iris, Ember Reach) have a quest to report.
+  const quest = state.gameStates.find((g) => g.chatId === chatId)?.playerStats?.activeQuests?.[0]?.name;
+  if (!quest) return [];
+  const results: [string, string, Row][] = [
+    [
+      "expression",
+      "Expression Engine",
+      { expressions: [{ characterName, expression: Object.values(sprites ?? {})[0] ?? "neutral" }] },
+    ],
+    ["quest", "Quest Tracker", { updates: [{ action: "update", questName: quest }] }],
+    [
+      "lorebook-keeper",
+      "Lorebook Keeper",
+      {
+        updates: [{ action: "create", entryName: chatId === "demo-chat-iris" ? "Lamp keeper's log" : "The open gate" }],
+      },
+    ],
+    ["illustrator", "Illustrator", { generated: true, chosen: "scene", reason: "Scene image for this reply" }],
+  ];
+  return results.map(([agentType, agentName, data]) => ({
+    chatId,
+    agentType,
+    agentName: `${agentName} (sample)`,
+    resultType: "sample",
+    data,
+    success: true,
+    durationMs: 900,
+    tokensUsed: 0,
+  }));
+};
+
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 const notFound = () => json({ error: "Not found" }, 404);
@@ -172,6 +205,10 @@ function generate(body: Row, signal: AbortSignal | null): Response {
         }
         chat.lastMessageAt = chat.updatedAt = nowIso();
         send("message_saved", saved);
+        // Only Roleplay mode has an Agent Activity list to show them.
+        if (chat.mode === "roleplay")
+          for (const data of sampleAgentResults(chatId, characterName, saved.extra?.spriteExpressions))
+            send("agent_result", data);
         send("done");
         finish();
       };
@@ -476,6 +513,8 @@ function registerRoutes() {
   );
   on("GET", "/spotify/playlists", () => json({ playlists: [] }));
   on("GET", "/agents/import-policy", () => json({ enabled: false }));
+  on("GET", "/agents/runs/:id/custom", () => json([]));
+  on("POST", "/game/weather/update", () => json({ changed: false, weather: null }));
   on("GET", "/game-tile-packs", () => json({ packs: [], builtIn: [], selection: {} }));
   for (const path of [
     "/characters/:id/gallery",
@@ -712,6 +751,12 @@ function registerRoutes() {
   on("PATCH", "/chats/:id/messages/:mid", (m, _u, b) => {
     const row = byId(state.messages, m[2]!);
     return row ? json(patchRow(row, b)) : notFound();
+  });
+  on("PATCH", "/chats/:id/messages/:mid/extra", (m, _u, b) => {
+    const row = byId(state.messages, m[2]!);
+    if (!row) return notFound();
+    row.extra = { ...row.extra, ...b };
+    return json(row);
   });
   on("DELETE", "/chats/:id/messages/:mid", (m) =>
     remove(state.messages, m[2]!) ? json({ trashed: false, trashedCount: 0 }) : notFound(),
