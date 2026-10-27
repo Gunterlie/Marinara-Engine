@@ -11,7 +11,6 @@ import {
   CornerDownLeft,
   Link as LinkIcon,
   Menu,
-  Pencil,
   Search,
   X,
 } from "lucide-react";
@@ -34,7 +33,6 @@ import {
   type DemoSearchHit,
 } from "./docs";
 
-const EDIT_ROOT = "https://github.com/Pasta-Devs/Marinara-Engine/edit/staging/docs/";
 const GROUPS_KEY = "marinara-demo:docs-open-groups";
 const FOCUS = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)]";
 const linkClass = `inline-flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm font-medium text-[var(--foreground)] hover:bg-[var(--accent)] ${FOCUS}`;
@@ -342,6 +340,27 @@ export function DemoDocs({ path, section }: { path: string; section: string }) {
     [guide.data, current],
   );
   useCodeBlockCopy(reader, rendered);
+
+  // Wide tables scroll inside their own box; mark the boxes that overflow so CSS can fade the edge and show a hint.
+  useEffect(() => {
+    if (!reader) return;
+    const boxes = [...reader.querySelectorAll<HTMLElement>(".mari-md-table-wrapper")];
+    const update = () => {
+      for (const box of boxes) {
+        const overflow = box.scrollWidth - box.clientWidth > 1;
+        box.dataset.hint = t("demo.docs.tableSwipe");
+        box.toggleAttribute("data-scrollable", overflow);
+        box.toggleAttribute("data-more", overflow && box.scrollLeft + box.clientWidth < box.scrollWidth - 1);
+      }
+    };
+    update();
+    for (const box of boxes) box.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update);
+    return () => {
+      for (const box of boxes) box.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+    };
+  }, [reader, rendered, t]);
 
   const openPalette = useCallback(() => {
     setPaletteOpen(true);
@@ -783,15 +802,6 @@ export function DemoDocs({ path, section }: { path: string; section: string }) {
                         </span>
                       ) : null}
                       {updated ? <span>{t("demo.docs.updated", { date: updated })}</span> : null}
-                      <a
-                        href={EDIT_ROOT + current.path}
-                        target="_blank"
-                        rel="noreferrer"
-                        className={`inline-flex min-h-8 items-center gap-1.5 rounded hover:text-[var(--foreground)] hover:underline ${FOCUS}`}
-                      >
-                        <Pencil size={14} aria-hidden="true" />
-                        {t("demo.docs.edit")}
-                      </a>
                     </p>
                     <article
                       key={`${current.path}:${current.updatedAt}`}
