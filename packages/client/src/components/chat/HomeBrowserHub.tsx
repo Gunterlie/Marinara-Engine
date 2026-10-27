@@ -374,8 +374,20 @@ type HomeBrowserHubProps = {
   onOpenCredits: () => void;
   /** Hide the Professor Mari tab where no live Mari runtime exists. */
   hideProfessor?: boolean;
-  /** Replaces the Home tab page and hides the address and bookmark rows, such as the static demo product page. */
-  websiteContent?: ReactNode;
+  /** Static demo website inside Home: extra tabs, a hero and story around the widgets, and pages for its own tabs. */
+  website?: {
+    /** Selected website tab; null keeps the Home tab selected. */
+    tab: string | null;
+    tabs: ReactNode;
+    /** Links after the tab list; a tablist may only hold tabs (#5743). */
+    links: ReactNode;
+    hero: ReactNode;
+    story: ReactNode;
+    page: ReactNode;
+    onHome: () => void;
+    /** Replaces opening Professor Mari, where no live Mari runtime exists. */
+    onProfessor: () => void;
+  };
 };
 
 export function MarinaraWordmark({ className }: { className?: string }) {
@@ -872,7 +884,7 @@ function ShortcutIcon({ tone, children }: { tone: string; children: ReactNode })
   );
 }
 
-export function HomeBrowserHub({ pageActive, onOpenCredits, hideProfessor, websiteContent }: HomeBrowserHubProps) {
+export function HomeBrowserHub({ pageActive, onOpenCredits, hideProfessor, website }: HomeBrowserHubProps) {
   const { id: mariPackId, poses: mariPoses, portraits: mariPortraits } = useMariAppearancePack();
   const mariRaccoon = mariPackId === "raccoon";
   const { t, i18n } = useTranslation();
@@ -1297,7 +1309,10 @@ export function HomeBrowserHub({ pageActive, onOpenCredits, hideProfessor, websi
     };
   }, [characterCatalog.data]);
 
-  const address = `marinara/${activeTab}`;
+  const websiteTab = website?.tab ?? null;
+  const homeSelected = activeTab === "home" && !websiteTab;
+  const onWebsiteHome = website?.onHome;
+  const address = `marinara/${websiteTab ?? activeTab}`;
   const selectTab = useCallback(
     (tab: string) => {
       setMobileBookmarksOpen(false);
@@ -1307,11 +1322,16 @@ export function HomeBrowserHub({ pageActive, onOpenCredits, hideProfessor, websi
         requestProfessorMariOpen();
         return;
       }
+      if (tab === "home") onWebsiteHome?.();
       setActiveTab(tab);
     },
-    [sceneOriginFocus, setSceneOriginFocus],
+    [sceneOriginFocus, setSceneOriginFocus, onWebsiteHome],
   );
-  const openProfessor = () => requestProfessorMariOpen();
+  // Website tabs are pages of Home, so picking one leaves any package tab.
+  useEffect(() => {
+    if (websiteTab) setActiveTab("home");
+  }, [websiteTab]);
+  const openProfessor = () => (website?.onProfessor ?? requestProfessorMariOpen)();
   // The omnibar and Command Center ask Home for a surface through `requestHome`; Home opens it here.
   const homeRequest = useUIStore((state) => state.homeRequest);
   useEffect(() => {
@@ -1610,17 +1630,8 @@ export function HomeBrowserHub({ pageActive, onOpenCredits, hideProfessor, websi
       className="mari-chrome-token-scope relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-[var(--background)]"
       data-component="HomeBrowserHub"
     >
-      <div
-        className={cn(
-          "flex h-full min-h-0 w-full flex-col overflow-hidden bg-[var(--marinara-home-page-wash)]",
-          // The demo website page runs edge to edge under its own bar, without the browser frame.
-          !websiteContent && "border border-[var(--border)]/75 shadow-2xl shadow-black/25 sm:rounded-xl",
-        )}
-      >
-        <header
-          hidden={!!websiteContent}
-          className="mari-home-browser-chrome relative z-40 shrink-0 border-b border-[var(--marinara-topbar-border)] bg-[var(--marinara-topbar-surface)] shadow-[0_8px_28px_-26px_rgba(0,0,0,0.8)] backdrop-blur-sm"
-        >
+      <div className="flex h-full min-h-0 w-full flex-col overflow-hidden border border-[var(--border)]/75 bg-[var(--marinara-home-page-wash)] shadow-2xl shadow-black/25 sm:rounded-xl">
+        <header className="mari-home-browser-chrome relative z-40 shrink-0 border-b border-[var(--marinara-topbar-border)] bg-[var(--marinara-topbar-surface)] shadow-[0_8px_28px_-26px_rgba(0,0,0,0.8)] backdrop-blur-sm">
           <div className="mari-home-browser-tab-row flex h-10 min-w-0 items-end gap-1 border-b border-[var(--border)]/45 px-2 sm:gap-2 sm:px-3">
             <div
               className="relative z-10 flex shrink-0 self-center items-center gap-2 pr-1 sm:pr-3"
@@ -1643,7 +1654,7 @@ export function HomeBrowserHub({ pageActive, onOpenCredits, hideProfessor, websi
                 only contain tabs, and two independent reviews flagged the
                 nesting. In the phone shell (portrait or landscape) this is the
                 only way to the bookmarks, and only on the Home tab. */}
-            {mobileShell && activeTab === "home" ? (
+            {mobileShell && homeSelected ? (
               <button
                 ref={mobileBookmarksTriggerRef}
                 type="button"
@@ -1673,18 +1684,18 @@ export function HomeBrowserHub({ pageActive, onOpenCredits, hideProfessor, websi
                 role="tab"
                 aria-controls={HOME_BROWSER_PANEL_ID}
                 aria-label={t("home.browser.homeTab")}
-                aria-selected={activeTab === "home"}
+                aria-selected={homeSelected}
                 onClick={() => selectTab("home")}
                 className={cn(
                   "flex min-h-9 min-w-0 items-center justify-center rounded-t-lg border border-b-0 text-[0.65rem] font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[oklch(0.79_0.16_205)] sm:min-w-[6.5rem] sm:w-auto sm:flex-none sm:gap-1.5 sm:px-3 sm:text-xs",
-                  activeTab === "home" ? "flex-1 gap-1 px-2" : "w-9 flex-none gap-0 px-0",
-                  activeTab === "home"
+                  homeSelected ? "flex-1 gap-1 px-2" : "w-9 flex-none gap-0 px-0",
+                  homeSelected
                     ? "border-[var(--border)] bg-[var(--card)] text-[var(--foreground)]"
                     : "border-transparent text-[var(--muted-foreground)] hover:bg-[var(--accent)]",
                 )}
               >
                 <img src="/home/tab-icons/home.png" alt="" className="h-[1.125rem] w-[1.125rem] object-contain" />
-                <span className={cn("min-w-0 truncate", activeTab === "home" ? "block" : "hidden sm:block")}>
+                <span className={cn("min-w-0 truncate", homeSelected ? "block" : "hidden sm:block")}>
                   {t("home.browser.homeTab")}
                 </span>
               </button>
@@ -1759,7 +1770,9 @@ export function HomeBrowserHub({ pageActive, onOpenCredits, hideProfessor, websi
                   </button>
                 );
               })}
+              {website?.tabs}
             </div>
+            {website?.links}
           </div>
 
           {showHomeBrowserAddressBar && !mobileShell ? (
@@ -1771,7 +1784,7 @@ export function HomeBrowserHub({ pageActive, onOpenCredits, hideProfessor, websi
                 <button
                   type="button"
                   onClick={() => selectTab("home")}
-                  disabled={activeTab === "home"}
+                  disabled={homeSelected}
                   className="flex h-8 w-8 items-center justify-center rounded-full text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[oklch(0.79_0.16_205)] disabled:opacity-30"
                   aria-label={t("home.browser.back")}
                 >
@@ -1822,7 +1835,7 @@ export function HomeBrowserHub({ pageActive, onOpenCredits, hideProfessor, websi
             </div>
           ) : null}
 
-          {activeTab === "home" && !mobileShell ? (
+          {homeSelected && !mobileShell ? (
             <nav
               className="flex min-h-8 items-center border-t border-[var(--border)]/45 px-2 sm:min-h-9 sm:px-3"
               aria-label={t("home.browser.bookmarksLabel")}
@@ -1900,7 +1913,7 @@ export function HomeBrowserHub({ pageActive, onOpenCredits, hideProfessor, websi
           ) : null}
 
           <AnimatePresence initial={false}>
-            {mobileShell && mobileBookmarksOpen && activeTab === "home" ? (
+            {mobileShell && mobileBookmarksOpen && homeSelected ? (
               <motion.div
                 ref={mobileBookmarksRef}
                 id="marinara-mobile-bookmarks"
@@ -2066,10 +2079,10 @@ export function HomeBrowserHub({ pageActive, onOpenCredits, hideProfessor, websi
                 },
               }}
             />
-          ) : websiteContent && activeTab === "home" ? (
+          ) : website && websiteTab && activeTab === "home" ? (
             <div className={HOME_PAGE_CLASS} data-component="HomeBrowserHub.HomePage">
               <HomeStarfield />
-              <div className="relative z-[1]">{websiteContent}</div>
+              <div className="relative z-[1]">{website.page}</div>
             </div>
           ) : activeTab === "professor" ? (
             <div className="flex h-full items-center justify-center text-sm text-[var(--muted-foreground)]">
@@ -2079,8 +2092,10 @@ export function HomeBrowserHub({ pageActive, onOpenCredits, hideProfessor, websi
             <div className={HOME_PAGE_CLASS} data-component="HomeBrowserHub.HomePage">
               <HomeStarfield />
               <div className="relative z-[1] w-full p-[clamp(0.65rem,1vw,1.25rem)]">
+                {website && <section ref={heroRef}>{website.hero}</section>}
                 <section
-                  ref={heroRef}
+                  ref={website ? undefined : heroRef}
+                  hidden={!!website}
                   className="mari-home-hero relative flex min-w-0 flex-col items-center gap-2 px-[clamp(0.35rem,0.8vw,0.9rem)] pb-[clamp(0.7rem,1.1vw,1rem)] pt-[clamp(0.4rem,0.7vw,0.7rem)] text-center"
                   data-tour="home-hub"
                 >
@@ -2664,6 +2679,7 @@ export function HomeBrowserHub({ pageActive, onOpenCredits, hideProfessor, websi
                     )}
                   </div>
                 </div>
+                {website?.story}
               </div>
             </div>
           )}

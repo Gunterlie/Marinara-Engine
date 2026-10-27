@@ -817,8 +817,8 @@ function isolateLocalStorage() {
           chatHelpSeenModes: ["conversation", "roleplay", "game"],
           chatSettingsMoveTipDismissed: true,
           defaultRoleplayBackground,
-          // The site opens on the landing; a sidebar that closes after paint shifts the whole page.
-          sidebarOpen: false,
+          // Desktop opens with the seeded chats in view; set before the first paint, so nothing shifts.
+          sidebarOpen: window.innerWidth >= 1024,
         },
         version: UI_PERSISTENCE.version,
       }),

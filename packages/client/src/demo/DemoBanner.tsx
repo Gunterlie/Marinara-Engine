@@ -13,7 +13,7 @@ import { isMobileShellViewport, useUIStore, type Panel } from "../stores/ui.stor
 import { resetDemo } from "./runtime";
 import { DEMO_SEED_IDS } from "./seed";
 import { useDemoNavigation } from "./navigation";
-import { DISCORD_URL, GITHUB_URL, asset } from "./DemoSiteHeader";
+import { DISCORD_URL, GITHUB_URL, asset } from "./DemoSiteTabs";
 
 // ponytail: fork trial branch; point at the release tag once demos publish from stable tags.
 const SOURCE_URL = "https://github.com/Gunterlie/Marinara-Engine/tree/feat/static-demo-tutorial";

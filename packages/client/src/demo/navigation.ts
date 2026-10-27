@@ -45,7 +45,7 @@ export function useDemoNavigation() {
       const ui = useUIStore.getState();
       ui.closeAllDetails();
       ui.closeRightPanel();
-      if (firstRoute || isMobileShellViewport()) ui.setSidebarOpen(false);
+      if (isMobileShellViewport()) ui.setSidebarOpen(false);
       firstRoute = false;
       // Feature links deep-link with #/demo?chat=<id> or #/demo?panel=<panel>.
       const [route, query] = hash.split("?");

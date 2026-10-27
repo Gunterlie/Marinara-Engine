@@ -1,7 +1,7 @@
 // ──────────────────────────────────────────────
 // Static demo: product page on the Home tab
 // ──────────────────────────────────────────────
-import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type PointerEvent } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type PointerEvent } from "react";
 import {
   ArrowRight,
   BookOpen,
@@ -28,18 +28,12 @@ import { useTranslation } from "react-i18next";
 import { HOME_CHAT_MODE_ACCENTS } from "../lib/home-chat-mode-style";
 import { cn } from "../lib/utils";
 import { FeedModule, HOME_MODULE_ACCENTS } from "../components/chat/HomeBrowserHub";
-import { GITHUB_URL, GithubIcon, asset } from "./DemoSiteHeader";
+import { GITHUB_URL, GithubIcon, asset } from "./DemoSiteTabs";
 import { useMariAppearancePack } from "../hooks/use-mari-appearance-pack";
 import { DEMO_ASSETS } from "./seed";
-import { DemoFeatures } from "./DemoFeatures";
 import { docHref } from "./docs";
 import { FEATURE_CATEGORIES, FEATURE_COUNT } from "./features";
 import "./demo-landing.css";
-
-const subscribeHash = (notify: () => void) => {
-  window.addEventListener("hashchange", notify);
-  return () => window.removeEventListener("hashchange", notify);
-};
 
 // Short answers from docs/FAQ.md. Each links to the full answer in its section.
 const FAQ = [
@@ -171,16 +165,11 @@ const SHOT = "block w-full rounded-xl border border-[var(--border)] object-cover
 
 const external = (href: string) => (href.startsWith("http") ? { target: "_blank", rel: "noreferrer" } : {});
 
-export function DemoLanding() {
+/** The selling hero; it takes the place of the Engine's own Home hero, above the real widgets. */
+export function DemoLandingHero() {
   const { t } = useTranslation();
   const mari = useMariAppearancePack();
-  const [mode, setMode] = useState<(typeof MODES)[number]["key"]>("roleplay");
-  const active = MODES.find((item) => item.key === mode) ?? MODES[0];
   const stageRef = useRef<HTMLDivElement>(null);
-  const heroRef = useRef<HTMLElement>(null);
-  const ctaRef = useRef<HTMLElement>(null);
-  const [actionBar, setActionBar] = useState(false);
-  const stepRefs = useRef<Record<string, HTMLLIElement | null>>({});
 
   // Pointer parallax for the hero stage: mouse only, never with reduced motion.
   const tilt = (event: PointerEvent<HTMLElement>) => {
@@ -191,68 +180,21 @@ export function DemoLanding() {
     stage.style.setProperty("--py", String(((event.clientY - box.top) / box.height) * 2 - 1));
   };
 
-  useEffect(() => {
-    document.title = "Marinara Engine";
-  }, []);
-  const hash = useSyncExternalStore(subscribeHash, () => window.location.hash);
-  const onFeatures = hash.startsWith("#/features");
-
-  // The mode in the middle band of the viewport drives the pinned window. Observing never moves the scroll.
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const hit = entries.find((entry) => entry.isIntersecting);
-        if (hit) setMode((hit.target as HTMLElement).dataset.mode as (typeof MODES)[number]["key"]);
-      },
-      { rootMargin: "-45% 0px -45% 0px" },
-    );
-    Object.values(stepRefs.current).forEach((node) => node && observer.observe(node));
-    return () => observer.disconnect();
-  }, [onFeatures]);
-
-  // Browsers without scroll timelines reveal each block once it enters the viewport.
-  useEffect(() => {
-    if (CSS.supports("animation-timeline: view()") || reducedMotion()) return;
-    const observer = new IntersectionObserver((entries) => {
-      for (const entry of entries) {
-        if (!entry.isIntersecting) continue;
-        entry.target.setAttribute("data-revealed", "");
-        observer.unobserve(entry.target);
-      }
-    });
-    document.querySelectorAll(".demo-reveal").forEach((node) => observer.observe(node));
-    return () => observer.disconnect();
-  }, [onFeatures]);
-
-  // Phones get a bottom action bar once the hero is gone, and lose it again at the closing call to action.
-  useEffect(() => {
-    if (onFeatures) return;
-    const inView = new Map<Element, boolean>();
-    const observer = new IntersectionObserver((entries) => {
-      for (const entry of entries) inView.set(entry.target, entry.isIntersecting);
-      setActionBar(![...inView.values()].some(Boolean));
-    });
-    for (const node of [heroRef.current, ctaRef.current]) if (node) observer.observe(node);
-    return () => observer.disconnect();
-  }, [onFeatures]);
-
-  if (onFeatures) {
-    return <DemoFeatures category={new URLSearchParams(hash.split("?")[1] ?? "").get("c") ?? ""} />;
-  }
-
   return (
-    <div data-testid="demo-product-home" data-demo-page="" className="relative isolate w-full overflow-x-clip">
-      <div aria-hidden="true" className="demo-progress sticky top-0 z-20 h-0.5 bg-[var(--primary)]" />
+    <div
+      data-testid="demo-product-home"
+      data-demo-hero=""
+      data-demo-page=""
+      className="relative isolate w-full overflow-x-clip"
+    >
       {/* Ambient light, behind every section */}
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[56rem] bg-[radial-gradient(55%_45%_at_78%_18%,color-mix(in_srgb,var(--primary)_22%,transparent),transparent_70%),radial-gradient(40%_35%_at_8%_8%,color-mix(in_srgb,var(--primary)_10%,transparent),transparent_70%)]"
       />
-
-      <div className="mx-auto flex w-full max-w-[75rem] flex-col gap-20 px-4 pb-20 pt-4 sm:gap-24 sm:px-8 sm:pt-14">
+      <div className="mx-auto w-full max-w-[75rem] px-3 pb-6 pt-3 sm:px-6 sm:pb-8 sm:pt-6">
         {/* Hero: one promise, one action, and a scripted story playing beside it */}
         <section
-          ref={heroRef}
           aria-labelledby="demo-product-title"
           onPointerMove={tilt}
           onPointerLeave={() => {
@@ -264,7 +206,7 @@ export function DemoLanding() {
           <div className="flex flex-col gap-5 sm:gap-7">
             <h1
               id="demo-product-title"
-              className="text-balance text-[2.125rem] font-bold leading-[1.08] tracking-tight text-[var(--foreground)] sm:text-5xl xl:text-[4rem]"
+              className="text-balance text-[2.125rem] font-bold leading-[1.08] tracking-tight text-[var(--foreground)] sm:text-5xl xl:text-[3.5rem]"
             >
               {t("demo.landing.title")}
             </h1>
@@ -273,7 +215,7 @@ export function DemoLanding() {
               <span className="max-sm:hidden">{t("demo.landing.lede")}</span>
             </p>
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-6">
-              <a href="#/demo" className={PRIMARY_BUTTON}>
+              <a href="#/demo" data-testid="demo-site-try" className={PRIMARY_BUTTON}>
                 <Play className="h-4 w-4" aria-hidden="true" />
                 {t("demo.site.try")}
               </a>
@@ -318,6 +260,13 @@ export function DemoLanding() {
               </div>
               <HeroTeaser />
               <figcaption className="sr-only">{t("demo.landing.teaser.caption")}</figcaption>
+              {/* The whole window opens this chat in the demo. */}
+              <a
+                href="#/demo"
+                data-testid="demo-hero-chat"
+                aria-label={t("demo.landing.teaser.open")}
+                className={`absolute inset-0 z-10 rounded-2xl ${FOCUS}`}
+              />
             </figure>
             <div
               className={`${PARALLAX} absolute bottom-0 left-0 flex items-end gap-2 [--depth:14px] max-sm:bottom-auto max-sm:left-auto max-sm:right-3 max-sm:top-0 max-sm:-z-10 sm:-left-4 lg:-left-2`}
@@ -344,7 +293,66 @@ export function DemoLanding() {
             <p className="text-center text-xs text-[var(--muted-foreground)]">{t("demo.landing.heroNote")}</p>
           </div>
         </section>
+      </div>
+    </div>
+  );
+}
 
+/** The story below the Engine widgets: proof, modes, stories, install, FAQ and the closing call. */
+export function DemoLanding() {
+  const { t } = useTranslation();
+  const mari = useMariAppearancePack();
+  const [mode, setMode] = useState<(typeof MODES)[number]["key"]>("roleplay");
+  const active = MODES.find((item) => item.key === mode) ?? MODES[0];
+  const ctaRef = useRef<HTMLElement>(null);
+  const [actionBar, setActionBar] = useState(false);
+  const stepRefs = useRef<Record<string, HTMLLIElement | null>>({});
+
+  useEffect(() => {
+    document.title = "Marinara Engine";
+  }, []);
+
+  // The mode in the middle band of the viewport drives the pinned window. Observing never moves the scroll.
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const hit = entries.find((entry) => entry.isIntersecting);
+        if (hit) setMode((hit.target as HTMLElement).dataset.mode as (typeof MODES)[number]["key"]);
+      },
+      { rootMargin: "-45% 0px -45% 0px" },
+    );
+    Object.values(stepRefs.current).forEach((node) => node && observer.observe(node));
+    return () => observer.disconnect();
+  }, []);
+
+  // Browsers without scroll timelines reveal each block once it enters the viewport.
+  useEffect(() => {
+    if (CSS.supports("animation-timeline: view()") || reducedMotion()) return;
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        entry.target.setAttribute("data-revealed", "");
+        observer.unobserve(entry.target);
+      }
+    });
+    document.querySelectorAll(".demo-reveal").forEach((node) => observer.observe(node));
+    return () => observer.disconnect();
+  }, []);
+
+  // Phones get a bottom action bar once the hero is gone, and lose it again at the closing call to action.
+  useEffect(() => {
+    const inView = new Map<Element, boolean>();
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) inView.set(entry.target, entry.isIntersecting);
+      setActionBar(![...inView.values()].some(Boolean));
+    });
+    for (const node of [document.querySelector("[data-demo-hero]"), ctaRef.current]) if (node) observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div data-demo-page="" className="relative isolate w-full overflow-x-clip">
+      <div className="mx-auto flex w-full max-w-[75rem] flex-col gap-20 px-4 pb-20 pt-10 sm:gap-24 sm:px-8 sm:pt-14">
         {/* Proof: four true facts, each links to where you can check it */}
         <ul
           aria-label={t("demo.landing.proof.label")}
