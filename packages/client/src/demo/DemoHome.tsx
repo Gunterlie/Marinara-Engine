@@ -58,7 +58,8 @@ export function DemoHome() {
           <div data-demo-page="">
             <DemoSiteHeader />
             {page}
-            {footer && <DemoSiteFooter />}
+            {/* Keyed per page: a shared footer that moves up on a shorter page counts as layout shift. */}
+            {footer && <DemoSiteFooter key={hash} />}
           </div>
         }
       />
