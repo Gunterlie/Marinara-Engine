@@ -1,10 +1,29 @@
 // ──────────────────────────────────────────────
 // Static demo: persistent banner + guided lessons
 // ──────────────────────────────────────────────
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+} from "react";
 import { createPortal } from "react-dom";
 import { APP_VERSION } from "@marinara-engine/shared";
-import { BookOpen, Check, Code, Download, GitBranch, Home, RotateCcw } from "lucide-react";
+import {
+  BookMarked,
+  BookOpen,
+  Check,
+  Code,
+  Download,
+  Home,
+  LayoutGrid,
+  MessagesSquare,
+  RotateCcw,
+  UserRound,
+} from "lucide-react";
 import { useTranslation as useUiTranslation } from "react-i18next";
 import { OnboardingTutorialInner, type TourStep } from "../components/onboarding/OnboardingTutorial";
 import { showConfirmDialog } from "../lib/app-dialogs";
@@ -13,7 +32,8 @@ import { isMobileShellViewport, useUIStore, type Panel } from "../stores/ui.stor
 import { resetDemo } from "./runtime";
 import { DEMO_SEED_IDS } from "./seed";
 import { useDemoNavigation } from "./navigation";
-import { DISCORD_URL, GITHUB_URL, asset } from "./DemoSiteTabs";
+import { DISCORD_URL, DiscordIcon, GITHUB_URL, GithubIcon, asset } from "./DemoSiteTabs";
+import { MarinaraWordmark } from "../components/chat/HomeBrowserHub";
 
 // ponytail: fork trial branch; point at the release tag once demos publish from stable tags.
 const SOURCE_URL = "https://github.com/Gunterlie/Marinara-Engine/tree/feat/static-demo-tutorial";
@@ -92,17 +112,50 @@ export function readDone(): LessonId[] {
   }
 }
 
-const BUTTON_CLASS =
-  "flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs font-medium text-[var(--marinara-chat-chrome-panel-text)] transition-colors hover:bg-[var(--marinara-chat-chrome-highlight-bg)] focus-visible:outline-2 focus-visible:outline-[var(--marinara-chat-chrome-focus-ring)]";
+const MENU_ROW =
+  "flex min-h-12 w-full items-center gap-3 rounded-xl px-2 text-left text-sm font-medium text-[var(--marinara-chat-chrome-panel-text)] transition-colors hover:bg-[var(--marinara-chat-chrome-highlight-bg)] focus-visible:outline-2 focus-visible:outline-[var(--marinara-chat-chrome-focus-ring)] aria-[current=page]:bg-[color-mix(in_srgb,#f29744_14%,transparent)] aria-[current=page]:text-[var(--foreground)]";
+const MENU_TILE =
+  "grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[color-mix(in_srgb,#f29744_13%,transparent)] text-[#f29744]";
+const EXPLORE = [
+  { href: "#/", label: "demo.docs.home", testId: "demo-home", Icon: Home },
+  { href: "#/features", label: "demo.site.features", testId: "demo-menu-features", Icon: LayoutGrid },
+  { href: "#/docs", label: "demo.docs.title", testId: "demo-docs-link", Icon: BookOpen },
+  { href: "#/download", label: "demo.site.download", testId: "demo-download", Icon: Download },
+];
+const LESSON_ICONS = { chat: MessagesSquare, character: UserRound, lorebook: BookMarked };
+
+function MenuHeading({ children }: { children: ReactNode }) {
+  return (
+    <p className="flex items-center px-2.5 pb-0.5 pt-2.5 text-[0.6875rem] font-semibold uppercase tracking-[0.12em] text-[#f29744]">
+      {children}
+    </p>
+  );
+}
 
 // The demo's only control in the Engine bar: a small badge whose menu holds the tours, reset and source.
 export function DemoSiteStart() {
   return (
-    // Phones order the bar with CSS (the menu is order 10 and pushed right by ml-auto); the badge takes both, so it sits just before the menu.
-    <div className="flex shrink-0 items-center gap-1 max-sm:order-10 max-sm:ml-auto max-sm:[&+button]:ml-0">
-      <span aria-hidden="true" className="mr-1 h-5 w-px bg-[var(--border)] max-md:hidden" />
-      <DemoBanner />
-    </div>
+    <>
+      {/* Phones: the brand sits in the bar after the Engine's own buttons, so the website needs no brand row. */}
+      <a
+        href="#/"
+        className="flex min-h-11 shrink-0 items-center gap-[6px] rounded-lg px-[4px] transition-transform focus-visible:outline-2 focus-visible:outline-[var(--marinara-chat-chrome-focus-ring)] active:scale-95 motion-reduce:transform-none max-sm:order-2 sm:hidden"
+      >
+        <img
+          src={asset("icon-192.png")}
+          alt=""
+          width={28}
+          height={28}
+          className="h-[28px] w-[28px] shrink-0 object-contain"
+        />
+        <MarinaraWordmark className="whitespace-nowrap text-[14px] leading-none max-[374px]:text-[13px]" />
+      </a>
+      {/* Phones order the bar with CSS (the menu is order 10 and pushed right by ml-auto); the badge takes both, so it sits just before the menu. */}
+      <div className="flex shrink-0 items-center gap-1 max-sm:order-10 max-sm:ml-auto max-sm:[&+button]:ml-0">
+        <span aria-hidden="true" className="mr-1 h-5 w-px bg-[var(--border)] max-md:hidden" />
+        <DemoBanner />
+      </div>
+    </>
   );
 }
 
@@ -121,7 +174,7 @@ export function DemoBanner() {
   const lessonsButtonRef = useRef<HTMLButtonElement>(null);
   // Only a lesson picked from the menu returns focus there; the automatic welcome must not leave a focus ring.
   const fromMenu = useRef(false);
-  const lessonsListRef = useRef<HTMLUListElement>(null);
+  const lessonsListRef = useRef<HTMLDivElement>(null);
 
   const [position, setPosition] = useState({ top: 48, left: 8 });
   useLayoutEffect(() => {
@@ -217,6 +270,7 @@ export function DemoBanner() {
     if (confirmed) resetDemo();
   };
 
+  const here = window.location.hash || "#/";
   return (
     <>
       <section data-testid="demo-banner" aria-label={t("demo.banner.label")} className="shrink-0">
@@ -243,9 +297,10 @@ export function DemoBanner() {
       {lessonsOpen &&
         createPortal(
           // Portalled so it paints above the shell, which is mounted after the banner.
-          <ul
+          <div
             ref={lessonsListRef}
             id="demo-lessons"
+            role="group"
             aria-label={t("demo.lessons.label")}
             onKeyDown={closeLessonsOnEscape}
             onBlur={(event) => {
@@ -254,97 +309,105 @@ export function DemoBanner() {
                 setLessonsOpen(false);
             }}
             style={position}
-            className="mari-chrome-token-scope fixed z-[9990] flex max-h-[calc(100dvh-4rem)] w-64 max-w-[calc(100vw-1rem)] flex-col gap-0.5 overflow-y-auto rounded-xl border border-[var(--marinara-chat-chrome-panel-border)] bg-[var(--marinara-chat-chrome-panel-bg)] p-1 shadow-lg backdrop-blur-xl"
+            className="demo-menu mari-chrome-token-scope fixed z-[9990] flex max-h-[calc(100dvh-4rem)] w-72 max-w-[calc(100vw-1rem)] flex-col gap-1 overflow-y-auto rounded-2xl border border-[var(--marinara-chat-chrome-panel-border)] bg-[color-mix(in_srgb,var(--marinara-chat-chrome-panel-bg)_88%,transparent)] p-1.5 shadow-2xl shadow-black/30 backdrop-blur-xl"
           >
-            <li className="px-3 py-2 text-xs text-[var(--muted-foreground)]">{t("demo.controls.info")}</li>
-            {LESSON_IDS.map((id) => (
-              <li key={id}>
+            <p className="px-2.5 pb-1 pt-2 text-xs leading-snug text-[var(--muted-foreground)]">
+              {t("demo.controls.info")}
+            </p>
+            <MenuHeading>{t("demo.menu.explore")}</MenuHeading>
+            {EXPLORE.map(({ href, label, testId, Icon }) => (
+              <a
+                key={href}
+                href={href}
+                data-testid={testId}
+                aria-current={(href === "#/" ? here === href : here.startsWith(href)) ? "page" : undefined}
+                className={MENU_ROW}
+                onClick={() => setLessonsOpen(false)}
+              >
+                <span className={MENU_TILE}>
+                  <Icon size={16} aria-hidden="true" />
+                </span>
+                {t(label)}
+              </a>
+            ))}
+            <MenuHeading>
+              {t("demo.menu.learn")}
+              <span className="ml-auto tabular-nums">
+                {done.length}/{LESSON_IDS.length}
+              </span>
+            </MenuHeading>
+            <div aria-hidden="true" className="mx-2.5 mb-1 h-1 overflow-hidden rounded-full bg-[var(--border)]">
+              <div
+                className="h-full rounded-full bg-[#f29744] transition-[width] duration-500 motion-reduce:transition-none"
+                style={{ width: `${(done.length / LESSON_IDS.length) * 100}%` }}
+              />
+            </div>
+            {LESSON_IDS.map((id) => {
+              const Icon = LESSON_ICONS[id];
+              return (
                 <button
+                  key={id}
                   type="button"
                   data-testid={`demo-lesson-${id}`}
                   onClick={() => startLesson(id)}
-                  className={`${BUTTON_CLASS} w-full justify-start`}
+                  className={MENU_ROW}
                 >
-                  {done.includes(id) ? (
-                    <Check aria-hidden="true" className="h-3.5 w-3.5 text-[var(--marinara-chat-chrome-accent)]" />
-                  ) : (
-                    <span aria-hidden="true" className="h-3.5 w-3.5" />
+                  <span className={MENU_TILE}>
+                    <Icon size={16} aria-hidden="true" />
+                  </span>
+                  <span className="min-w-0 flex-1">{t(`demo.lessons.${id}.title`)}</span>
+                  {done.includes(id) && (
+                    <>
+                      <Check aria-hidden="true" className="h-4 w-4 text-[#f29744]" />
+                      <span className="sr-only">{t("demo.lessons.done")}</span>
+                    </>
                   )}
-                  <span>{t(`demo.lessons.${id}.title`)}</span>
-                  {done.includes(id) && <span className="sr-only">{t("demo.lessons.done")}</span>}
                 </button>
-              </li>
-            ))}
-            <li>
-              <a
-                href="#/"
-                data-testid="demo-home"
-                className={`${BUTTON_CLASS} w-full justify-start`}
-                onClick={() => setLessonsOpen(false)}
-              >
-                <Home size={14} aria-hidden="true" />
-                {t("demo.docs.home")}
-              </a>
-            </li>
-            <li>
-              <a
-                href="#/docs"
-                data-testid="demo-docs-link"
-                className={`${BUTTON_CLASS} w-full justify-start`}
-                onClick={() => setLessonsOpen(false)}
-              >
-                <BookOpen size={14} aria-hidden="true" />
-                {t("demo.docs.title")}
-              </a>
-            </li>
-            <li>
-              <a href="#/download" data-testid="demo-download" className={`${BUTTON_CLASS} w-full justify-start`}>
-                <Download size={14} aria-hidden="true" />
-                {t("demo.site.download")}
-              </a>
-            </li>
-            <li>
-              <a href={GITHUB_URL} target="_blank" rel="noreferrer" className={`${BUTTON_CLASS} w-full justify-start`}>
-                <GitBranch size={14} aria-hidden="true" />
-                {t("demo.landing.community.github")}
-              </a>
-            </li>
-            <li>
-              <a href={DISCORD_URL} target="_blank" rel="noreferrer" className={`${BUTTON_CLASS} w-full justify-start`}>
-                <img
-                  src={asset("home/tab-icons/discord.svg")}
-                  alt=""
-                  className="h-3.5 w-3.5 [[data-theme=light]_&]:invert"
-                />
-                {t("demo.landing.community.discord")}
-              </a>
-            </li>
-            <li>
+              );
+            })}
+            <MenuHeading>{t("demo.menu.community")}</MenuHeading>
+            <a href={GITHUB_URL} target="_blank" rel="noreferrer" className={MENU_ROW}>
+              <span className={MENU_TILE}>
+                <GithubIcon className="h-4 w-4" />
+              </span>
+              {t("demo.landing.community.github")}
+            </a>
+            <a href={DISCORD_URL} target="_blank" rel="noreferrer" className={MENU_ROW}>
+              <span className={MENU_TILE}>
+                <DiscordIcon className="h-4 w-4" />
+              </span>
+              {t("demo.landing.community.discord")}
+            </a>
+            <div className="mt-1 flex items-center gap-1 border-t border-[var(--marinara-chat-chrome-panel-border)] pt-1.5">
               <button
                 type="button"
                 data-testid="demo-reset"
-                className={`${BUTTON_CLASS} w-full justify-start`}
+                className={`${MENU_ROW} min-w-0 whitespace-nowrap`}
                 onClick={() => {
                   setLessonsOpen(false);
                   void confirmReset();
                 }}
               >
-                <RotateCcw size={14} aria-hidden="true" />
+                <span className={MENU_TILE}>
+                  <RotateCcw size={16} aria-hidden="true" />
+                </span>
                 {t("demo.reset.open")}
               </button>
-            </li>
-            <li>
               <a
                 href={SOURCE_URL}
                 target="_blank"
                 rel="noreferrer"
-                className={`${BUTTON_CLASS} w-full justify-start text-[var(--marinara-chat-chrome-panel-muted)]`}
+                title={t("demo.banner.source")}
+                className="flex min-h-12 shrink-0 items-center gap-1.5 rounded-xl px-2.5 text-xs text-[var(--marinara-chat-chrome-panel-muted)] transition-colors hover:bg-[var(--marinara-chat-chrome-highlight-bg)] focus-visible:outline-2 focus-visible:outline-[var(--marinara-chat-chrome-focus-ring)]"
               >
                 <Code aria-hidden="true" className="h-3.5 w-3.5" />
-                {t("demo.banner.source")}
+                <span className="rounded-full border border-[var(--border)] px-1.5 py-0.5 tabular-nums">
+                  v{APP_VERSION}
+                </span>
+                <span className="sr-only">{t("demo.banner.source")}</span>
               </a>
-            </li>
-          </ul>,
+            </div>
+          </div>,
           document.body,
         )}
       {/* Portaled: the bar's backdrop blur would otherwise pin the fixed tour stage inside the 48px bar. */}

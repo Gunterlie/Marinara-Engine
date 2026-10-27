@@ -203,8 +203,8 @@ export function DemoLandingHero() {
           }}
           className="grid grid-cols-[minmax(0,1fr)] items-center gap-8 sm:gap-12 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:gap-10"
         >
-          <div className="flex flex-col gap-5 sm:gap-7">
-            <p className={`${EYEBROW} -mb-2 sm:-mb-4`}>{t("demo.landing.eyebrow")}</p>
+          <div className="demo-enter flex flex-col gap-5 sm:gap-7">
+            <p className={`${EYEBROW} -mb-2 max-sm:tracking-[0.1em] sm:-mb-4`}>{t("demo.landing.eyebrow")}</p>
             <h1
               id="demo-product-title"
               className="text-balance text-[2.125rem] font-bold leading-[1.08] tracking-tight text-[var(--foreground)] sm:text-5xl xl:text-[3.5rem]"
@@ -220,7 +220,7 @@ export function DemoLandingHero() {
                 <Play className="h-4 w-4" aria-hidden="true" />
                 {t("demo.site.try")}
               </a>
-              <a href="#/download" className={cn(TEXT_LINK, "self-center max-sm:hidden")}>
+              <a href="#/download" className={cn(TEXT_LINK, "self-center")}>
                 <Download className="h-4 w-4" aria-hidden="true" />
                 {t("demo.landing.install")}
               </a>
@@ -278,7 +278,7 @@ export function DemoLandingHero() {
                 width={120}
                 height={180}
                 draggable={false}
-                className="h-24 w-auto select-none object-contain drop-shadow-[0_10px_18px_rgba(0,0,0,0.35)] sm:h-32"
+                className="demo-wave h-24 w-auto select-none object-contain drop-shadow-[0_10px_18px_rgba(0,0,0,0.35)] sm:h-32"
               />
               <p className="mb-6 max-w-[15rem] max-sm:hidden rounded-2xl rounded-bl-sm border border-[var(--border)] bg-[var(--card)] px-3.5 py-2.5 text-xs font-medium leading-snug text-[var(--card-foreground)] shadow-lg sm:mb-12 sm:text-sm">
                 {t("demo.product.mariHello")}

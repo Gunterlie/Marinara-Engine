@@ -40,7 +40,7 @@ export function GithubIcon({ className }: { className: string }) {
   );
 }
 
-function DiscordIcon({ className }: { className: string }) {
+export function DiscordIcon({ className }: { className: string }) {
   return (
     <img src={asset("home/tab-icons/discord.svg")} alt="" className={`${className} [[data-theme=light]_&]:invert`} />
   );

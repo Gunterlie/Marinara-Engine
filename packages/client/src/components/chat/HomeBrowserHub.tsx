@@ -1645,14 +1645,22 @@ export function HomeBrowserHub({ pageActive, onOpenCredits, hideProfessor, websi
               data-component="HomeBrowserHub.Brand"
             >
               <img
-                src="/logo-splash.gif"
+                src={website ? `${import.meta.env.BASE_URL}icon-192.png` : "/logo-splash.gif"}
                 alt=""
                 data-component="HomeBrowserHub.AnimatedLogo"
-                className="h-8 w-8 shrink-0 object-contain drop-shadow-[0_0_10px_color-mix(in_srgb,var(--marinara-app-accent-solid)_28%,transparent)]"
+                className={cn(
+                  "h-8 w-8 shrink-0 object-contain drop-shadow-[0_0_10px_color-mix(in_srgb,var(--marinara-app-accent-solid)_28%,transparent)]",
+                  website && "h-9 w-9",
+                )}
               />
               <div className="hidden min-w-0 sm:block">
                 <MarinaraWordmark className="block text-xs leading-none" />
-                <span className="mt-0.5 block text-[0.5rem] font-semibold tracking-[0.14em] text-[var(--muted-foreground)]">
+                <span
+                  className={cn(
+                    "mt-0.5 block text-[0.5rem] font-semibold tracking-[0.14em] text-[var(--muted-foreground)]",
+                    website && "w-fit rounded-full border border-[var(--border)] px-1.5 py-px tracking-[0.08em]",
+                  )}
+                >
                   {versionLabel}
                 </span>
               </div>

@@ -185,23 +185,14 @@
 
   [data-website] .mari-home-browser-tab-row {
     height: auto;
-    flex-wrap: wrap;
-    padding-inline: 1.25rem 0;
   }
 
-  /* The brand gets its own row on phones, so the name is the first thing on every page. */
+  /* The brand moves into the Engine bar on phones (DemoSiteStart). */
   [data-website] [data-component="HomeBrowserHub.Brand"] {
-    width: 100%;
-    padding-block: 0.625rem 0.25rem;
-  }
-
-  [data-website] [data-component="HomeBrowserHub.Brand"] > div {
-    display: block;
+    display: none;
   }
 
   [data-website] [role="tablist"] {
-    flex-basis: 100%;
-    margin-inline-start: -0.4375rem;
     overflow-x: auto;
     scrollbar-width: none;
   }
@@ -217,5 +208,60 @@
 
   [data-website] [role="tab"] > span {
     display: block;
+  }
+}
+
+/* Demo menu, hero headline and logo: one short entrance each, none with reduced motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .demo-menu {
+    transform-origin: top;
+    animation: demo-menu-in 160ms ease-out;
+  }
+
+  .demo-enter {
+    animation: demo-enter 600ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+
+  .demo-wave {
+    transform-origin: 70% 90%;
+    animation: demo-wave 1.2s ease-in-out 0.8s 1;
+  }
+}
+
+@keyframes demo-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-0.25rem) scale(0.98);
+  }
+}
+
+@keyframes demo-enter {
+  from {
+    opacity: 0;
+    transform: translateY(0.75rem);
+  }
+}
+
+@keyframes demo-wave {
+  20%,
+  60% {
+    transform: rotate(-8deg);
+  }
+  40%,
+  80% {
+    transform: rotate(6deg);
+  }
+}
+
+/* Phones: the Engine bar holds the brand too, so its buttons are exactly 44 px. */
+@media (max-width: 39.99rem) {
+  .mari-topbar {
+    column-gap: 4px;
+  }
+
+  .mari-topbar .mari-topbar-action {
+    width: 44px !important;
+    min-width: 44px;
+    height: 44px;
   }
 }
