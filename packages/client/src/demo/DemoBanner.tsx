@@ -32,8 +32,7 @@ import { isMobileShellViewport, useUIStore, type Panel } from "../stores/ui.stor
 import { resetDemo } from "./runtime";
 import { DEMO_SEED_IDS } from "./seed";
 import { useDemoNavigation } from "./navigation";
-import { DISCORD_URL, DiscordIcon, GITHUB_URL, GithubIcon, asset } from "./DemoSiteTabs";
-import { MarinaraWordmark } from "../components/chat/HomeBrowserHub";
+import { DISCORD_URL, DiscordIcon, GITHUB_URL, GithubIcon } from "./DemoSiteTabs";
 
 // ponytail: fork trial branch; point at the release tag once demos publish from stable tags.
 const SOURCE_URL = "https://github.com/Gunterlie/Marinara-Engine/tree/feat/static-demo-tutorial";
@@ -135,27 +134,11 @@ function MenuHeading({ children }: { children: ReactNode }) {
 // The demo's only control in the Engine bar: a small badge whose menu holds the tours, reset and source.
 export function DemoSiteStart() {
   return (
-    <>
-      {/* Phones: the brand sits in the bar after the Engine's own buttons, so the website needs no brand row. */}
-      <a
-        href="#/"
-        className="flex min-h-11 shrink-0 items-center gap-[6px] rounded-lg px-[4px] transition-transform focus-visible:outline-2 focus-visible:outline-[var(--marinara-chat-chrome-focus-ring)] active:scale-95 motion-reduce:transform-none max-sm:order-2 sm:hidden"
-      >
-        <img
-          src={asset("icon-192.png")}
-          alt=""
-          width={28}
-          height={28}
-          className="h-[28px] w-[28px] shrink-0 object-contain"
-        />
-        <MarinaraWordmark className="whitespace-nowrap text-[14px] leading-none max-[374px]:text-[13px]" />
-      </a>
-      {/* Phones order the bar with CSS (the menu is order 10 and pushed right by ml-auto); the badge takes both, so it sits just before the menu. */}
-      <div className="flex shrink-0 items-center gap-1 max-sm:order-10 max-sm:ml-auto max-sm:[&+button]:ml-0">
-        <span aria-hidden="true" className="mr-1 h-5 w-px bg-[var(--border)] max-md:hidden" />
-        <DemoBanner />
-      </div>
-    </>
+    // Phones order the bar with CSS (the menu is order 10 and pushed right by ml-auto); the badge takes both, so it sits just before the menu.
+    <div className="flex shrink-0 items-center gap-1 max-sm:order-10 max-sm:ml-auto max-sm:[&+button]:ml-0">
+      <span aria-hidden="true" className="mr-1 h-5 w-px bg-[var(--border)] max-md:hidden" />
+      <DemoBanner />
+    </div>
   );
 }
 

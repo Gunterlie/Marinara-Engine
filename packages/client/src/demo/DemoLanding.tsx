@@ -25,9 +25,10 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { APP_VERSION } from "@marinara-engine/shared";
 import { HOME_CHAT_MODE_ACCENTS } from "../lib/home-chat-mode-style";
 import { cn } from "../lib/utils";
-import { FeedModule, HOME_MODULE_ACCENTS } from "../components/chat/HomeBrowserHub";
+import { FeedModule, HOME_MODULE_ACCENTS, MarinaraWordmark } from "../components/chat/HomeBrowserHub";
 import { GITHUB_URL, GithubIcon, asset } from "./DemoSiteTabs";
 import { useMariAppearancePack } from "../hooks/use-mari-appearance-pack";
 import { DEMO_ASSETS } from "./seed";
@@ -193,6 +194,14 @@ export function DemoLandingHero() {
         className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[56rem] bg-[radial-gradient(55%_45%_at_78%_18%,color-mix(in_srgb,var(--primary)_22%,transparent),transparent_70%),radial-gradient(40%_35%_at_8%_8%,color-mix(in_srgb,var(--primary)_10%,transparent),transparent_70%)]"
       />
       <div className="mx-auto w-full max-w-[75rem] px-5 pb-6 pt-3 sm:px-6 sm:pb-8 sm:pt-6">
+        {/* Phones: the page's own brand row, since the website tab row hides its logo block there. */}
+        <a href="#/" className={`mb-3 flex min-h-11 w-fit items-center gap-2 rounded-lg sm:hidden ${FOCUS}`}>
+          <img src={asset("icon-192.png")} alt="" width={32} height={32} className="h-8 w-8 shrink-0 object-contain" />
+          <MarinaraWordmark className="text-base leading-none" />
+          <span className="rounded-full border border-[var(--border)] px-1.5 py-px text-[0.625rem] font-semibold tabular-nums text-[var(--muted-foreground)]">
+            v{APP_VERSION}
+          </span>
+        </a>
         {/* Hero: one promise, one action, and a scripted story playing beside it */}
         <section
           aria-labelledby="demo-product-title"
