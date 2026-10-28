@@ -1,20 +1,7 @@
 import type { DocContent, DocSummary } from "../hooks/use-docs";
 
-let pending: Promise<(DocContent & DocSummary)[]> | undefined;
-
-export function loadDemoDocs() {
-  return (pending ??= fetch(`${import.meta.env.BASE_URL}demo-docs/guides.json`)
-    .then((response) => {
-      if (!response.ok) throw new Error("Documentation unavailable");
-      return response.json() as Promise<(DocContent & DocSummary)[]>;
-    })
-    .catch((error) => {
-      pending = undefined;
-      throw error;
-    }));
-}
-
 export type DemoDocSummary = DocSummary & { minutes?: number };
+type DemoDoc = DocContent & DocSummary;
 
 async function fetchDemoDocsFile(file: string) {
   const response = await fetch(`${import.meta.env.BASE_URL}demo-docs/${file}`);
@@ -22,12 +9,52 @@ async function fetchDemoDocsFile(file: string) {
   return response;
 }
 
-/** Titles and dates only. The reader fetches one guide at a time and the full corpus only for search. */
-export const loadDemoIndex = () =>
-  fetchDemoDocsFile("index.json").then((response) => response.json() as Promise<DemoDocSummary[]>);
+/** English files sit at the root of demo-docs/, each translation in a folder named by its language code. */
+const langDir = (lang: string) => (lang === "en" ? "" : `${lang}/`);
 
-export const loadDemoGuide = (path: string) =>
-  fetchDemoDocsFile(`guides/${path.split("/").map(encodeURIComponent).join("/")}`).then((response) => response.text());
+/** A translation covers part of the guides; the English entry stands in for the rest, in English order. */
+function mergeByPath<T extends { path: string }>(english: T[], translated: T[] = []) {
+  const byPath = new Map(translated.map((entry) => [entry.path, entry]));
+  return english.map((entry) => byPath.get(entry.path) ?? entry);
+}
+
+const corpora = new Map<string, Promise<DemoDoc[]>>();
+/** The full corpus is only fetched for search, once per language. */
+export function loadDemoDocs(lang = "en"): Promise<DemoDoc[]> {
+  let pending = corpora.get(lang);
+  if (!pending) {
+    pending =
+      lang === "en"
+        ? fetchDemoDocsFile("guides.json").then((response) => response.json() as Promise<DemoDoc[]>)
+        : Promise.all([
+            loadDemoDocs(),
+            fetchDemoDocsFile(`${lang}/guides.json`)
+              .then((response) => response.json() as Promise<DemoDoc[]>)
+              .catch(() => []),
+          ]).then(([english, translated]) => mergeByPath(english, translated));
+    pending.catch(() => corpora.delete(lang));
+    corpora.set(lang, pending);
+  }
+  return pending;
+}
+
+const fetchIndex = (lang: string) =>
+  fetchDemoDocsFile(`${langDir(lang)}index.json`).then((response) => response.json() as Promise<DemoDocSummary[]>);
+
+/** Titles and dates only. Each entry's `language` says which pack serves that guide. */
+export const loadDemoIndex = async (lang = "en") =>
+  lang === "en" ? fetchIndex("en") : mergeByPath(await fetchIndex("en"), await fetchIndex(lang).catch(() => []));
+
+export const loadDemoGuide = (path: string, lang = "en") =>
+  fetchDemoDocsFile(`${langDir(lang)}guides/${path.split("/").map(encodeURIComponent).join("/")}`).then((response) =>
+    response.text(),
+  );
+
+/** Language codes with a translated pack in this build; empty when the build had no docs-i18n branch. */
+export const loadDemoLanguages = () =>
+  fetchDemoDocsFile("languages.json")
+    .then((response) => response.json() as Promise<string[]>)
+    .catch(() => [] as string[]);
 
 export interface DemoSearchHit {
   path: string;

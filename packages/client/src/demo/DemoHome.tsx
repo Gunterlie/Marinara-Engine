@@ -63,7 +63,11 @@ export function DemoHome() {
           </p>
         }
       >
-        <DemoDocs path={path} section={new URLSearchParams(query).get("section") ?? ""} />
+        <DemoDocs
+          path={path}
+          section={new URLSearchParams(query).get("section") ?? ""}
+          lang={new URLSearchParams(query).get("lang") ?? ""}
+        />
       </Suspense>
     );
   }

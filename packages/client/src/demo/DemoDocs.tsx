@@ -18,6 +18,8 @@ import { useTranslation } from "react-i18next";
 import { renderMarkdownBlocks, applyInlineMarkdown } from "../lib/markdown";
 import { useCodeBlockCopy } from "../hooks/use-code-block-copy";
 import { cn, copyToClipboard } from "../lib/utils";
+import { DOCS_LANGUAGE_LABELS, docsLanguageDirection, normalizeDocsLanguage } from "@marinara-engine/shared";
+import { LanguagePicker } from "../components/ui/LanguagePicker";
 import { isApplePlatform } from "../lib/command-center";
 import { dirLabel } from "../components/modals/DocsViewerModal";
 import { DemoBrandMark } from "./DemoSiteTabs";
@@ -28,6 +30,7 @@ import {
   loadDemoDocs,
   loadDemoGuide,
   loadDemoIndex,
+  loadDemoLanguages,
   prepareDemoDoc,
   searchDemoDocs,
   type DemoDocSummary,
@@ -154,15 +157,23 @@ function GuideNav({
   );
 }
 
-function DocsPalette({ index, onPick }: { index: DemoDocSummary[]; onPick: (href: string) => void }) {
+function DocsPalette({
+  index,
+  lang,
+  onPick,
+}: {
+  index: DemoDocSummary[];
+  lang: string;
+  onPick: (href: string) => void;
+}) {
   const { t } = useTranslation();
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const deferred = useDeferredValue(query.trim());
   const fullText = deferred.length >= 2;
   const corpus = useQuery({
-    queryKey: ["demo-docs", "corpus"],
-    queryFn: loadDemoDocs,
+    queryKey: ["demo-docs", "corpus", lang],
+    queryFn: () => loadDemoDocs(lang),
     staleTime: Infinity,
     enabled: fullText,
   });
@@ -312,13 +323,67 @@ function SearchTrigger({ onOpen, large = false }: { onOpen: () => void; large?: 
   );
 }
 
-export function DemoDocs({ path, section }: { path: string; section: string }) {
+const LANG_KEY = "marinara-demo:docs-lang";
+
+/** Native-name picker over the packs this build shipped; hidden when the build had English only. */
+function DocsLanguage({
+  value,
+  languages,
+  onChange,
+}: {
+  value: string;
+  languages: string[];
+  onChange: (code: string) => void;
+}) {
   const { t } = useTranslation();
-  const index = useQuery({ queryKey: ["demo-docs", "index"], queryFn: loadDemoIndex, staleTime: Infinity });
+  if (!languages.length) return null;
+  return (
+    <div className="w-44 shrink-0">
+      <LanguagePicker
+        label={t("demo.docs.language")}
+        value={value}
+        onChange={onChange}
+        options={["en", ...languages].map((code) => ({ code, ...(DOCS_LANGUAGE_LABELS[code] ?? { label: code }) }))}
+      />
+    </div>
+  );
+}
+
+export function DemoDocs({ path, section, lang: linked }: { path: string; section: string; lang: string }) {
+  const { t } = useTranslation();
+  const languages = useQuery({ queryKey: ["demo-docs", "languages"], queryFn: loadDemoLanguages, staleTime: Infinity });
+  const [stored, setStored] = useState(() => {
+    try {
+      return localStorage.getItem(LANG_KEY) ?? "";
+    } catch {
+      return "";
+    }
+  });
+  const wanted = normalizeDocsLanguage(linked || stored) ?? "en";
+  // Until the list loads, trust the code: a missing pack falls back to English guide by guide.
+  const lang = wanted === "en" || languages.data?.includes(wanted) !== false ? wanted : "en";
+  const chooseLanguage = (code: string) => {
+    setStored(code);
+    try {
+      localStorage.setItem(LANG_KEY, code);
+    } catch {
+      // Private mode: the ?lang link below still carries the choice.
+    }
+    const [route = "", query = ""] = window.location.hash.split("?");
+    const params = new URLSearchParams(query);
+    params.set("lang", code);
+    window.location.hash = `${route}?${params}`;
+  };
+  const languagePicker = <DocsLanguage value={lang} languages={languages.data ?? []} onChange={chooseLanguage} />;
+  const index = useQuery({
+    queryKey: ["demo-docs", "index", lang],
+    queryFn: () => loadDemoIndex(lang),
+    staleTime: Infinity,
+  });
   const current = path ? index.data?.find((entry) => entry.path === path) : undefined;
   const guide = useQuery({
-    queryKey: ["demo-docs", "guide", path],
-    queryFn: () => loadDemoGuide(path),
+    queryKey: ["demo-docs", "guide", current?.language, path],
+    queryFn: () => loadDemoGuide(path, current?.language),
     staleTime: Infinity,
     enabled: !!current,
   });
@@ -568,7 +633,7 @@ export function DemoDocs({ path, section }: { path: string; section: string }) {
         }}
         className="demo-docs-palette mx-auto mt-[8vh] w-[min(42rem,calc(100vw-1.5rem))] max-w-none overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] p-0 text-[var(--foreground)] shadow-2xl backdrop:bg-black/50 backdrop:backdrop-blur-sm"
       >
-        {paletteOpen ? <DocsPalette index={index.data ?? []} onPick={pick} /> : null}
+        {paletteOpen ? <DocsPalette index={index.data ?? []} lang={lang} onPick={pick} /> : null}
       </dialog>
 
       <dialog
@@ -619,8 +684,11 @@ export function DemoDocs({ path, section }: { path: string; section: string }) {
                   </p>
                 </div>
               </div>
-              <div className="max-w-xl">
-                <SearchTrigger onOpen={openPalette} large />
+              <div className="flex max-w-xl flex-wrap items-center gap-3">
+                <div className="min-w-0 flex-1 basis-64">
+                  <SearchTrigger onOpen={openPalette} large />
+                </div>
+                {languagePicker}
               </div>
             </header>
             {status}
@@ -768,22 +836,28 @@ export function DemoDocs({ path, section }: { path: string; section: string }) {
                       ) : null}
                     </ol>
                   </nav>
-                  {current ? (
-                    <a
-                      href={docHref(path, section)}
-                      className={linkClass}
-                      onClick={async (event) => {
-                        event.preventDefault();
-                        const copied = await copyToClipboard(
-                          new URL(docHref(path, section), window.location.href).href,
-                        );
-                        setCopyStatus(t(copied ? "demo.docs.copied" : "demo.docs.copyFailed"));
-                      }}
-                    >
-                      <LinkIcon size={16} aria-hidden="true" />
-                      {t("demo.docs.copyLink")}
-                    </a>
-                  ) : null}
+                  <div className="flex flex-wrap items-center gap-2">
+                    {languagePicker}
+                    {current ? (
+                      <a
+                        href={docHref(path, section)}
+                        className={linkClass}
+                        onClick={async (event) => {
+                          event.preventDefault();
+                          const copied = await copyToClipboard(
+                            new URL(
+                              `${docHref(path, section)}${lang === "en" ? "" : `${section ? "&" : "?"}lang=${lang}`}`,
+                              window.location.href,
+                            ).href,
+                          );
+                          setCopyStatus(t(copied ? "demo.docs.copied" : "demo.docs.copyFailed"));
+                        }}
+                      >
+                        <LinkIcon size={16} aria-hidden="true" />
+                        {t("demo.docs.copyLink")}
+                      </a>
+                    ) : null}
+                  </div>
                 </div>
                 <p role="status" className="text-sm text-[var(--muted-foreground)] empty:hidden">
                   {copyStatus}
@@ -812,8 +886,18 @@ export function DemoDocs({ path, section }: { path: string; section: string }) {
                       ) : null}
                       {updated ? <span>{t("demo.docs.updated", { date: updated })}</span> : null}
                     </p>
+                    {current.language !== lang ? (
+                      <p
+                        role="note"
+                        className="mb-4 rounded-lg border border-[var(--border)] bg-[var(--secondary)] px-3 py-2 text-sm text-[var(--muted-foreground)]"
+                      >
+                        {t("demo.docs.notTranslated")}
+                      </p>
+                    ) : null}
                     <article
                       key={`${current.path}:${current.updatedAt}`}
+                      lang={current.language}
+                      dir={docsLanguageDirection(current.language)}
                       ref={setReader}
                       data-testid="demo-doc-article"
                       className="mari-message-content docs-reader-content demo-docs-reader break-words"

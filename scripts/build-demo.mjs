@@ -66,18 +66,49 @@ collectDocs(resolve(root, "docs"));
 // Home opens with the welcome guide and ends with achievements; the rest stay alphabetical.
 const sortKey = (path) => ({ "home/welcome.md": "home/0", "home/achievements.md": "home/zzz" })[path] ?? path;
 docs.sort((a, b) => sortKey(a.path).localeCompare(sortKey(b.path)));
-mkdirSync(resolve(root, "packages/client/dist-demo/demo-docs"), { recursive: true });
 // The full corpus is only fetched for search. Readers load the small index and one guide at a time.
-writeFileSync(resolve(root, "packages/client/dist-demo/demo-docs/guides.json"), JSON.stringify(docs));
-writeFileSync(
-  resolve(root, "packages/client/dist-demo/demo-docs/index.json"),
-  JSON.stringify(docs.map(({ content: _content, ...doc }) => doc)),
-);
-for (const doc of docs) {
-  const file = resolve(root, "packages/client/dist-demo/demo-docs/guides", doc.path);
-  mkdirSync(resolve(file, ".."), { recursive: true });
-  writeFileSync(file, doc.content);
+function writeDocs(dir, list) {
+  const out = resolve(root, "packages/client/dist-demo/demo-docs", dir);
+  mkdirSync(out, { recursive: true });
+  writeFileSync(resolve(out, "guides.json"), JSON.stringify(list));
+  writeFileSync(resolve(out, "index.json"), JSON.stringify(list.map(({ content: _content, ...doc }) => doc)));
+  for (const doc of list) {
+    const file = resolve(out, "guides", doc.path);
+    mkdirSync(resolve(file, ".."), { recursive: true });
+    writeFileSync(file, doc.content);
+  }
 }
+writeDocs("", docs);
+
+// Translated guides come from the Engine's docs-i18n branch: one folder per language with the same paths as docs/.
+// A failed fetch or a missing branch only drops the translations; the English site still builds.
+const I18N_REF = "refs/website/upstream/docs-i18n";
+const git = (...args) => spawnSync("git", args, { cwd: root, encoding: "utf8", maxBuffer: 1 << 26 });
+const i18nRemote = process.env.MARINARA_DOCS_I18N_REMOTE ?? "https://github.com/Pasta-Devs/Marinara-Engine.git";
+const fetched = git("fetch", "--quiet", "--no-tags", "--depth=1", i18nRemote, `+refs/heads/docs-i18n:${I18N_REF}`);
+if (fetched.status !== 0)
+  console.warn(`[build-demo] Could not fetch docs-i18n from ${i18nRemote}: ${fetched.stderr?.trim()}`);
+const languages = [];
+if (git("rev-parse", "--verify", "--quiet", `${I18N_REF}^{commit}`).status === 0) {
+  const tree = new Set(git("ls-tree", "-r", "--name-only", I18N_REF).stdout.split("\n"));
+  const updatedAt = git("log", "-1", "--format=%cI", I18N_REF).stdout.trim();
+  const codes = [...tree].filter((file) => /^[a-z-]+\/manifest\.json$/.test(file)).map((file) => file.split("/")[0]);
+  for (const code of codes.sort()) {
+    const translated = docs
+      .filter((doc) => tree.has(`${code}/${doc.path}`))
+      .map((doc) => {
+        const content = git("show", `${I18N_REF}:${code}/${doc.path}`).stdout;
+        return { ...doc, title: content.match(/^#\s+(.+)$/m)?.[1] ?? doc.title, language: code, updatedAt, content };
+      });
+    if (!translated.length) continue;
+    writeDocs(code, translated);
+    languages.push(code);
+  }
+  console.log(`[build-demo] Translated docs: ${languages.join(", ") || "none"}`);
+} else {
+  console.warn(`[build-demo] ${I18N_REF} is not available; publishing English docs only.`);
+}
+writeFileSync(resolve(root, "packages/client/dist-demo/demo-docs/languages.json"), JSON.stringify(languages));
 
 mkdirSync(resolve(root, "packages/client/dist-demo/website"), { recursive: true });
 const sharp = createRequire(resolve(root, "packages/server/package.json"))("sharp");
