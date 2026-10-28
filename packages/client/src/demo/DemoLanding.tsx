@@ -61,6 +61,8 @@ const MODES = [
     key: "roleplay",
     icon: Drama,
     image: "website/Desktop_Roleplay_View.webp",
+    // Pinned frame zooms to the chat so message text stays readable at frame size.
+    zoom: { scale: "1.7", transformOrigin: "0% 45%" },
     href: "#/docs/roleplay/getting-started.md",
     points: ["scenes", "sprites", "trackers"],
   },
@@ -68,6 +70,7 @@ const MODES = [
     key: "conversation",
     icon: MessageCircle,
     image: "website/Desktop_DM_Conversation.webp",
+    zoom: { scale: "2", transformOrigin: "0% 40%" },
     href: "#/docs/conversation/getting-started.md",
     points: ["groups", "calls", "schedules"],
   },
@@ -75,6 +78,7 @@ const MODES = [
     key: "game",
     icon: Dices,
     image: "website/Browser_Game_Screen.webp",
+    zoom: { scale: "1.8", transformOrigin: "50% 100%" },
     href: "#/docs/game/getting-started.md",
     points: ["dice", "map", "saves"],
   },
@@ -471,7 +475,7 @@ export function DemoLanding() {
                 style={{ "--mode-accent": HOME_CHAT_MODE_ACCENTS[active.key] } as CSSProperties}
                 className="sticky top-[calc(50vh-12rem)] rounded-3xl border border-[var(--border)] bg-[radial-gradient(70%_80%_at_0%_100%,color-mix(in_srgb,var(--mode-accent)_16%,transparent),transparent_70%),var(--card)] p-4 transition-colors duration-500"
               >
-                <div className="relative aspect-video">
+                <div className="relative aspect-video overflow-hidden rounded-xl border border-[var(--border)] shadow-2xl shadow-black/30">
                   {MODES.map((item) => (
                     <img
                       key={item.key}
@@ -482,7 +486,8 @@ export function DemoLanding() {
                       loading="lazy"
                       decoding="async"
                       data-active={item.key === mode ? "" : undefined}
-                      className={`demo-mode-shot ${SHOT} absolute inset-0 h-full`}
+                      style={item.zoom}
+                      className="demo-mode-shot absolute inset-0 h-full w-full object-cover"
                     />
                   ))}
                 </div>

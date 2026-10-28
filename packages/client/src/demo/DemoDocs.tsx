@@ -345,6 +345,14 @@ export function DemoDocs({ path, section }: { path: string; section: string }) {
   useEffect(() => {
     if (!reader) return;
     const boxes = [...reader.querySelectorAll<HTMLElement>(".mari-md-table-wrapper")];
+    // Columns of sentences get a wide track on phones; short columns stay narrow.
+    for (const box of boxes) {
+      const rows = [...box.querySelectorAll("tbody tr")];
+      box.querySelectorAll("th").forEach((th, i) => {
+        const chars = rows.reduce((sum, row) => sum + (row.children[i]?.textContent?.length ?? 0), 0);
+        th.toggleAttribute("data-long", chars / Math.max(rows.length, 1) > 40);
+      });
+    }
     const update = () => {
       for (const box of boxes) {
         const overflow = box.scrollWidth - box.clientWidth > 1;

@@ -177,8 +177,16 @@
 
   .demo-docs-reader .mari-md-table th,
   .demo-docs-reader .mari-md-table td {
-    min-width: 9rem;
-    max-width: 15rem;
+    min-width: 0;
+    max-width: 8rem;
+    padding: 0.5rem 0.75rem;
+    line-height: 1.45;
+  }
+
+  /* DemoDocs marks columns of long text, so they wrap less and rows stay short. */
+  .demo-docs-reader .mari-md-table th[data-long] {
+    min-width: 17rem;
+    max-width: none;
   }
 
   .demo-docs-reader .mari-md-table th {
@@ -191,7 +199,8 @@
     position: sticky;
     left: 0;
     z-index: 1;
-    max-width: 10rem;
+    min-width: 0;
+    max-width: 8.5rem;
     /* Theme colours can be see-through; the opaque base hides the columns that scroll under it. */
     background: linear-gradient(var(--card), var(--card)) var(--background);
     box-shadow: 1px 0 0 var(--border);
