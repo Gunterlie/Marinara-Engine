@@ -20,6 +20,7 @@ import { useCodeBlockCopy } from "../hooks/use-code-block-copy";
 import { cn, copyToClipboard } from "../lib/utils";
 import { isApplePlatform } from "../lib/command-center";
 import { dirLabel } from "../components/modals/DocsViewerModal";
+import { DemoBrandMark } from "./DemoSiteTabs";
 import {
   DOC_CATEGORIES,
   docHref,
@@ -603,8 +604,8 @@ export function DemoDocs({ path, section }: { path: string; section: string }) {
         {!path ? (
           <>
             <header className="relative flex flex-col gap-6 overflow-hidden rounded-3xl border border-[var(--border)] bg-[radial-gradient(70%_90%_at_10%_0%,color-mix(in_srgb,var(--primary)_16%,transparent),transparent_70%),var(--card)] p-6 max-sm:rounded-none max-sm:border-0 max-sm:p-0 max-sm:[background:none] sm:p-10">
-              <div className="flex items-start gap-3">
-                <BookOpen className="mt-1.5 shrink-0 text-[var(--primary)]" size={28} aria-hidden="true" />
+              <div className="flex items-start gap-4">
+                <DemoBrandMark />
                 <div>
                   <h1
                     ref={headingRef}

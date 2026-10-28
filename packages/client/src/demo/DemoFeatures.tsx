@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 import { cn } from "../lib/utils";
 import { docHref } from "./docs";
 import { FEATURE_CATEGORIES, FEATURE_COUNT, type FeatureCategory } from "./features";
+import { DemoBrandMark } from "./DemoSiteTabs";
 
 const FOCUS =
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]";
@@ -166,9 +167,12 @@ export function DemoFeatures({ category }: { category: string }) {
     >
       <header className="flex flex-col gap-4">
         <span className={EYEBROW}>{t("demo.features.eyebrow", { count: FEATURE_COUNT })}</span>
-        <h1 className="text-balance text-[2.125rem] font-bold leading-[1.08] tracking-tight text-[var(--foreground)] sm:text-5xl">
-          {t("demo.features.title")}
-        </h1>
+        <div className="flex items-center gap-4">
+          <DemoBrandMark />
+          <h1 className="text-balance text-[2.125rem] font-bold leading-[1.08] tracking-tight text-[var(--foreground)] sm:text-5xl">
+            {t("demo.features.title")}
+          </h1>
+        </div>
         <p className="max-w-[60ch] text-pretty text-base leading-relaxed text-[var(--muted-foreground)] sm:text-lg">
           {t("demo.features.body")}
         </p>

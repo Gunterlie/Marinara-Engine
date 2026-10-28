@@ -31,6 +31,21 @@ const TABS = [
   { id: "download", key: "demo.site.download", icon: null },
 ] as const;
 
+/** Logo link to Home for page headers; the website tab row has no logo, so the tabs sit at the same place on every page. */
+export function DemoBrandMark() {
+  return (
+    <a href="#/" className={cn("shrink-0 rounded-lg", FOCUS)}>
+      <img
+        src={asset("icon-192.png")}
+        alt="Marinara Engine"
+        width={40}
+        height={40}
+        className="h-10 w-10 object-contain"
+      />
+    </a>
+  );
+}
+
 /** GitHub mark (Simple Icons, CC0). */
 export function GithubIcon({ className }: { className: string }) {
   return (

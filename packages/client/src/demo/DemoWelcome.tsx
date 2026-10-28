@@ -3,6 +3,7 @@
 // ──────────────────────────────────────────────
 import { ArrowRight, BookOpen, Download } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { DemoBrandMark } from "./DemoSiteTabs";
 
 const APK_URL = "https://github.com/Pasta-Devs/Marinara-Engine/releases/latest/download/marinara-engine-android.apk";
 
@@ -39,12 +40,15 @@ export function DemoDownload() {
   return (
     <div data-demo-page="" className="mx-auto flex w-full max-w-3xl flex-col gap-10 px-5 pb-20 pt-6 sm:px-8 sm:pt-16">
       <section aria-labelledby="demo-download-title" className="flex flex-col gap-3">
-        <h1
-          id="demo-download-title"
-          className="text-balance text-[2.125rem] font-bold leading-[1.08] tracking-tight text-[var(--foreground)] sm:text-5xl"
-        >
-          {t("demo.download.title")}
-        </h1>
+        <div className="flex items-center gap-4">
+          <DemoBrandMark />
+          <h1
+            id="demo-download-title"
+            className="text-balance text-[2.125rem] font-bold leading-[1.08] tracking-tight text-[var(--foreground)] sm:text-5xl"
+          >
+            {t("demo.download.title")}
+          </h1>
+        </div>
         <p className="max-w-[60ch] text-pretty text-sm leading-relaxed text-[var(--muted-foreground)] sm:text-base">
           {t("demo.landing.platforms.body")}
         </p>

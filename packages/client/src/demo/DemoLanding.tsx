@@ -200,12 +200,8 @@ export function DemoLandingHero() {
         className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[56rem] bg-[radial-gradient(55%_45%_at_78%_18%,color-mix(in_srgb,var(--primary)_22%,transparent),transparent_70%),radial-gradient(40%_35%_at_8%_8%,color-mix(in_srgb,var(--primary)_10%,transparent),transparent_70%)]"
       />
       <div className="mx-auto w-full max-w-[75rem] px-5 pb-6 pt-3 sm:px-6 sm:pb-8 sm:pt-6">
-        {/* The page's own brand row; demo-landing.css hides the tab-row logo while it shows, so the logo appears once. */}
-        <a
-          href="#/"
-          data-demo-brand=""
-          className={`mb-3 flex min-h-11 w-fit items-center gap-2 rounded-lg sm:mb-5 sm:gap-3 ${FOCUS}`}
-        >
+        {/* The page's own brand row; the website tab row has no logo (demo-landing.css). */}
+        <a href="#/" className={`mb-3 flex min-h-11 w-fit items-center gap-2 rounded-lg sm:mb-5 sm:gap-3 ${FOCUS}`}>
           <img
             src={asset("icon-192.png")}
             alt=""
@@ -295,7 +291,7 @@ export function DemoLandingHero() {
               />
             </figure>
             <div
-              className={`${PARALLAX} absolute bottom-0 left-0 flex items-end gap-2 [--depth:14px] max-sm:bottom-auto max-sm:left-auto max-sm:right-3 max-sm:top-0 max-sm:-z-10 sm:-left-4 lg:-left-2`}
+              className={`${PARALLAX} absolute bottom-0 left-0 flex items-end gap-2 [--depth:14px] max-sm:bottom-auto max-sm:left-auto max-sm:right-3 z-20 max-sm:top-0 max-sm:-translate-y-[92%] sm:-left-4 lg:-left-2`}
             >
               <img
                 src={mari.poses.chibi}
