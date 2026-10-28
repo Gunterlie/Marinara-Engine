@@ -179,6 +179,11 @@ html [data-sonner-toaster] {
   }
 }
 
+/* The landing page has its own brand row, so the tab row drops its logo there. */
+[data-website]:has([data-demo-brand]) [data-component="HomeBrowserHub.Brand"] {
+  display: none;
+}
+
 /* Phones: the website's Home tabs become one scrollable strip of labelled 44 px tabs, without the logo block. */
 @media (max-width: 39.99rem) {
   [data-website] .mari-home-browser-chrome {

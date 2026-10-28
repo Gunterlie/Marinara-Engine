@@ -200,11 +200,21 @@ export function DemoLandingHero() {
         className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[56rem] bg-[radial-gradient(55%_45%_at_78%_18%,color-mix(in_srgb,var(--primary)_22%,transparent),transparent_70%),radial-gradient(40%_35%_at_8%_8%,color-mix(in_srgb,var(--primary)_10%,transparent),transparent_70%)]"
       />
       <div className="mx-auto w-full max-w-[75rem] px-5 pb-6 pt-3 sm:px-6 sm:pb-8 sm:pt-6">
-        {/* Phones: the page's own brand row, since the website tab row hides its logo block there. */}
-        <a href="#/" className={`mb-3 flex min-h-11 w-fit items-center gap-2 rounded-lg sm:hidden ${FOCUS}`}>
-          <img src={asset("icon-192.png")} alt="" width={32} height={32} className="h-8 w-8 shrink-0 object-contain" />
-          <MarinaraWordmark className="text-base leading-none" />
-          <span className="rounded-full border border-[var(--border)] px-1.5 py-px text-[0.625rem] font-semibold tabular-nums text-[var(--muted-foreground)]">
+        {/* The page's own brand row; demo-landing.css hides the tab-row logo while it shows, so the logo appears once. */}
+        <a
+          href="#/"
+          data-demo-brand=""
+          className={`mb-3 flex min-h-11 w-fit items-center gap-2 rounded-lg sm:mb-5 sm:gap-3 ${FOCUS}`}
+        >
+          <img
+            src={asset("icon-192.png")}
+            alt=""
+            width={32}
+            height={32}
+            className="h-8 w-8 shrink-0 object-contain sm:h-11 sm:w-11"
+          />
+          <MarinaraWordmark className="text-base leading-none sm:text-2xl" />
+          <span className="rounded-full border border-[var(--border)] px-1.5 py-px text-[0.625rem] font-semibold tabular-nums text-[var(--muted-foreground)] sm:px-2 sm:text-xs">
             v{APP_VERSION}
           </span>
         </a>
