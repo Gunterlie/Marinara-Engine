@@ -141,6 +141,25 @@ try {
   assert.equal(gone.conflict, false);
   assert.ok(!existsSync(resolve(gone.dir, "docs/development/x.md")));
 
+  // 10. Release: the newest vX.Y.Z tag wins by number, other tag names are ignored, bad --tag values fail closed.
+  commit(up, "release.txt", "r1\n", "release 1.9.0");
+  sh(up, "tag", "v1.9.0");
+  commit(up, "release.txt", "r2\n", "release 1.10.0");
+  sh(up, "tag", "-a", "v1.10.0", "-m", "1.10.0");
+  sh(up, "tag", "v9.9.9-rc1");
+  sh(up, "tag", "latest");
+  const release = prepare({ root: fork, source: "release", dir: resolve(base, "out-release"), upstreamUrl: up });
+  assert.equal(release.conflict, false);
+  assert.equal(release.meta.releaseTag, "v1.10.0");
+  assert.equal(release.meta.sourceSha, sh(up, "rev-parse", "v1.10.0^{commit}"));
+  assert.equal(readFileSync(resolve(release.dir, "release.txt"), "utf8"), "r2\n");
+  assert.equal(readFileSync(resolve(release.dir, "demo.txt"), "utf8"), "overlay\n");
+  const pinned = prepare({ root: fork, source: "release", tag: "v1.9.0", dir: resolve(base, "out-pinned"), upstreamUrl: up });
+  assert.equal(pinned.meta.sourceSha, sh(up, "rev-parse", "v1.9.0"));
+  bad({ source: "release", tag: "v9.9.9-rc1" }, /look like v1\.2\.3/);
+  bad({ source: "release", tag: "--upload-pack=x" }, /look like v1\.2\.3/);
+  bad({ source: "main", tag: "v1.9.0" }, /only with --source release/);
+
   console.log("refresh-check: ok");
 } finally {
   rmSync(base, { recursive: true, force: true });

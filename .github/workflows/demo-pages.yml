@@ -1,17 +1,18 @@
 name: Static demo Pages trial
 
 on:
-  # Weekly refresh onto the latest upstream staging (runs from the default branch, which is this website branch).
+  # Daily: rebuild onto the latest upstream release when it is newer than the deployed site.
+  # GitHub runs schedules only from the default branch, so this file must also be on that branch (WEBSITE-REBUILD.md).
   schedule:
-    - cron: "17 4 * * 1"
+    - cron: "23 5 * * *"
   push:
     branches: [feat/static-demo-tutorial]
   workflow_dispatch:
     inputs:
       source_ref:
-        description: "Upstream line to rebuild the website on (current = this branch as pushed)"
+        description: "Upstream line to rebuild the website on (current = this branch as pushed, release = latest upstream release, always rebuilt)"
         type: choice
-        options: [current, main, staging]
+        options: [current, release, main, staging]
         default: current
       prepared_branch:
         description: "Reviewed candidate branch on this fork (website-refresh/...); needs source_ref=current. Empty = this branch"
@@ -26,11 +27,39 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Finds the latest upstream release and skips the build when the site already shows it.
+  release:
+    if: github.repository == 'Gunterlie/Marinara-Engine' && (github.event_name == 'schedule' || inputs.source_ref == 'release')
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.latest.outputs.tag }}
+      build: ${{ steps.latest.outputs.build }}
+    steps:
+      - name: Compare the latest release with the deployed site
+        id: latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FORCED: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          tag=$(gh api repos/Pasta-Devs/Marinara-Engine/releases/latest --jq .tag_name)
+          [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::Unexpected release tag '$tag'"; exit 1; }
+          # A missing file or a site built from a branch has no releaseTag, so the release is built.
+          deployed=$(curl -fsSL https://gunterlie.github.io/Marinara-Engine/website-source.json | jq -r '.releaseTag // empty') || deployed=""
+          if [ "$FORCED" = true ] || [ "$tag" != "$deployed" ]; then build=true; else build=false; fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "build=$build" >> "$GITHUB_OUTPUT"
+          echo "Latest release $tag, deployed ${deployed:-no release}, forced $FORCED, build $build." >> "$GITHUB_STEP_SUMMARY"
+
   build:
-    if: github.repository == 'Gunterlie/Marinara-Engine' && (github.ref == 'refs/heads/feat/static-demo-tutorial' || github.event_name == 'schedule')
+    needs: release
+    if: >-
+      !cancelled() && github.repository == 'Gunterlie/Marinara-Engine' &&
+      (github.ref == 'refs/heads/feat/static-demo-tutorial' || github.event_name == 'schedule') &&
+      (needs.release.result == 'skipped' || needs.release.outputs.build == 'true')
     runs-on: ubuntu-latest
     env:
-      SOURCE_REF: ${{ inputs.source_ref || (github.event_name == 'schedule' && 'staging') || 'current' }}
+      SOURCE_REF: ${{ (github.event_name == 'schedule' && 'release') || inputs.source_ref || 'current' }}
+      RELEASE_TAG: ${{ needs.release.outputs.tag }}
       PREPARED_BRANCH: ${{ inputs.prepared_branch }}
     steps:
       # Values reach the shell only through env. A candidate must sit under website-refresh/ and have been reviewed before publication.
@@ -59,7 +88,7 @@ jobs:
           if [ "$SOURCE_REF" = current ]; then
             echo "dir=$GITHUB_WORKSPACE" >> "$GITHUB_OUTPUT"
           else
-            node scripts/demo/refresh.mjs prepare --source "$SOURCE_REF" --dir "$RUNNER_TEMP/website-refresh"
+            node scripts/demo/refresh.mjs prepare --source "$SOURCE_REF" ${RELEASE_TAG:+--tag "$RELEASE_TAG"} --dir "$RUNNER_TEMP/website-refresh"
             echo "dir=$RUNNER_TEMP/website-refresh" >> "$GITHUB_OUTPUT"
           fi
       - run: pnpm install --frozen-lockfile
@@ -68,9 +97,15 @@ jobs:
         working-directory: ${{ steps.prep.outputs.dir }}
         env:
           MARINARA_DEMO_BASE: /Marinara-Engine/
+      - name: Check the site against docs, assets, locale keys and versions
+        id: check
+        run: node scripts/demo/check-site.mjs ${RELEASE_TAG:+--tag "$RELEASE_TAG"}
+        working-directory: ${{ steps.prep.outputs.dir }}
       - run: pnpm exec playwright install --with-deps chromium
         working-directory: ${{ steps.prep.outputs.dir }}
-      - run: pnpm smoke:demo
+      - name: Smoke test
+        id: smoke
+        run: pnpm smoke:demo
         working-directory: ${{ steps.prep.outputs.dir }}
       # Provenance beside demo-build.json: source line, exact upstream commit, overlay commits, prepared head.
       - name: Record source
@@ -78,12 +113,35 @@ jobs:
         run: |
           if [ "$SOURCE_REF" = current ]; then CURRENT="--source current"; else CURRENT=""; fi
           node scripts/demo/refresh.mjs finish --dir . --out packages/client/dist-demo/website-source.json $CURRENT
+      - name: Job summary
+        if: always()
+        env:
+          DIR: ${{ steps.prep.outputs.dir }}
+          CHECK: ${{ steps.check.outcome || 'not run' }}
+          SMOKE: ${{ steps.smoke.outcome || 'not run' }}
+        run: |
+          meta="$DIR/packages/client/dist-demo/website-source.json"
+          [ -f "$meta" ] || meta="$RUNNER_TEMP/website-refresh.meta.json"
+          {
+            echo "### Website build"
+            echo "- Source: $SOURCE_REF"
+            echo "- Release tag: ${RELEASE_TAG:-none}"
+            if [ -f "$meta" ]; then
+              jq -r '"- Upstream commit: \(.sourceSha // "this branch as pushed")",
+                "- Overlay commits: \(.overlayCommits // [] | length) after \(.overlayBase // "none")",
+                "- Built head: \(.preparedHead // "not finished")"' "$meta"
+            fi
+            echo "- Site check: $CHECK"
+            echo "- Smoke test: $SMOKE"
+          } >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
         with:
           path: ${{ steps.prep.outputs.dir }}/packages/client/dist-demo
 
   deploy:
     needs: build
+    # Explicit, because a skipped release job would otherwise skip this job too.
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       pages: write
@@ -95,3 +153,7 @@ jobs:
       - name: Deploy trial
         id: deployment
         uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
+      - name: Job summary
+        env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+        run: echo "- Deployed: $PAGE_URL" >> "$GITHUB_STEP_SUMMARY"

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Replays the committed website overlay onto the latest upstream main/staging in an isolated worktree.
-//   node scripts/demo/refresh.mjs prepare --source main|staging [--dir D] [--base SHA]
+//   node scripts/demo/refresh.mjs prepare --source main|staging|release [--tag vX.Y.Z] [--dir D] [--base SHA]
 //   node scripts/demo/refresh.mjs finish [--dir D] [--meta F] [--out F] [--source current]
 // See WEBSITE-REBUILD.md. No build is run here; no source branch, remote or upstream ref is changed.
 import { spawnSync } from "node:child_process";
@@ -11,7 +11,10 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
 const UPSTREAM_URL = "https://github.com/Pasta-Devs/Marinara-Engine.git";
-const SOURCES = ["main", "staging"]; // allowlist: nothing else ever reaches git
+const BRANCHES = ["main", "staging"];
+// allowlist: nothing else ever reaches git. "release" is the newest vX.Y.Z tag upstream.
+const SOURCES = [...BRANCHES, "release"];
+const RELEASE_TAG = /^v\d+\.\d+\.\d+$/;
 const MAX_OVERLAY_COMMITS = 200; // more than this means the base is wrong, not the overlay big
 const WEBSITE_MARKERS = ["scripts/build-demo.mjs", "packages/client/src/demo/DemoHome.tsx"]; // upstream already ships the site
 // Paths this fork deleted on purpose (WEBSITE-REBUILD.md). Keep in sync with AGENTS.md.
@@ -50,7 +53,7 @@ const isAncestor = (a, b, cwd) => git(["merge-base", "--is-ancestor", a, b], cwd
 
 // A main-only hotfix must not be replayed as overlay, so main's merge-base wins when it descends from staging's.
 function defaultBase(root, ref) {
-  const [m, s] = SOURCES.map((n) => git(["merge-base", "HEAD", ref(n)], root, { allowFail: true }).out);
+  const [m, s] = BRANCHES.map((n) => git(["merge-base", "HEAD", ref(n)], root, { allowFail: true }).out);
   if (m && s && isAncestor(s, m, root)) return m;
   if (m && s && isAncestor(m, s, root)) return s;
   throw new Error(
@@ -58,11 +61,22 @@ function defaultBase(root, ref) {
   );
 }
 
+// Newest vX.Y.Z tag upstream, compared by number (v1.10.0 is newer than v1.9.0). Other tag names are ignored.
+function latestReleaseTag(upstreamUrl, root) {
+  const tags = gitOut(["ls-remote", "--tags", "--refs", upstreamUrl, "v*"], root)
+    .split("\n")
+    .map((line) => line.split("refs/tags/")[1] ?? "")
+    .filter((name) => RELEASE_TAG.test(name));
+  if (!tags.length) throw new Error(`No vX.Y.Z release tag at ${upstreamUrl}.`);
+  return tags.sort((a, b) => a.localeCompare(b, "en", { numeric: true })).at(-1);
+}
+
 export function prepare({
   root,
   source,
   dir,
   base,
+  tag,
   upstreamUrl = UPSTREAM_URL,
   scratch = `${homedir()}/scratch/website-refresh`,
 }) {
@@ -72,8 +86,16 @@ export function prepare({
   }
 
   // Fixed URL, fixed refspec: the repo and ref can never come from user input.
+  if (tag !== undefined && source !== "release") throw new Error("--tag works only with --source release.");
   const ref = (name) => `refs/website/upstream/${name}`;
-  git(["fetch", "--no-tags", upstreamUrl, ...SOURCES.map((s) => `+refs/heads/${s}:${ref(s)}`)], root);
+  const releaseTag = source === "release" ? (tag ?? latestReleaseTag(upstreamUrl, root)) : undefined;
+  // Validate before git sees it: the tag name ends up in a refspec.
+  if (releaseTag !== undefined && !RELEASE_TAG.test(releaseTag)) {
+    throw new Error(`Release tag must look like v1.2.3, got "${releaseTag}".`);
+  }
+  const refspecs = BRANCHES.map((s) => `+refs/heads/${s}:${ref(s)}`);
+  if (releaseTag) refspecs.push(`+refs/tags/${releaseTag}:${ref("release")}`);
+  git(["fetch", "--no-tags", upstreamUrl, ...refspecs], root);
   const sourceSha = gitOut(["rev-parse", "--verify", `${ref(source)}^{commit}`], root);
 
   // Overlay = commits after the base. Default base: where this branch left upstream, taking the later of main/staging.
@@ -113,6 +135,7 @@ export function prepare({
   const meta = {
     source,
     sourceRef: ref(source),
+    releaseTag,
     sourceSha,
     overlayBase,
     overlayCommits,
@@ -176,7 +199,7 @@ Prompt for your AI helper:
   overlay to it; do not revert upstream. Then run: git add <files> && git cherry-pick --continue
   (repeat until done), then: node scripts/demo/refresh.mjs finish --dir ${dir}
   Then run heavy pnpm install --frozen-lockfile, heavy pnpm build:demo, heavy pnpm smoke:demo
-  in ${dir}, and review the diff before you publish.
+  and node scripts/demo/check-site.mjs in ${dir}, and review the diff before you publish.
 
 To discard: git worktree remove --force ${dir}`;
 }
@@ -189,6 +212,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       source: { type: "string" },
       dir: { type: "string" },
       base: { type: "string" },
+      tag: { type: "string" },
       meta: { type: "string" },
       out: { type: "string" },
     },
@@ -202,10 +226,10 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
         process.exit(2);
       }
       console.log(
-        `Prepared ${r.dir}\n  source ${r.meta.source} @ ${r.meta.sourceSha}\n  overlay ${r.meta.overlayCommits.length} commit(s) from ${r.meta.overlayBase}`,
+        `Prepared ${r.dir}\n  source ${r.meta.source}${r.meta.releaseTag ? ` ${r.meta.releaseTag}` : ""} @ ${r.meta.sourceSha}\n  overlay ${r.meta.overlayCommits.length} commit(s) from ${r.meta.overlayBase}`,
       );
       console.log(
-        `Next, in ${r.dir}: heavy pnpm install --frozen-lockfile && heavy pnpm build:demo && heavy pnpm smoke:demo`,
+        `Next, in ${r.dir}: heavy pnpm install --frozen-lockfile && heavy pnpm build:demo && heavy pnpm smoke:demo && node scripts/demo/check-site.mjs`,
       );
     } else if (cmd === "finish") {
       console.log(
@@ -222,7 +246,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       );
     } else {
       throw new Error(
-        "usage: refresh.mjs prepare --source main|staging [--dir D] [--base SHA] | finish [--dir D] [--meta F] [--out F]",
+        "usage: refresh.mjs prepare --source main|staging|release [--tag vX.Y.Z] [--dir D] [--base SHA] | finish [--dir D] [--meta F] [--out F]",
       );
     }
   } catch (e) {
