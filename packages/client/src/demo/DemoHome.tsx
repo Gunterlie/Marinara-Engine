@@ -73,6 +73,7 @@ export function DemoHome() {
       <HomeCreditsModal open={creditsOpen} onClose={() => setCreditsOpen(false)} />
       <HomeBrowserHub
         pageActive={pageActive}
+        hideProfessor
         onOpenCredits={() => setCreditsOpen(true)}
         website={{
           tab,

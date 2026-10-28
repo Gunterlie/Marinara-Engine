@@ -250,7 +250,7 @@ export function DemoLandingHero() {
           </div>
 
           {/* Stage: a scripted chat plays in the app frame, a real screen behind, Mari at the edge */}
-          <div ref={stageRef} className="demo-hero-stage relative pt-6 sm:pb-20 sm:pt-0 lg:pl-6">
+          <div ref={stageRef} className="demo-hero-stage relative pt-16 sm:pb-20 sm:pt-0 lg:pl-6">
             <div
               aria-hidden="true"
               className="demo-hero-glow pointer-events-none absolute -inset-4 -z-10 sm:-inset-12"
@@ -291,7 +291,7 @@ export function DemoLandingHero() {
               />
             </figure>
             <div
-              className={`${PARALLAX} absolute bottom-0 left-0 flex items-end gap-2 [--depth:14px] max-sm:bottom-auto max-sm:left-auto max-sm:right-3 z-20 max-sm:top-0 max-sm:-translate-y-[92%] sm:-left-4 lg:-left-2`}
+              className={`${PARALLAX} absolute bottom-0 left-0 flex items-end gap-2 [--depth:14px] max-sm:bottom-auto max-sm:left-3 z-20 max-sm:top-16 max-sm:-translate-y-[72%] sm:-left-4 lg:-left-2`}
             >
               <img
                 src={mari.poses.chibi}
