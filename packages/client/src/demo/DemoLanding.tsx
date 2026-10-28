@@ -869,13 +869,13 @@ export function DemoLanding() {
         inert={!actionBar}
         className="demo-action-bar fixed inset-x-0 bottom-0 z-30 flex gap-2 border-t border-[var(--border)] bg-[color-mix(in_srgb,var(--background)_88%,transparent)] px-4 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-3 backdrop-blur-xl md:hidden"
       >
-        <a href="#/demo" className={cn(PRIMARY_BUTTON, "flex-1 px-3")}>
+        <a href="#/demo" className={cn(PRIMARY_BUTTON, "min-h-[44px] flex-1 px-3")}>
           <Play className="h-4 w-4" aria-hidden="true" />
           {t("demo.site.try")}
         </a>
-        <a href="#/download" className={cn(SECONDARY_BUTTON, "flex-1 px-3")}>
+        <a href="#/download" className={cn(SECONDARY_BUTTON, "min-h-[44px] flex-1 px-3")}>
           <Download className="h-4 w-4" aria-hidden="true" />
-          {t("demo.landing.install")}
+          {t("demo.landing.stickyInstall")}
         </a>
       </div>
     </div>

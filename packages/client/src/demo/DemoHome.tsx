@@ -9,6 +9,7 @@ import { DemoLanding, DemoLandingHero } from "./DemoLanding";
 import { DemoSiteFooter, DemoSiteLinks, DemoSiteTabs } from "./DemoSiteTabs";
 
 const DemoDocs = lazy(() => import("./DemoDocs").then((module) => ({ default: module.DemoDocs })));
+const DemoChangelog = lazy(() => import("./DemoChangelog").then((module) => ({ default: module.DemoChangelog })));
 
 // Short links people guess, mapped to the guide they mean.
 const DOC_ALIASES = new Map([
@@ -45,6 +46,13 @@ export function DemoHome() {
   } else if (route === "#/download") {
     tab = "download";
     page = <DemoDownload />;
+  } else if (route === "#/changelog" || route.startsWith("#/changelog/")) {
+    tab = "changelog";
+    page = (
+      <Suspense fallback={null}>
+        <DemoChangelog version={route.slice("#/changelog/".length)} />
+      </Suspense>
+    );
   } else if (route === "#/docs" || route.startsWith("#/docs/")) {
     tab = "docs";
     const rawPath = route.slice("#/docs".length).replace(/^\//, "");

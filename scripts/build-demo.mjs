@@ -80,16 +80,22 @@ function writeDocs(dir, list) {
 }
 writeDocs("", docs);
 
-// Translated guides come from the Engine's docs-i18n branch: one folder per language with the same paths as docs/.
-// A failed fetch or a missing branch only drops the translations; the English site still builds.
-const I18N_REF = "refs/website/upstream/docs-i18n";
+// Translated guides (docs-i18n) and release notes (main) come from the Engine repository.
+// A failed fetch or a missing branch only drops that part; the English site still builds.
+// No --depth: a shallow fetch would mark the whole local repository shallow.
 const git = (...args) => spawnSync("git", args, { cwd: root, encoding: "utf8", maxBuffer: 1 << 26 });
-const i18nRemote = process.env.MARINARA_DOCS_I18N_REMOTE ?? "https://github.com/Pasta-Devs/Marinara-Engine.git";
-const fetched = git("fetch", "--quiet", "--no-tags", "--depth=1", i18nRemote, `+refs/heads/docs-i18n:${I18N_REF}`);
-if (fetched.status !== 0)
-  console.warn(`[build-demo] Could not fetch docs-i18n from ${i18nRemote}: ${fetched.stderr?.trim()}`);
+const upstreamRemote = process.env.MARINARA_UPSTREAM_REMOTE ?? "https://github.com/Pasta-Devs/Marinara-Engine.git";
+function fetchUpstream(branch) {
+  const ref = `refs/website/upstream/${branch}`;
+  const fetched = git("fetch", "--quiet", "--no-tags", upstreamRemote, `+refs/heads/${branch}:${ref}`);
+  if (fetched.status !== 0) console.warn(`[build-demo] Could not fetch ${branch} from ${upstreamRemote}: ${fetched.stderr?.trim()}`);
+  if (git("rev-parse", "--verify", "--quiet", `${ref}^{commit}`).status === 0) return ref;
+  console.warn(`[build-demo] ${ref} is not available; skipping it.`);
+  return null;
+}
+const I18N_REF = fetchUpstream("docs-i18n");
 const languages = [];
-if (git("rev-parse", "--verify", "--quiet", `${I18N_REF}^{commit}`).status === 0) {
+if (I18N_REF) {
   const tree = new Set(git("ls-tree", "-r", "--name-only", I18N_REF).stdout.split("\n"));
   const updatedAt = git("log", "-1", "--format=%cI", I18N_REF).stdout.trim();
   const codes = [...tree].filter((file) => /^[a-z-]+\/manifest\.json$/.test(file)).map((file) => file.split("/")[0]);
@@ -105,10 +111,22 @@ if (git("rev-parse", "--verify", "--quiet", `${I18N_REF}^{commit}`).status === 0
     languages.push(code);
   }
   console.log(`[build-demo] Translated docs: ${languages.join(", ") || "none"}`);
-} else {
-  console.warn(`[build-demo] ${I18N_REF} is not available; publishing English docs only.`);
 }
 writeFileSync(resolve(root, "packages/client/dist-demo/demo-docs/languages.json"), JSON.stringify(languages));
+
+// Release notes: one entry per "## [x.y.z] - date" heading of the released CHANGELOG.md. Without it the page links to GitHub.
+const MAIN_REF = fetchUpstream("main");
+const changelog = MAIN_REF ? git("show", `${MAIN_REF}:CHANGELOG.md`).stdout : "";
+const releases = changelog
+  .split(/^## /m)
+  .slice(1)
+  .map((part) => {
+    const [, version, date = ""] = part.match(/^\[([^\]]+)\](?:[ \t]+-[ \t]+(\S+))?/) ?? [];
+    return { version, date, body: part.slice(part.indexOf("\n") + 1).trim() };
+  })
+  .filter((release) => /^\d+\.\d+\.\d+/.test(release.version ?? "") && release.body);
+writeFileSync(resolve(root, "packages/client/dist-demo/changelog.json"), JSON.stringify(releases));
+console.log(`[build-demo] Changelog: ${releases.length} releases`);
 
 mkdirSync(resolve(root, "packages/client/dist-demo/website"), { recursive: true });
 const sharp = createRequire(resolve(root, "packages/server/package.json"))("sharp");

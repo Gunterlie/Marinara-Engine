@@ -1,7 +1,8 @@
 // ──────────────────────────────────────────────
 // Static demo: Home lead row and the download view
 // ──────────────────────────────────────────────
-import { ArrowRight, BookOpen, Download } from "lucide-react";
+import { ArrowRight, BookOpen, Download, ExternalLink } from "lucide-react";
+import { APP_VERSION } from "@marinara-engine/shared";
 import { useTranslation } from "react-i18next";
 import { DemoBrandMark } from "./DemoSiteTabs";
 
@@ -14,6 +15,7 @@ const SECONDARY = `inline-flex min-h-11 items-center justify-center gap-2 rounde
 const TEXT_LINK = `inline-flex min-h-11 w-fit items-center gap-1.5 text-sm font-semibold text-[var(--primary)] hover:underline ${FOCUS}`;
 
 const RELEASES_URL = "https://github.com/Pasta-Devs/Marinara-Engine/releases/latest";
+const ALL_RELEASES_URL = "https://github.com/Pasta-Devs/Marinara-Engine/releases";
 const CLONE = "git clone https://github.com/Pasta-Devs/Marinara-Engine.git\ncd Marinara-Engine";
 
 // Steps and requirements follow the install guides in docs/installation.
@@ -52,6 +54,37 @@ export function DemoDownload() {
         <p className="max-w-[60ch] text-pretty text-sm leading-relaxed text-[var(--muted-foreground)] sm:text-base">
           {t("demo.landing.platforms.body")}
         </p>
+      </section>
+
+      <section
+        aria-labelledby="demo-download-release"
+        className="flex flex-col gap-3 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4 sm:p-6"
+      >
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 id="demo-download-release" className="text-lg font-bold text-[var(--foreground)]">
+            {t("demo.download.releaseTitle")}
+          </h2>
+          <span className="rounded-full border border-[var(--border)] bg-[var(--secondary)] px-2 py-0.5 text-xs font-semibold tabular-nums text-[var(--foreground)]">
+            v{APP_VERSION}
+          </span>
+        </div>
+        <p className="max-w-[65ch] text-sm leading-relaxed text-[var(--muted-foreground)]">
+          {t("demo.download.releaseBody")}
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <a href={RELEASES_URL} target="_blank" rel="noreferrer" className={PRIMARY}>
+            {t("demo.download.releaseLatest")}
+            <ExternalLink className="h-4 w-4" aria-hidden="true" />
+          </a>
+          <a href={ALL_RELEASES_URL} target="_blank" rel="noreferrer" className={SECONDARY}>
+            {t("demo.download.releaseAll")}
+            <ExternalLink className="h-4 w-4" aria-hidden="true" />
+          </a>
+          <a href="#/changelog" className={TEXT_LINK}>
+            {t("demo.download.changelog")}
+            <ArrowRight className="h-4 w-4" aria-hidden="true" />
+          </a>
+        </div>
       </section>
 
       <section aria-labelledby="demo-download-platforms" className="flex flex-col gap-3">
@@ -150,7 +183,7 @@ export function DemoDownload() {
         </div>
       </section>
 
-      <a href="#/about" className={TEXT_LINK}>
+      <a href="#/features" className={TEXT_LINK}>
         {t("demo.download.about")}
         <ArrowRight className="h-4 w-4" aria-hidden="true" />
       </a>

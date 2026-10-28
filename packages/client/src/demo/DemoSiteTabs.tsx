@@ -1,7 +1,7 @@
 // ──────────────────────────────────────────────
 // Static demo: the website's tabs in the Engine's own Home tab row, and the page footer.
 // ──────────────────────────────────────────────
-import { Download } from "lucide-react";
+import { Download, ScrollText } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { MarinaraWordmark } from "../components/chat/HomeBrowserHub";
 import { cn } from "../lib/utils";
@@ -28,7 +28,8 @@ const ICON_LINK = `flex h-8 w-8 shrink-0 items-center justify-center rounded-ful
 const TABS = [
   { id: "features", key: "demo.site.features", icon: "home/tab-icons/widgets.svg" },
   { id: "docs", key: "demo.site.docs", icon: "home/tab-icons/documentation.png" },
-  { id: "download", key: "demo.site.download", icon: null },
+  { id: "download", key: "demo.site.download", icon: Download },
+  { id: "changelog", key: "demo.site.changelog", icon: ScrollText },
 ] as const;
 
 /** Logo link to Home for page headers; the website tab row has no logo, so the tabs sit at the same place on every page. */
@@ -83,10 +84,10 @@ export function DemoSiteTabs({ tab }: { tab: string | null }) {
             : "border-transparent text-[var(--muted-foreground)] hover:bg-[var(--accent)]",
         )}
       >
-        {item.icon ? (
+        {typeof item.icon === "string" ? (
           <img src={asset(item.icon)} alt="" className={TAB_ICON} />
         ) : (
-          <Download className={cn(TAB_ICON, "text-[var(--primary)]")} aria-hidden="true" />
+          <item.icon className={cn(TAB_ICON, "text-[var(--primary)]")} aria-hidden="true" />
         )}
         <span className={cn("min-w-0 truncate", active ? "block" : "hidden sm:block")}>{t(item.key)}</span>
       </button>
@@ -139,6 +140,7 @@ const FOOTER = [
     links: [
       { label: "demo.site.features", href: "#/features" },
       { label: "demo.site.download", href: "#/download" },
+      { label: "demo.site.changelog", href: "#/changelog" },
       { label: "demo.site.try", href: "#/demo" },
       { label: "demo.landing.guides.mari.title", href: "#/docs/home/professor-mari.md" },
     ],
