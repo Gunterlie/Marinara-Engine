@@ -9,6 +9,7 @@ import { DemoLanding, DemoLandingHero } from "./DemoLanding";
 import { DemoSiteFooter, DemoSiteLinks, DemoSiteTabs } from "./DemoSiteTabs";
 
 const DemoDocs = lazy(() => import("./DemoDocs").then((module) => ({ default: module.DemoDocs })));
+const DemoAgents = lazy(() => import("./DemoAgents").then((module) => ({ default: module.DemoAgents })));
 const DemoChangelog = lazy(() => import("./DemoChangelog").then((module) => ({ default: module.DemoChangelog })));
 
 // Short links people guess, mapped to the guide they mean.
@@ -42,7 +43,14 @@ export function DemoHome() {
   let page: ReactNode = null;
   if (route.startsWith("#/features")) {
     tab = "features";
-    page = <DemoFeatures category={new URLSearchParams(query).get("c") ?? ""} />;
+    page =
+      route === "#/features/agents" || route.startsWith("#/features/agents/") ? (
+        <Suspense fallback={null}>
+          <DemoAgents slug={route.slice("#/features/agents/".length)} />
+        </Suspense>
+      ) : (
+        <DemoFeatures category={new URLSearchParams(query).get("c") ?? ""} />
+      );
   } else if (route === "#/download") {
     tab = "download";
     page = <DemoDownload />;

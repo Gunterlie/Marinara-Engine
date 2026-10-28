@@ -85,6 +85,12 @@ function CategorySection({ category, index }: { category: FeatureCategory; index
                 <ArrowRight className="h-4 w-4" aria-hidden="true" />
                 <span className="sr-only">: {t(`demo.features.items.${item.key}.title`)}</span>
               </a>
+              {item.page ? (
+                <a href={item.page} className={TEXT_LINK}>
+                  {t("demo.agents.browse")}
+                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                </a>
+              ) : null}
               {item.demo ? (
                 <a href={item.demo} className={`${TEXT_LINK} text-[var(--foreground)]`}>
                   <Play className="h-4 w-4" aria-hidden="true" />
@@ -105,7 +111,7 @@ function CategorySection({ category, index }: { category: FeatureCategory; index
             {more.map((item) => (
               <li key={item.key}>
                 <a
-                  href={docHref(item.doc, item.section)}
+                  href={item.page ?? docHref(item.doc, item.section)}
                   className={`inline-flex min-h-11 items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--background)] px-4 text-sm text-[var(--foreground)] transition-colors hover:border-[var(--feature-accent)] motion-reduce:transition-none ${FOCUS}`}
                 >
                   <span className="h-1.5 w-1.5 rounded-full bg-[var(--feature-accent)]" aria-hidden="true" />
@@ -221,7 +227,7 @@ export function DemoFeatures({ category }: { category: string }) {
                 {item.items.map((feature) => (
                   <li key={feature.key}>
                     <a
-                      href={docHref(feature.doc, feature.section)}
+                      href={feature.page ?? docHref(feature.doc, feature.section)}
                       className={`flex min-h-9 items-start gap-2 rounded-md py-1.5 text-sm text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:underline ${FOCUS}`}
                     >
                       <Check className="mt-0.5 h-4 w-4 shrink-0 text-[var(--feature-accent)]" aria-hidden="true" />

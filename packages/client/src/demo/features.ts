@@ -15,7 +15,14 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-export type FeatureItem = { key: string; doc: string; section?: string; highlight?: boolean; demo?: string };
+export type FeatureItem = {
+  key: string;
+  doc: string;
+  section?: string;
+  highlight?: boolean;
+  demo?: string;
+  page?: string;
+};
 export type FeatureCategory = {
   key: string;
   icon: LucideIcon;
@@ -148,9 +155,15 @@ export const FEATURE_CATEGORIES: FeatureCategory[] = [
     accent: ROLEPLAY,
     items: [
       { key: "mari", doc: "home/professor-mari.md", highlight: true },
-      { key: "agents", doc: "agents/agents-overview.md", highlight: true, demo: "#/demo?panel=agents" },
+      {
+        key: "agents",
+        doc: "agents/agents-overview.md",
+        highlight: true,
+        demo: "#/demo?panel=agents",
+        page: "#/features/agents",
+      },
       { key: "customAgents", doc: "agents/custom-agents.md", highlight: true },
-      { key: "catalog", doc: "agents/built-in-agents.md" },
+      { key: "catalog", doc: "agents/built-in-agents.md", page: "#/features/agents" },
       { key: "approvals", doc: "agents/approvals-and-agent-suite.md" },
       { key: "tutorial", doc: "home/tutorial.md" },
       { key: "achievements", doc: "home/achievements.md" },
@@ -230,3 +243,19 @@ export const FEATURE_CATEGORIES: FeatureCategory[] = [
 ];
 
 export const FEATURE_COUNT = FEATURE_CATEGORIES.reduce((sum, category) => sum + category.items.length, 0);
+
+/** Agent pages with a hand-written tagline, `demo.agents.tagline.<slug>`. The rest show the first sentence of their guide entry. */
+export const AGENT_TAGLINES = [
+  "noodle",
+  "slurp",
+  "gacha-forge",
+  "illustrator",
+  "lorebook-keeper",
+  "long-term-memory",
+  "music-dj",
+  "narrative-director",
+  "world-state",
+  "2d-avatars",
+  "calls",
+  "chess",
+];

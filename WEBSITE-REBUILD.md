@@ -83,7 +83,11 @@ A push to `feat/static-demo-tutorial` still deploys that branch as pushed (`sour
 - Every `docs/` folder is in `DOC_CATEGORIES` (`packages/client/src/demo/docs.ts`) and in `categories` (`scripts/build-demo.mjs`), and the two lists are the same. A new upstream folder fails with the lines to add, or with a hint to delete it in this fork.
 - Screenshots and images named in the site code exist in the build.
 - `demo.*` keys used in code exist in `en.json`. Unused `demo.*` keys are only warnings.
-- `scripts/demo/check-agents.mjs` passes, when that script exists.
+- `scripts/demo/check-agents.mjs` passes. Every agent in `docs/agents/built-in-agents.md` has a built page, every `docs/agents/` guide is in the docs index, and every slug in `AGENT_TAGLINES` (`packages/client/src/demo/features.ts`) still exists and has a `demo.agents.tagline.<slug>` key in `en.json`.
+
+### When upstream adds an agent
+
+`pnpm build:demo` makes the agent pages from `docs/agents/built-in-agents.md`: one page per `### Name` under a `## Category`, at `#/features/agents/<slug>`, where the slug is the heading anchor in that guide. A new agent gets its page on the next build, with the first sentence of its entry as the tagline, so nothing must change. To give it a hand-written tagline, add its slug to `AGENT_TAGLINES` and add `demo.agents.tagline.<slug>` to `en.json`. When upstream renames or removes an agent, `check-agents` names the stale tagline to rename or remove.
 - `APP_VERSION` equals the root `package.json` version and the built `demo-build.json`. With `--tag vX.Y.Z` (CI passes it for release builds), the version must also equal the tag.
 
 ## When a run fails

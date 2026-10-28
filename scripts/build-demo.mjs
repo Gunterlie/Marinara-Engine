@@ -4,6 +4,7 @@ import { copyFileSync, readFileSync, writeFileSync, readdirSync, statSync, mkdir
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolvePnpmRunner } from "./pnpm-runner.mjs";
+import { AGENTS_GUIDE, agentPages } from "./demo/agents-pages.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const base = process.env.MARINARA_DEMO_BASE ?? "/Marinara-Engine/";
@@ -79,6 +80,9 @@ function writeDocs(dir, list) {
   }
 }
 writeDocs("", docs);
+const agents = agentPages(docs.find((doc) => doc.path === AGENTS_GUIDE)?.content ?? "");
+writeFileSync(resolve(root, "packages/client/dist-demo/agents.json"), JSON.stringify(agents));
+console.log(`[build-demo] Agent pages: ${agents.length}`);
 
 // Translated guides (docs-i18n) and release notes (main) come from the Engine repository.
 // A failed fetch or a missing branch only drops that part; the English site still builds.
@@ -88,7 +92,8 @@ const upstreamRemote = process.env.MARINARA_UPSTREAM_REMOTE ?? "https://github.c
 function fetchUpstream(branch) {
   const ref = `refs/website/upstream/${branch}`;
   const fetched = git("fetch", "--quiet", "--no-tags", upstreamRemote, `+refs/heads/${branch}:${ref}`);
-  if (fetched.status !== 0) console.warn(`[build-demo] Could not fetch ${branch} from ${upstreamRemote}: ${fetched.stderr?.trim()}`);
+  if (fetched.status !== 0)
+    console.warn(`[build-demo] Could not fetch ${branch} from ${upstreamRemote}: ${fetched.stderr?.trim()}`);
   if (git("rev-parse", "--verify", "--quiet", `${ref}^{commit}`).status === 0) return ref;
   console.warn(`[build-demo] ${ref} is not available; skipping it.`);
   return null;
