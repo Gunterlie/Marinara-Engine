@@ -11,7 +11,16 @@ const root = fileURLToPath(new URL("../../", import.meta.url));
 const dist = resolve(process.argv[2] ?? resolve(root, "packages/client/dist-demo"));
 const shots = process.argv[3] ? resolve(process.argv[3]) : null;
 const { base } = JSON.parse(await readFile(resolve(dist, "demo-build.json"), "utf8"));
-const routes = ["#/", "#/features", "#/download", "#/about", "#/docs", "#/docs/installation/windows.md", "#/demo"];
+const routes = [
+  "#/",
+  "#/features",
+  "#/changelog",
+  "#/download",
+  "#/about",
+  "#/docs",
+  "#/docs/installation/windows.md",
+  "#/demo",
+];
 const types = {
   ".html": "text/html",
   ".js": "text/javascript",
@@ -72,8 +81,9 @@ const scrolled = (page) =>
 const browser = await chromium.launch({ args: ["--mute-audio"] });
 const results = [];
 const restored = [];
+const tabRows = [];
 try {
-  for (const width of [390, 1440]) {
+  for (const width of [360, 390, 1440]) {
     const context = await browser.newContext({ viewport: { width, height: 900 }, colorScheme: "dark" });
     await context.addInitScript(observe);
     for (const route of routes) {
@@ -81,6 +91,14 @@ try {
       await page.goto(url + route);
       await settle(page);
       const cold = await take(page);
+      // The site tabs (after Home, which has no test id) keep one order and the same x positions on every page, and fit at 360 px.
+      const tabs = await page.evaluate(() =>
+        [...document.querySelectorAll('[role="tab"][data-testid^="demo-tab-"]')].map((tab) => {
+          const box = tab.getBoundingClientRect();
+          return `${tab.dataset.testid.slice(9)}@${Math.round(box.x)}-${Math.round(box.right)}`;
+        }),
+      );
+      if (tabs.length) tabRows.push({ width, route, tabs });
       if (shots) await page.screenshot({ path: resolve(shots, `${width}-${route.replace(/\W+/g, "_")}.png`) });
       // Navigate from a scrolled landing page, the way a visitor follows a link deep in the story.
       await page.evaluate((from) => (location.hash = from), route === "#/" ? "#/features" : "#/");
@@ -124,6 +142,16 @@ for (const { width, route, cold, nav, scrollAfter, sources } of results) {
 // Entering the workspace swaps the whole shell (site bar overlay to in-flow Engine bar) behind a fade, so its nav score is logged only.
 const worst = Math.max(...results.flatMap((item) => [item.cold, item.route === "#/demo" ? 0 : item.nav]));
 console.log(`Worst website CLS ${worst}`);
+for (const { width, route, tabs } of tabRows) {
+  const first = tabRows.find((row) => row.width === width);
+  assert.deepEqual(tabs, first.tabs, `${width}px ${route}: the tabs moved compared with ${first.route}`);
+  assert.deepEqual(
+    tabs.map((tab) => tab.split("@")[0]),
+    ["features", "docs", "changelog", "download"],
+    `${width}px: wrong tab order`,
+  );
+  assert.ok(Math.max(...tabs.map((tab) => Number(tab.split("-").at(-1)))) <= width, `${width}px: the tabs do not fit`);
+}
 for (const { width, left, back } of restored) console.log(`${width}px back to #/ left at ${left}, restored to ${back}`);
 assert.ok(worst < 0.1, `Layout shift ${worst} is above 0.1`);
 const kept = results.filter((item) => !item.route.startsWith("#/docs") && item.scrollAfter > 0);

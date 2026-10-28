@@ -46,8 +46,8 @@ const ICON_LINK = `flex h-8 w-8 shrink-0 items-center justify-center rounded-ful
 const TABS = [
   { id: "features", key: "demo.site.features", icon: "home/tab-icons/widgets.svg" },
   { id: "docs", key: "demo.site.docs", icon: "home/tab-icons/documentation.png" },
-  { id: "download", key: "demo.site.download", icon: Download },
   { id: "changelog", key: "demo.site.changelog", icon: ScrollText },
+  { id: "download", key: "demo.site.download", icon: Download },
 ] as const;
 
 /** Logo link to Home for page headers; the website tab row has no logo, so the tabs sit at the same place on every page. */

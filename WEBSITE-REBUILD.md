@@ -104,6 +104,12 @@ To serve the site from your own web server, run `scripts/demo/pull-site.sh <targ
 
 `pnpm build:demo` makes the agent pages from `docs/agents/built-in-agents.md`: one page per `### Name` under a `## Category`, at `#/features/agents/<slug>`, where the slug is the heading anchor in that guide. A new agent gets its page on the next build, with the first sentence of its entry as the tagline, so nothing must change. To give it a hand-written tagline, add its slug to `AGENT_TAGLINES` and add `demo.agents.tagline.<slug>` to `en.json`. When upstream renames or removes an agent, `check-agents` names the stale tagline to rename or remove.
 - `APP_VERSION` equals the root `package.json` version and the built `demo-build.json`. With `--tag vX.Y.Z` (CI passes it for release builds), the version must also equal the tag.
+- `whats-new.json` is for the newest `CHANGELOG.md` release. A release without notes in `WhatsNewModal.tsx` is a warning.
+- Every release video in `packages/client/public/releases` has a poster, and the build wrote `dist-demo/changelog-media`.
+
+### When upstream adds release notes
+
+The Changelog tab, the landing "What's new" card and the Engine's What's New dialog show the Engine's own notes (`RELEASE_ANNOUNCEMENTS` and `ReleaseNotes` in `packages/client/src/components/modals/WhatsNewModal.tsx`, media in `packages/client/public/releases/<version>`). Releases without story or highlights there show their `CHANGELOG.md` entry. `pnpm build:demo` turns the images into WebP and copies the videos under 5 MB to `/changelog-media/`. Media from other hosts are left out, because the site allows same-origin media only. When upstream adds a release video, run `node scripts/demo/changelog-posters.mjs` and commit the new posters in `packages/client/public/demo-assets/changelog-posters`. `check:site` names any missing poster.
 
 ## When a run fails
 

@@ -2,11 +2,12 @@
 // Fails when the built demo website drifts from docs, assets, locale keys or versions.
 //   node scripts/demo/check-site.mjs [--tag vX.Y.Z]     (after pnpm build:demo; --tag when the source is a release)
 import { spawnSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { DOC_CATEGORIES, headingSlug, prepareDemoDoc } from "../../packages/client/src/demo/docs.ts";
+import { releaseVideos } from "./changelog-posters.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const { values } = parseArgs({ options: { tag: { type: "string" } } });
@@ -170,7 +171,26 @@ if (!existsSync(changelogFile) || !existsSync(whatsNewFile)) {
     );
   if (latest && latest.version !== version)
     warnings.push(`The newest changelog release is ${latest.version}, but package.json says ${version}.`);
+  // The Changelog tab and the landing show the Engine's own What's New notes, CHANGELOG.md only when they are missing.
+  const modal = read(join(client, "src/components/modals/WhatsNewModal.tsx"));
+  if (latest && !modal.includes(`"${latest.version}": {`)) {
+    warnings.push(`WhatsNewModal.tsx has no notes for ${latest.version}, so the site shows its CHANGELOG.md entry.`);
+  }
 }
+
+// Release media: every video needs a poster (preload="none"), and the build wrote /changelog-media/.
+for (const { file, poster } of releaseVideos()) {
+  if (!existsSync(poster)) {
+    errors.push(`releases/${file} has no poster. Run node scripts/demo/changelog-posters.mjs and commit the result.`);
+  }
+}
+const mediaDir = join(dist, "changelog-media");
+const mediaFiles = existsSync(mediaDir)
+  ? readdirSync(mediaDir, { recursive: true, withFileTypes: true }).filter((entry) => entry.isFile())
+  : [];
+if (!mediaFiles.length) errors.push("dist-demo/changelog-media is missing. Rebuild with pnpm build:demo.");
+const mediaBytes = mediaFiles.reduce((total, entry) => total + statSync(join(entry.parentPath, entry.name)).size, 0);
+console.log(`Changelog media: ${mediaFiles.length} files, ${(mediaBytes / 1048576).toFixed(1)} MB`);
 
 const report = [...errors, ...warnings.map((warning) => `warning: ${warning}`)];
 report.forEach((line, i) => console.log(`${i + 1}. ${line}`));

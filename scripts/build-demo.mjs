@@ -1,11 +1,21 @@
 import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
-import { copyFileSync, readFileSync, writeFileSync, readdirSync, statSync, mkdirSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  readFileSync,
+  writeFileSync,
+  readdirSync,
+  statSync,
+  mkdirSync,
+  rmSync,
+} from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolvePnpmRunner } from "./pnpm-runner.mjs";
 import { AGENTS_GUIDE, agentPages } from "./demo/agents-pages.mjs";
 import { whatsNew } from "./demo/whats-new.mjs";
+import { POSTERS } from "./demo/changelog-posters.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 
@@ -43,6 +53,43 @@ const base = process.env.MARINARA_DEMO_BASE || "/Marinara-Website/";
 if (!/^\/(?:[A-Za-z0-9._-]+\/)*$/.test(base)) {
   throw new Error("MARINARA_DEMO_BASE must be an absolute directory path with a trailing slash.");
 }
+
+// Release notes media (the Engine's What's New pictures and videos) for /changelog-media/:
+// images become WebP, videos keep their mp4 and get the poster from changelog-posters.mjs.
+// The sizes go into the bundle, so the boxes keep their height before the media load.
+// Keys carry the base because vite.config.ts rewrites the Engine's "/releases/..." paths to it.
+const sharp = createRequire(resolve(root, "packages/server/package.json"))("sharp");
+const releasesDir = resolve(root, "packages/client/public/releases");
+const MAX_VIDEO_BYTES = 5 * 1024 * 1024;
+const siteMedia = {};
+const mediaFiles = [];
+for (const file of readdirSync(releasesDir, { recursive: true })) {
+  const from = resolve(releasesDir, file);
+  if (/\.(png|jpe?g|gif|webp)$/i.test(file)) {
+    const to = file.replace(/\.\w+$/, ".webp");
+    const { data, info } = await sharp(from)
+      .resize({ width: 1600, height: 1600, fit: "inside", withoutEnlargement: true })
+      .webp({ quality: 80, effort: 4 })
+      .toBuffer({ resolveWithObject: true });
+    mediaFiles.push({ to, data });
+    siteMedia[`${base}releases/${file}`] = { src: `${base}changelog-media/${to}`, width: info.width, height: info.height };
+  } else if (file.endsWith(".mp4")) {
+    const poster = resolve(POSTERS, file.replace(/\.mp4$/, ".webp"));
+    if (statSync(from).size > MAX_VIDEO_BYTES || !existsSync(poster)) {
+      console.warn(`[build-demo] ${file} is over 5 MB or has no poster, so the site leaves it out.`);
+      continue;
+    }
+    const { width, height } = await sharp(poster).metadata();
+    mediaFiles.push({ to: file, data: readFileSync(from) });
+    siteMedia[`${base}releases/${file}`] = {
+      src: `${base}changelog-media/${file}`,
+      poster: `${base}demo-assets/changelog-posters/${file.replace(/\.mp4$/, ".webp")}`,
+      width,
+      height,
+    };
+  }
+}
+process.env.VITE_DEMO_CHANGELOG_MEDIA = JSON.stringify(siteMedia);
 
 const env = {
   ...process.env,
@@ -147,10 +194,18 @@ writeFileSync(resolve(root, "packages/client/dist-demo/demo-docs/languages.json"
 
 writeFileSync(resolve(root, "packages/client/dist-demo/changelog.json"), JSON.stringify(releases));
 writeFileSync(resolve(root, "packages/client/dist-demo/whats-new.json"), JSON.stringify(summary));
+for (const { to, data } of mediaFiles) {
+  const out = resolve(root, "packages/client/dist-demo/changelog-media", to);
+  mkdirSync(resolve(out, ".."), { recursive: true });
+  writeFileSync(out, data);
+}
+// The site reads release media from /changelog-media/ only, so the public copy would be a second 14 MB.
+rmSync(resolve(root, "packages/client/dist-demo/releases"), { recursive: true, force: true });
+const mediaBytes = mediaFiles.reduce((total, { data }) => total + data.length, 0);
+console.log(`[build-demo] Changelog media: ${mediaFiles.length} files, ${(mediaBytes / 1048576).toFixed(1)} MB`);
 console.log(`[build-demo] Changelog: ${releases.length} releases`);
 
 mkdirSync(resolve(root, "packages/client/dist-demo/website"), { recursive: true });
-const sharp = createRequire(resolve(root, "packages/server/package.json"))("sharp");
 for (const image of [
   "Desktop_Roleplay_View.png",
   "Desktop_DM_Conversation.png",

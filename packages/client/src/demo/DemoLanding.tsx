@@ -33,6 +33,8 @@ import { cn } from "../lib/utils";
 import { requestProfessorMariOpen } from "../lib/professor-mari-open";
 import { FeedModule, HOME_MODULE_ACCENTS, MarinaraWordmark } from "../components/chat/HomeBrowserHub";
 import { GITHUB_URL, GithubIcon, WHATS_NEW, WHATS_NEW_IS_NEW, asset } from "./DemoSiteTabs";
+import { engineNotes } from "./DemoChangelog";
+import { siteMedia } from "../components/modals/WhatsNewModal";
 import { useMariAppearancePack } from "../hooks/use-mari-appearance-pack";
 import { DEMO_ASSETS } from "./seed";
 import { docHref } from "./docs";
@@ -330,53 +332,85 @@ export function DemoLandingHero() {
 function WhatsNew() {
   const { t } = useTranslation();
   const releaseUrl = `${GITHUB_URL}/releases/${WHATS_NEW ? `tag/v${WHATS_NEW.version}` : "latest"}`;
+  // The Engine's own What's New notes when they exist, else the CHANGELOG.md bullets.
+  const notes = WHATS_NEW ? engineNotes(WHATS_NEW.version) : undefined;
+  const copy = (text: string | { key: string }) => (typeof text === "string" ? text : t(text.key));
+  const lead = notes?.story
+    ?.flatMap((section) => section.media ?? [])
+    .find((media) => media.kind === "video" && siteMedia?.[media.url]);
+  const leadMedia = lead && siteMedia?.[lead.url];
   return (
     <section
       aria-labelledby="demo-whats-new"
       style={{ "--home-module-accent": HOME_MODULE_ACCENTS.orange } as CSSProperties}
-      className="demo-reveal relative flex flex-col gap-4 overflow-hidden rounded-2xl border border-[color-mix(in_srgb,var(--home-module-accent)_30%,var(--border))] bg-[color-mix(in_srgb,var(--home-module-accent)_6%,var(--card))] p-5 sm:p-8"
+      className="demo-reveal relative flex flex-col gap-6 overflow-hidden rounded-2xl border border-[color-mix(in_srgb,var(--home-module-accent)_30%,var(--border))] bg-[color-mix(in_srgb,var(--home-module-accent)_6%,var(--card))] p-5 sm:p-8 lg:flex-row lg:items-center lg:gap-10"
     >
       <span
         aria-hidden="true"
         className="pointer-events-none absolute -right-12 -top-16 h-40 w-40 rounded-full bg-[color-mix(in_srgb,var(--home-module-accent)_11%,transparent)] blur-3xl"
       />
-      <div className="relative flex flex-wrap items-center gap-2">
-        <span className="text-[0.625rem] font-extrabold uppercase tracking-[0.16em] text-[var(--home-module-accent)]">
-          {t("demo.whatsNew.eyebrow")}
-        </span>
-        {WHATS_NEW_IS_NEW ? (
-          <span className="rounded-full bg-[var(--home-module-accent)] px-2 py-0.5 text-[0.625rem] font-bold uppercase text-[var(--background)]">
-            {t("demo.site.new")}
+      <div className="relative flex min-w-0 flex-1 flex-col gap-4">
+        <div className="relative flex flex-wrap items-center gap-2">
+          <span className="text-[0.625rem] font-extrabold uppercase tracking-[0.16em] text-[var(--home-module-accent)]">
+            {t("demo.whatsNew.eyebrow")}
           </span>
+          {WHATS_NEW_IS_NEW ? (
+            <span className="rounded-full bg-[var(--home-module-accent)] px-2 py-0.5 text-[0.625rem] font-bold uppercase text-[var(--background)]">
+              {t("demo.site.new")}
+            </span>
+          ) : null}
+        </div>
+        <h2
+          id="demo-whats-new"
+          className="relative text-balance text-2xl font-bold text-[var(--foreground)] sm:text-3xl"
+        >
+          {WHATS_NEW ? t("demo.whatsNew.title", { version: WHATS_NEW.version }) : t("demo.whatsNew.fallbackTitle")}
+        </h2>
+        {WHATS_NEW?.date ? (
+          <time dateTime={WHATS_NEW.date} className="relative -mt-2 text-sm text-[var(--muted-foreground)]">
+            {t("demo.whatsNew.released", { date: WHATS_NEW.date })}
+          </time>
         ) : null}
-      </div>
-      <h2 id="demo-whats-new" className="relative text-balance text-2xl font-bold text-[var(--foreground)] sm:text-3xl">
-        {WHATS_NEW ? t("demo.whatsNew.title", { version: WHATS_NEW.version }) : t("demo.whatsNew.fallbackTitle")}
-      </h2>
-      {WHATS_NEW?.date ? (
-        <time dateTime={WHATS_NEW.date} className="relative -mt-2 text-sm text-[var(--muted-foreground)]">
-          {t("demo.whatsNew.released", { date: WHATS_NEW.date })}
-        </time>
-      ) : null}
-      {WHATS_NEW?.highlights.length ? (
-        <ul className="relative flex max-w-[70ch] list-disc flex-col gap-2 pl-5 text-sm leading-relaxed text-[var(--foreground)] marker:text-[var(--home-module-accent)] sm:text-base">
-          {WHATS_NEW.highlights.map((highlight) => (
-            <li key={highlight}>{highlight}</li>
-          ))}
-        </ul>
-      ) : null}
-      <div className="relative flex flex-wrap items-center gap-x-5 gap-y-2">
-        {WHATS_NEW ? (
-          <a href={`#/changelog/${WHATS_NEW.version}`} className={SECONDARY_BUTTON}>
-            {t("demo.whatsNew.full")}
-            <ArrowRight className="h-4 w-4" aria-hidden="true" />
+        {notes ? (
+          <div className="relative flex max-w-[70ch] flex-col gap-2">
+            <p className="text-base font-semibold text-[var(--foreground)] sm:text-lg">{copy(notes.headline)}</p>
+            {notes.intro ? (
+              <p className="text-sm leading-relaxed text-[var(--muted-foreground)] sm:text-base">{copy(notes.intro)}</p>
+            ) : null}
+          </div>
+        ) : WHATS_NEW?.highlights.length ? (
+          <ul className="relative flex max-w-[70ch] list-disc flex-col gap-2 pl-5 text-sm leading-relaxed text-[var(--foreground)] marker:text-[var(--home-module-accent)] sm:text-base">
+            {WHATS_NEW.highlights.map((highlight) => (
+              <li key={highlight}>{highlight}</li>
+            ))}
+          </ul>
+        ) : null}
+        <div className="relative flex flex-wrap items-center gap-x-5 gap-y-2">
+          {WHATS_NEW ? (
+            <a href={`#/changelog/${WHATS_NEW.version}`} className={SECONDARY_BUTTON}>
+              {t("demo.whatsNew.full")}
+              <ArrowRight className="h-4 w-4" aria-hidden="true" />
+            </a>
+          ) : null}
+          <a href={releaseUrl} target="_blank" rel="noreferrer" className={TEXT_LINK}>
+            {t("demo.whatsNew.github")}
+            <ExternalLink className="h-4 w-4" aria-hidden="true" />
           </a>
-        ) : null}
-        <a href={releaseUrl} target="_blank" rel="noreferrer" className={TEXT_LINK}>
-          {t("demo.whatsNew.github")}
-          <ExternalLink className="h-4 w-4" aria-hidden="true" />
-        </a>
+        </div>
       </div>
+      {lead && leadMedia ? (
+        <video
+          src={leadMedia.src}
+          poster={leadMedia.poster}
+          width={leadMedia.width}
+          height={leadMedia.height}
+          aria-label={t(lead.altKey)}
+          controls
+          playsInline
+          preload="none"
+          className="relative h-auto w-full rounded-xl border border-[var(--border)] bg-[var(--secondary)] shadow-sm lg:w-[46%] lg:shrink-0"
+        />
+      ) : null}
     </section>
   );
 }

@@ -6,6 +6,13 @@ import { ExternalLink } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { applyInlineMarkdown, renderMarkdownBlocks } from "../lib/markdown";
 import { cn } from "../lib/utils";
+import { RELEASE_ANNOUNCEMENTS, ReleaseNotes } from "../components/modals/WhatsNewModal";
+
+/** The Engine's What's New notes for a version, when they have more than a headline. CHANGELOG.md covers the rest. */
+export function engineNotes(version: string) {
+  const notes = RELEASE_ANNOUNCEMENTS[version];
+  return notes?.story?.length || notes?.highlights.length ? notes : undefined;
+}
 import { CHANGELOG_SEEN_KEY, DemoBrandMark, WHATS_NEW } from "./DemoSiteTabs";
 
 interface Release {
@@ -50,7 +57,8 @@ export function DemoChangelog({ version }: { version: string }) {
   }, [version, releases.data]);
 
   return (
-    <div className="mx-auto flex max-w-[75rem] flex-col gap-8 px-5 pb-16 pt-6 sm:px-8 sm:pt-10">
+    // One screen of height keeps the footer below the fold while changelog.json loads (no layout shift).
+    <div className="mx-auto flex min-h-[100dvh] max-w-[75rem] flex-col gap-8 px-5 pb-16 pt-6 sm:px-8 sm:pt-10">
       <header className="flex items-start gap-4">
         <DemoBrandMark />
         <div>
@@ -131,9 +139,15 @@ export function DemoChangelog({ version }: { version: string }) {
                   {/* Older notes are long: render a release only once it is open. */}
                   {isOpen(release) ? (
                     <div className="border-t border-[var(--border)] px-4 pb-5 pt-4 sm:px-6">
-                      <div className="mari-message-content docs-reader-content demo-docs-reader break-words">
-                        {renderMarkdownBlocks(release.body, applyInlineMarkdown, `changelog-${release.version}`)}
-                      </div>
+                      {engineNotes(release.version) ? (
+                        <div className="space-y-5">
+                          <ReleaseNotes version={release.version} announcement={engineNotes(release.version)!} />
+                        </div>
+                      ) : (
+                        <div className="mari-message-content docs-reader-content demo-docs-reader break-words">
+                          {renderMarkdownBlocks(release.body, applyInlineMarkdown, `changelog-${release.version}`)}
+                        </div>
+                      )}
                       <a
                         href={`${RELEASES_URL}/tag/v${release.version}`}
                         target="_blank"

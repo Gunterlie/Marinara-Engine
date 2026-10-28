@@ -32,7 +32,7 @@ type ReleaseStorySection = {
   }>;
 };
 
-type ReleaseAnnouncement = {
+export type ReleaseAnnouncement = {
   headline: ReleaseCopy;
   intro?: ReleaseCopy;
   outro?: ReleaseCopy;
@@ -48,7 +48,7 @@ function localizedCopy(key: string): ReleaseCopy {
 
 // Add each release here before its version ships. Versions without a tailored
 // entry still get a one-time update notice and a link to their full release.
-const RELEASE_ANNOUNCEMENTS: Record<string, ReleaseAnnouncement> = {
+export const RELEASE_ANNOUNCEMENTS: Record<string, ReleaseAnnouncement> = {
   "2.5.1": {
     headline: localizedCopy("ui.modals.whatsnewmodal.release251.headline"),
     intro: localizedCopy("ui.modals.whatsnewmodal.release251.intro"),
@@ -820,7 +820,6 @@ export function WhatsNewModal({
   const [open, setOpen] = useState(false);
   const announcement = RELEASE_ANNOUNCEMENTS[APP_VERSION] ?? FALLBACK_ANNOUNCEMENT;
   const releaseUrl = `${RELEASES_URL}/tag/v${encodeURIComponent(APP_VERSION)}`;
-  const releaseCopy = (copy: ReleaseCopy) => (typeof copy === "string" ? copy : localizeUi(copy.key));
 
   useEffect(() => {
     if (!presentationAllowed || !hasCompletedOnboarding) return;
@@ -867,134 +866,7 @@ export function WhatsNewModal({
         </div>
 
         <div className="space-y-5 px-5 py-5 sm:px-6 sm:py-6">
-          <header>
-            <span className="inline-flex rounded-full border border-[var(--marinara-chat-chrome-button-border-active)] bg-[var(--marinara-chat-chrome-button-bg-active)] px-2.5 py-1 text-[0.625rem] font-bold uppercase tracking-[0.14em] text-[var(--marinara-chat-chrome-button-text-active)]">
-              {localizeUi("ui.characters.metadatatab.version")} {APP_VERSION}
-            </span>
-            <h3
-              data-release-copy
-              className="mt-3 text-balance text-2xl font-bold tracking-tight text-[var(--marinara-chat-chrome-panel-title)] sm:text-3xl"
-            >
-              {releaseCopy(announcement.headline)}
-            </h3>
-            {announcement.intro ? (
-              <p data-release-copy className="mt-2 text-sm leading-6 text-[var(--marinara-chat-chrome-panel-muted)]">
-                {releaseCopy(announcement.intro)}
-              </p>
-            ) : null}
-          </header>
-
-          {announcement.story?.length ? (
-            <div className="space-y-6" data-release-story={APP_VERSION}>
-              {announcement.story.map((section) => (
-                <section key={section.id} className="space-y-3">
-                  <p data-release-copy className="text-sm leading-6 text-[var(--marinara-chat-chrome-panel-muted)]">
-                    {section.linkUrl ? (
-                      <a
-                        href={section.linkUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="break-all text-[var(--marinara-chat-chrome-accent)] underline decoration-current/40 underline-offset-2 hover:decoration-current"
-                      >
-                        {localizeUi(section.copyKey)}
-                      </a>
-                    ) : (
-                      <Trans
-                        i18nKey={section.copyKey}
-                        components={{
-                          strong: <strong className="font-semibold text-[var(--marinara-chat-chrome-panel-title)]" />,
-                          env: (
-                            <code className="rounded bg-[var(--marinara-chat-chrome-highlight-bg)] px-1 py-0.5 text-[0.8125rem] text-[var(--marinara-chat-chrome-highlight-text)]" />
-                          ),
-                        }}
-                      />
-                    )}
-                  </p>
-                  {section.media?.length ? (
-                    <div className="grid grid-cols-1 gap-3" data-release-media-group={section.id}>
-                      {section.media.map((media) =>
-                        media.kind === "video" ? (
-                          <video
-                            key={media.url}
-                            src={media.url}
-                            aria-label={localizeUi(media.altKey)}
-                            autoPlay
-                            controls
-                            loop
-                            muted
-                            playsInline
-                            preload="metadata"
-                            data-release-media-kind="video"
-                            className="mx-auto max-h-[30rem] w-full rounded-xl border border-[var(--marinara-chat-chrome-panel-divider)] bg-[var(--marinara-chat-chrome-highlight-bg)] object-contain shadow-sm"
-                          />
-                        ) : (
-                          <img
-                            key={media.url}
-                            src={media.url}
-                            alt={localizeUi(media.altKey)}
-                            loading="lazy"
-                            data-release-media-kind="image"
-                            className="mx-auto max-h-[30rem] w-full rounded-xl border border-[var(--marinara-chat-chrome-panel-divider)] bg-[var(--marinara-chat-chrome-highlight-bg)] object-contain shadow-sm"
-                          />
-                        ),
-                      )}
-                    </div>
-                  ) : null}
-                </section>
-              ))}
-            </div>
-          ) : null}
-
-          {announcement.highlights.length > 0 ? (
-            <div className="divide-y divide-[var(--marinara-chat-chrome-panel-divider)] border-y border-[var(--marinara-chat-chrome-panel-divider)]">
-              {announcement.highlights.map((highlight) => {
-                const HighlightIcon = highlight.icon;
-                return (
-                  <article key={highlight.id} className="py-4">
-                    <div className="flex gap-3.5">
-                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[var(--marinara-chat-chrome-button-border-active)] bg-[var(--marinara-chat-chrome-button-bg-active)] text-[var(--marinara-chat-chrome-button-text-active)]">
-                        <HighlightIcon size="1.25rem" aria-hidden="true" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-[0.625rem] font-bold uppercase tracking-[0.14em] text-[var(--marinara-chat-chrome-accent)]">
-                          {releaseCopy(highlight.label)}
-                        </p>
-                        <h4 className="mt-1 text-base font-semibold text-[var(--marinara-chat-chrome-panel-title)]">
-                          {releaseCopy(highlight.title)}
-                        </h4>
-                        <p className="mt-1 text-sm leading-5 text-[var(--marinara-chat-chrome-panel-muted)]">
-                          {releaseCopy(highlight.description)}
-                        </p>
-                      </div>
-                    </div>
-                    {highlight.media?.length ? (
-                      <div
-                        className={`mt-3 grid gap-3 ${highlight.media.length > 1 ? "sm:grid-cols-2" : "grid-cols-1"}`}
-                      >
-                        {highlight.media.map((media) => (
-                          <img
-                            key={media.url}
-                            src={media.url}
-                            alt={releaseCopy(media.alt)}
-                            loading="lazy"
-                            referrerPolicy="no-referrer"
-                            className="mx-auto max-h-64 w-auto max-w-full rounded-lg border border-[var(--marinara-chat-chrome-panel-divider)] bg-[var(--marinara-chat-chrome-highlight-bg)] object-contain shadow-sm"
-                          />
-                        ))}
-                      </div>
-                    ) : null}
-                  </article>
-                );
-              })}
-            </div>
-          ) : null}
-
-          {announcement.outro ? (
-            <p data-release-copy className="text-sm leading-6 text-[var(--marinara-chat-chrome-panel-muted)]">
-              {releaseCopy(announcement.outro)}
-            </p>
-          ) : null}
-
+          <ReleaseNotes version={APP_VERSION} announcement={announcement} />
           <footer className="sticky bottom-0 z-10 -mx-5 -mb-6 flex flex-col-reverse gap-2 border-t border-[var(--marinara-chat-chrome-panel-divider)] bg-[var(--marinara-chat-chrome-panel-bg)] px-5 py-3 shadow-[0_-10px_24px_rgba(0,0,0,0.12)] sm:-mx-6 sm:flex-row sm:justify-end sm:px-6">
             <a
               href={releaseUrl}
@@ -1016,5 +888,157 @@ export function WhatsNewModal({
         </div>
       </div>
     </Modal>
+  );
+}
+
+type SiteMedia = Record<string, { src: string; width: number; height: number; poster?: string }>;
+// Static website build only: WebP images and video posters with their sizes (see scripts/build-demo.mjs).
+// Media not listed there, such as other hosts, are left out because the site allows same-origin media only.
+export const siteMedia: SiteMedia | undefined = import.meta.env.VITE_DEMO_CHANGELOG_MEDIA
+  ? JSON.parse(import.meta.env.VITE_DEMO_CHANGELOG_MEDIA)
+  : undefined;
+
+/** Release notes body, shared by this modal and the static website's changelog. */
+export function ReleaseNotes({ version, announcement }: { version: string; announcement: ReleaseAnnouncement }) {
+  const { t: localizeUi } = useUiTranslation();
+  const releaseCopy = (copy: ReleaseCopy) => (typeof copy === "string" ? copy : localizeUi(copy.key));
+  const shown = <T extends { url: string }>(media: T[]) =>
+    siteMedia ? media.filter((item) => item.url in siteMedia) : media;
+  const siteProps = (url: string) => {
+    const entry = siteMedia?.[url];
+    return entry ? { src: entry.src, width: entry.width, height: entry.height } : { src: url };
+  };
+
+  return (
+    <>
+      <header>
+        <span className="inline-flex rounded-full border border-[var(--marinara-chat-chrome-button-border-active)] bg-[var(--marinara-chat-chrome-button-bg-active)] px-2.5 py-1 text-[0.625rem] font-bold uppercase tracking-[0.14em] text-[var(--marinara-chat-chrome-button-text-active)]">
+          {localizeUi("ui.characters.metadatatab.version")} {version}
+        </span>
+        <h3
+          data-release-copy
+          className="mt-3 text-balance text-2xl font-bold tracking-tight text-[var(--marinara-chat-chrome-panel-title)] sm:text-3xl"
+        >
+          {releaseCopy(announcement.headline)}
+        </h3>
+        {announcement.intro ? (
+          <p data-release-copy className="mt-2 text-sm leading-6 text-[var(--marinara-chat-chrome-panel-muted)]">
+            {releaseCopy(announcement.intro)}
+          </p>
+        ) : null}
+      </header>
+
+      {announcement.story?.length ? (
+        <div className="space-y-6" data-release-story={version}>
+          {announcement.story.map((section) => (
+            <section key={section.id} className="space-y-3">
+              <p data-release-copy className="text-sm leading-6 text-[var(--marinara-chat-chrome-panel-muted)]">
+                {section.linkUrl ? (
+                  <a
+                    href={section.linkUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="break-all text-[var(--marinara-chat-chrome-accent)] underline decoration-current/40 underline-offset-2 hover:decoration-current"
+                  >
+                    {localizeUi(section.copyKey)}
+                  </a>
+                ) : (
+                  <Trans
+                    i18nKey={section.copyKey}
+                    components={{
+                      strong: <strong className="font-semibold text-[var(--marinara-chat-chrome-panel-title)]" />,
+                      env: (
+                        <code className="rounded bg-[var(--marinara-chat-chrome-highlight-bg)] px-1 py-0.5 text-[0.8125rem] text-[var(--marinara-chat-chrome-highlight-text)]" />
+                      ),
+                    }}
+                  />
+                )}
+              </p>
+              {section.media?.length ? (
+                <div className="grid grid-cols-1 gap-3" data-release-media-group={section.id}>
+                  {shown(section.media).map((media) =>
+                    media.kind === "video" ? (
+                      <video
+                        key={media.url}
+                        {...siteProps(media.url)}
+                        aria-label={localizeUi(media.altKey)}
+                        autoPlay
+                        controls
+                        loop
+                        muted
+                        playsInline
+                        preload="metadata"
+                        {...(siteMedia
+                          ? { autoPlay: false, loop: false, preload: "none", poster: siteMedia[media.url]?.poster }
+                          : {})}
+                        data-release-media-kind="video"
+                        className="mx-auto max-h-[30rem] w-full rounded-xl border border-[var(--marinara-chat-chrome-panel-divider)] bg-[var(--marinara-chat-chrome-highlight-bg)] object-contain shadow-sm"
+                      />
+                    ) : (
+                      <img
+                        key={media.url}
+                        {...siteProps(media.url)}
+                        alt={localizeUi(media.altKey)}
+                        loading="lazy"
+                        data-release-media-kind="image"
+                        className="mx-auto max-h-[30rem] w-full rounded-xl border border-[var(--marinara-chat-chrome-panel-divider)] bg-[var(--marinara-chat-chrome-highlight-bg)] object-contain shadow-sm"
+                      />
+                    ),
+                  )}
+                </div>
+              ) : null}
+            </section>
+          ))}
+        </div>
+      ) : null}
+
+      {announcement.highlights.length > 0 ? (
+        <div className="divide-y divide-[var(--marinara-chat-chrome-panel-divider)] border-y border-[var(--marinara-chat-chrome-panel-divider)]">
+          {announcement.highlights.map((highlight) => {
+            const HighlightIcon = highlight.icon;
+            return (
+              <article key={highlight.id} className="py-4">
+                <div className="flex gap-3.5">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[var(--marinara-chat-chrome-button-border-active)] bg-[var(--marinara-chat-chrome-button-bg-active)] text-[var(--marinara-chat-chrome-button-text-active)]">
+                    <HighlightIcon size="1.25rem" aria-hidden="true" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[0.625rem] font-bold uppercase tracking-[0.14em] text-[var(--marinara-chat-chrome-accent)]">
+                      {releaseCopy(highlight.label)}
+                    </p>
+                    <h4 className="mt-1 text-base font-semibold text-[var(--marinara-chat-chrome-panel-title)]">
+                      {releaseCopy(highlight.title)}
+                    </h4>
+                    <p className="mt-1 text-sm leading-5 text-[var(--marinara-chat-chrome-panel-muted)]">
+                      {releaseCopy(highlight.description)}
+                    </p>
+                  </div>
+                </div>
+                {highlight.media?.length ? (
+                  <div className={`mt-3 grid gap-3 ${highlight.media.length > 1 ? "sm:grid-cols-2" : "grid-cols-1"}`}>
+                    {shown(highlight.media).map((media) => (
+                      <img
+                        key={media.url}
+                        {...siteProps(media.url)}
+                        alt={releaseCopy(media.alt)}
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
+                        className="mx-auto max-h-64 w-auto max-w-full rounded-lg border border-[var(--marinara-chat-chrome-panel-divider)] bg-[var(--marinara-chat-chrome-highlight-bg)] object-contain shadow-sm"
+                      />
+                    ))}
+                  </div>
+                ) : null}
+              </article>
+            );
+          })}
+        </div>
+      ) : null}
+
+      {announcement.outro ? (
+        <p data-release-copy className="text-sm leading-6 text-[var(--marinara-chat-chrome-panel-muted)]">
+          {releaseCopy(announcement.outro)}
+        </p>
+      ) : null}
+    </>
   );
 }

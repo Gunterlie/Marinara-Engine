@@ -2340,7 +2340,11 @@ export function HomeBrowserHub({ pageActive, onOpenCredits, hideProfessor, websi
                         <div className="flex items-center gap-x-3">
                           <button
                             type="button"
-                            onClick={() => useUIStore.getState().requestWhatsNew()}
+                            onClick={() =>
+                              website?.releaseNotesHref
+                                ? window.location.assign(website.releaseNotesHref)
+                                : useUIStore.getState().requestWhatsNew()
+                            }
                             className="mt-2 inline-flex min-h-8 items-center text-xs font-bold text-[var(--home-module-accent)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--home-module-accent)]"
                           >
                             {t("home.whatsNew.open")}
