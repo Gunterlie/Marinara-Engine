@@ -9,7 +9,7 @@ import { delegateDirectAndroidBuild } from "./scripts/build-heap.mjs";
 
 const ENABLE_SOURCE_MAPS = process.env.VITE_ENABLE_SOURCEMAP === "true";
 const DEMO_BUILD = process.env.VITE_MARINARA_DEMO === "1";
-const DEMO_BASE = process.env.MARINARA_DEMO_BASE ?? "/Marinara-Engine/";
+const DEMO_BASE = process.env.MARINARA_DEMO_BASE || "/Marinara-Website/";
 const CLIENT_SOURCE_ROOT = path.resolve(import.meta.dirname, "src").replaceAll("\\", "/") + "/";
 const CLIENT_PUBLIC_ROOT = path.resolve(import.meta.dirname, "public");
 const PWA_DISABLED = Boolean(process.env.SKIP_PWA) || DEMO_BUILD;

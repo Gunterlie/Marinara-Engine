@@ -33,9 +33,7 @@ import { resetDemo } from "./runtime";
 import { DEMO_SEED_IDS } from "./seed";
 import { useDemoNavigation } from "./navigation";
 import { DISCORD_URL, DiscordIcon, GITHUB_URL, GithubIcon } from "./DemoSiteTabs";
-
-// ponytail: fork trial branch; point at the release tag once demos publish from stable tags.
-const SOURCE_URL = "https://github.com/Gunterlie/Marinara-Engine/tree/feat/static-demo-tutorial";
+import { SOURCE_TREE_URL as SOURCE_URL } from "./docs";
 const DONE_KEY = `marinara-demo:lessons-done:${APP_VERSION}`;
 const WELCOMED_KEY = `marinara-demo:welcomed:${APP_VERSION}`;
 

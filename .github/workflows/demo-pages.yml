@@ -1,4 +1,4 @@
-name: Static demo Pages trial
+name: Static demo Pages
 
 on:
   # Daily: rebuild onto the latest upstream release when it is newer than the deployed site.
@@ -6,7 +6,7 @@ on:
   schedule:
     - cron: "23 5 * * *"
   push:
-    branches: [feat/static-demo-tutorial]
+    branches: [feat/static-demo-tutorial, main]
   workflow_dispatch:
     inputs:
       source_ref:
@@ -29,7 +29,7 @@ concurrency:
 jobs:
   # Finds the latest upstream release and skips the build when the site already shows it.
   release:
-    if: github.repository == 'Gunterlie/Marinara-Engine' && (github.event_name == 'schedule' || inputs.source_ref == 'release')
+    if: contains(fromJSON('["Gunterlie/Marinara-Engine","Pasta-Devs/Marinara-Website"]'), github.repository) && (github.event_name == 'schedule' || inputs.source_ref == 'release')
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.latest.outputs.tag }}
@@ -44,7 +44,7 @@ jobs:
           tag=$(gh api repos/Pasta-Devs/Marinara-Engine/releases/latest --jq .tag_name)
           [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::Unexpected release tag '$tag'"; exit 1; }
           # A missing file or a site built from a branch has no releaseTag, so the release is built.
-          deployed=$(curl -fsSL https://gunterlie.github.io/Marinara-Engine/website-source.json | jq -r '.releaseTag // empty') || deployed=""
+          deployed=$(curl -fsSL "https://${GITHUB_REPOSITORY_OWNER,,}.github.io/${GITHUB_REPOSITORY#*/}/website-source.json" | jq -r '.releaseTag // empty') || deployed=""
           if [ "$FORCED" = true ] || [ "$tag" != "$deployed" ]; then build=true; else build=false; fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "build=$build" >> "$GITHUB_OUTPUT"
@@ -53,8 +53,8 @@ jobs:
   build:
     needs: release
     if: >-
-      !cancelled() && github.repository == 'Gunterlie/Marinara-Engine' &&
-      (github.ref == 'refs/heads/feat/static-demo-tutorial' || github.event_name == 'schedule') &&
+      !cancelled() && contains(fromJSON('["Gunterlie/Marinara-Engine","Pasta-Devs/Marinara-Website"]'), github.repository) &&
+      (github.ref == 'refs/heads/feat/static-demo-tutorial' || github.ref == 'refs/heads/main' || github.event_name == 'schedule') &&
       (needs.release.result == 'skipped' || needs.release.outputs.build == 'true')
     runs-on: ubuntu-latest
     env:
@@ -72,7 +72,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.prepared_branch && format('refs/heads/{0}', inputs.prepared_branch) || (github.event_name == 'schedule' && 'refs/heads/feat/static-demo-tutorial') || '' }}
+          ref: ${{ inputs.prepared_branch && format('refs/heads/{0}', inputs.prepared_branch) || (github.event_name == 'schedule' && format('refs/heads/{0}', github.event.repository.default_branch || github.ref_name)) || '' }}
           fetch-depth: 0 # the overlay is found as base..HEAD
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         with:
@@ -93,10 +93,9 @@ jobs:
           fi
       - run: pnpm install --frozen-lockfile
         working-directory: ${{ steps.prep.outputs.dir }}
-      - run: pnpm build:demo
+      # Pages serves the site under /<repo name>/; github.event.repository is empty on schedule runs.
+      - run: MARINARA_DEMO_BASE="/${GITHUB_REPOSITORY#*/}/" pnpm build:demo
         working-directory: ${{ steps.prep.outputs.dir }}
-        env:
-          MARINARA_DEMO_BASE: /Marinara-Engine/
       - name: Check the site against docs, assets, locale keys and versions
         id: check
         run: node scripts/demo/check-site.mjs ${RELEASE_TAG:+--tag "$RELEASE_TAG"}
@@ -156,4 +155,43 @@ jobs:
       - name: Job summary
         env:
           PAGE_URL: ${{ steps.deployment.outputs.page_url }}
-        run: echo "- Deployed: $PAGE_URL" >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          echo "- Deployed: $PAGE_URL" >> "$GITHUB_STEP_SUMMARY"
+
+  # Publishes the deployed site as a site-* release so a web server can pull it (scripts/demo/pull-site.sh).
+  # A failure here never touches the Pages deploy.
+  site-release:
+    needs: deploy
+    if: ${{ !cancelled() && needs.deploy.result == 'success' }}
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: github-pages
+          path: artifact
+      - name: Publish site release
+        run: |
+          mkdir site
+          tar -xf artifact/artifact.tar -C site
+          version=$(jq -r .version site/demo-build.json)
+          head=$(jq -r .preparedHead site/website-source.json)
+          name="website-$version-${head::7}"
+          tag="site-$version-${head::7}"
+          tar -czf "$name.tar.gz" -C site .
+          sha256sum "$name.tar.gz" > "$name.tar.gz.sha256"
+          cp site/website-source.json .
+          gh release create "$tag" "$name.tar.gz" "$name.tar.gz.sha256" website-source.json \
+            --target "$GITHUB_SHA" --title "$tag" --latest=false \
+            --notes "Built website for Marinara Engine $version. Install it with scripts/demo/pull-site.sh."
+          echo "- Site release: $tag" >> "$GITHUB_STEP_SUMMARY"
+      - name: Keep the 5 newest site releases
+        run: |
+          gh api "repos/$GH_REPO/releases?per_page=100" \
+            --jq '[.[] | select(.tag_name | startswith("site-"))] | sort_by(.created_at) | reverse | .[5:] | .[].tag_name' |
+            while read -r old; do gh release delete "$old" --cleanup-tag --yes; done

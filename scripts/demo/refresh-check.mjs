@@ -42,6 +42,14 @@ try {
   assert.equal(readFileSync(resolve(ok.dir, "demo.txt"), "utf8"), "overlay\n");
   assert.equal(ok.meta.preparedHead, sh(ok.dir, "rev-parse", "HEAD"));
 
+  // 1b. The website repo starts as the fork history pushed to its main: same base, same overlay.
+  const website = resolve(base, "website");
+  sh(base, "clone", "-q", fork, "website");
+  sh(website, "branch", "-m", "main");
+  const moved = prepare({ root: website, source: "main", dir: resolve(base, "out-website"), upstreamUrl: up });
+  assert.equal(moved.meta.overlayBase, ok.meta.overlayBase);
+  assert.deepEqual(moved.meta.overlayCommits, ok.meta.overlayCommits);
+
   // 2. Repeat refresh from the prepared tree: the main hotfix must not become overlay when switching to staging.
   const again = prepare({ root: ok.dir, source: "staging", dir: resolve(base, "out-again"), upstreamUrl: up });
   assert.equal(again.meta.overlayCommits.length, 1);

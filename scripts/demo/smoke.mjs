@@ -27,7 +27,7 @@ assert.equal(
 assert.equal(prepareDemoDoc("[Here](#details)", "home/welcome.md"), "[Here](#/docs/home/welcome.md?section=details)");
 assert.match(
   prepareDemoDoc("[Source](../../packages/client/package.json)", "development/guide.md"),
-  /https:\/\/github.com\/Gunterlie\/Marinara-Engine\/blob\/feat\/static-demo-tutorial\/packages\/client\/package.json/,
+  /\(https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/blob\/.+\/packages\/client\/package\.json\)/,
 );
 const example = "```md\n[x](guide.md)\n```\n`[x](guide.md)`";
 assert.equal(prepareDemoDoc(example, "home/welcome.md"), example, "Documentation examples were rewritten");

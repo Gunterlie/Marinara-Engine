@@ -7,12 +7,20 @@ import { resolvePnpmRunner } from "./pnpm-runner.mjs";
 import { AGENTS_GUIDE, agentPages } from "./demo/agents-pages.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
-const base = process.env.MARINARA_DEMO_BASE ?? "/Marinara-Engine/";
+const base = process.env.MARINARA_DEMO_BASE || "/Marinara-Website/";
 if (!/^\/(?:[A-Za-z0-9._-]+\/)*$/.test(base)) {
   throw new Error("MARINARA_DEMO_BASE must be an absolute directory path with a trailing slash.");
 }
 
-const env = { ...process.env, VITE_MARINARA_DEMO: "1", MARINARA_DEMO_BASE: base, SKIP_PWA: "1" };
+const env = {
+  ...process.env,
+  VITE_MARINARA_DEMO: "1",
+  MARINARA_DEMO_BASE: base,
+  SKIP_PWA: "1",
+  // "Source" links point at the repo and branch that built the site (defaults in packages/client/src/demo/docs.ts).
+  VITE_DEMO_SOURCE_REPO: process.env.GITHUB_REPOSITORY,
+  VITE_DEMO_SOURCE_REF: process.env.GITHUB_REF_NAME,
+};
 const runner = resolvePnpmRunner();
 for (const args of [["build:shared"], ["--filter", "@marinara-engine/client", "build"]]) {
   const result = spawnSync(runner.command, [...runner.args, ...args], { cwd: root, env, stdio: "inherit" });

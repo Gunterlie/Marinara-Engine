@@ -139,8 +139,12 @@ function isUserGuide(path: string) {
   return path.includes("/") ? categories.has(path.split("/")[0]!) : rootGuides.has(path);
 }
 
-// ponytail: trial source branch; use the release commit when stable snapshots publish.
-const SOURCE_ROOT = "https://github.com/Gunterlie/Marinara-Engine/blob/feat/static-demo-tutorial/";
+// ponytail: source branch of the build (scripts/build-demo.mjs); use the release commit when stable snapshots publish.
+// Node (the smoke test) imports this file too and has no import.meta.env.
+const SOURCE_REPO = import.meta.env?.VITE_DEMO_SOURCE_REPO ?? "Pasta-Devs/Marinara-Website";
+const SOURCE_REF = import.meta.env?.VITE_DEMO_SOURCE_REF ?? "main";
+export const SOURCE_TREE_URL = `https://github.com/${SOURCE_REPO}/tree/${SOURCE_REF}`;
+const SOURCE_ROOT = `https://github.com/${SOURCE_REPO}/blob/${SOURCE_REF}/`;
 
 export function prepareDemoDoc(raw: string, path: string) {
   // Keep examples literal: rewrite only prose outside fenced and inline code.
