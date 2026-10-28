@@ -1,6 +1,11 @@
 /* Scroll storytelling for the demo landing page.
    Transform and opacity only, never wheel handling. Reduced motion keeps the static layout. */
 
+/* Sonner's system font stack falls back to monospace on some Linux browsers; use the app font. */
+html [data-sonner-toaster] {
+  font-family: inherit;
+}
+
 .demo-mode-shot {
   opacity: 0;
   transform: translateY(1.5rem) scale(0.96);

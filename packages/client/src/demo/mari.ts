@@ -12,7 +12,7 @@ const chip = (label: string, extra: Partial<MariSuggestionChip> = {}): MariSugge
 
 export const MARI_STARTER_CHIPS: MariSuggestionChip[] = [
   chip("Create a cozy café character", { icon: "UserPlus" }),
-  chip("Add a lorebook entry about the lighthouse", { icon: "BookOpen" }),
+  chip("Add a lighthouse lorebook entry", { icon: "BookOpen" }),
   chip("Explain what agents do", { icon: "Sparkles" }),
   chip("Set up a connection", { icon: "Link2" }),
   chip("Change the theme or accent", { icon: "Wand2" }),
@@ -27,7 +27,7 @@ const MARI_SCRIPTS: { match: RegExp; reply: string; action?: MariAction; chips: 
     action: "character",
     reply:
       "Done. I made **Wren Hollis**, who bakes at the Copper Kettle on Saltmere's harbor road. She has a description, a warm personality and a first message, so you can start a chat with her right away. The card below shows every field I wrote. If she isn't what you wanted, press Undo and she's gone.",
-    chips: [chip("Add a lorebook entry about the lighthouse"), chip("Explain what agents do")],
+    chips: [chip("Add a lighthouse lorebook entry"), chip("Explain what agents do")],
   },
   {
     match: /\b(?:lore|lorebook|entry|lighthouse|lamp)\b/i,
@@ -72,8 +72,7 @@ export function pickMariScript(text: string) {
 
 export const MARI_CHARACTER = {
   name: "Wren Hollis",
-  description:
-    "Baker at the Copper Kettle on Saltmere's harbor road. Flour on her sleeves, a pencil behind one ear, and a window seat she saves for regulars.",
+  description: "Baker at the Copper Kettle on the harbor road, flour on her sleeves.",
   personality: "Warm, chatty and a little nosy. Remembers every order and every rumour.",
   first_mes:
     "*Wren slides a cinnamon knot across the counter.* On the house, since you look like you walked in from the fog. What can I get you?",

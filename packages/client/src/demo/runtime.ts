@@ -425,6 +425,11 @@ function mariPrompt(body: Row, signal: AbortSignal | null): Response {
         chat.lastMessageAt = chat.updatedAt = nowIso();
         send("done");
         controller.close();
+        // shortcut: on phones the pane leaves her late "Next" chips under the fold; scroll once after the reply reloads.
+        setTimeout(
+          () => document.querySelector(".mari-workspace-transcript")?.scrollTo({ top: 1e6, behavior: "smooth" }),
+          800,
+        );
       });
       let i = 0;
       const tick = () => {
@@ -1195,6 +1200,14 @@ export function installDemoRuntime(): void {
   installed = true;
   state = createSeed();
   registerRoutes();
+  // The Engine's Undo toast names an app data snapshot, which the demo does not have.
+  const renameUndoToast = () => {
+    const messages = i18n.store.data.en?.translation as Record<string, string> | undefined;
+    if (messages?.["demo.mari.undone"])
+      messages["ui.chat.homeprofessormarichat.restoredThePreviousAppDataSnapshot"] = messages["demo.mari.undone"];
+  };
+  renameUndoToast();
+  i18n.store.on("added", renameUndoToast);
   isolateLocalStorage();
   const realFetch = window.fetch.bind(window);
   window.fetch = async (input, init) => {

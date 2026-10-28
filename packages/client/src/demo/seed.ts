@@ -479,7 +479,7 @@ export function createSeed() {
       null,
       scene("cozy-cafe-interior"),
     ],
-    ["demo-chat-k7", "Chat with K-7", "conversation", ["demo-character-k7"], 1500, null, null],
+    ["demo-chat-k7", "Chat with K-7", "conversation", ["demo-character-k7"], 1000, null, null],
     [
       "demo-chat-orsolo",
       "Aboard the Gull's Promise",

@@ -288,7 +288,8 @@ export default defineConfig({
     outDir: DEMO_BUILD ? "dist-demo" : "dist",
     manifest: true,
     target: "es2020",
-    cssTarget: "safari14",
+    // safari14 lowers logical insets to :lang(a,b,...) lists, which Chromium drops; the demo targets newer browsers.
+    cssTarget: DEMO_BUILD ? "safari15" : "safari14",
     // Vite reports decimal kB; 512 kB matches the bundle plugin's enforced 500 KiB ceiling.
     chunkSizeWarningLimit: 512,
     sourcemap: ENABLE_SOURCE_MAPS,

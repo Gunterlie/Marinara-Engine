@@ -4248,7 +4248,8 @@ export function GameNarration({
   const playerInputAvailable =
     !scenePreparing &&
     !reviewingPast &&
-    (narrationComplete || interruptCommitted) &&
+    // The demo shows its try-this chips while the opening narration still plays.
+    (narrationComplete || interruptCommitted || import.meta.env.VITE_MARINARA_DEMO === "1") &&
     !isStreaming &&
     !partyTurnPending &&
     !!inputSlot;
