@@ -38,7 +38,9 @@ const PersonasPanel = lazy(() =>
   import("../panels/PersonasPanel").then((module) => ({ default: module.PersonasPanel })),
 );
 const SettingsPanel = lazy(() =>
-  import("../panels/SettingsPanel").then((module) => ({ default: module.SettingsPanel })),
+  import.meta.env.VITE_MARINARA_DEMO === "1"
+    ? import("../../demo/DemoSettings").then((module) => ({ default: module.DemoSettings }))
+    : import("../panels/SettingsPanel").then((module) => ({ default: module.SettingsPanel })),
 );
 const BotBrowserPanel = lazy(() =>
   import("../panels/BotBrowserPanel").then((module) => ({ default: module.BotBrowserPanel })),

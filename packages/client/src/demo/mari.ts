@@ -19,7 +19,7 @@ export const MARI_STARTER_CHIPS: MariSuggestionChip[] = [
 ];
 
 export const MARI_WELCOME =
-  "Hello, I'm Professor Mari. I live inside Marinara and can check or change things for you: characters, lorebooks, presets and more. Every change I make shows up as a card, so you can see what changed and undo it. Pick one below to watch me work.";
+  "Hello, I'm Professor Mari. I live inside Marinara Engine and can check or change things for you: characters, lorebooks, presets and more. Every change I make shows up as a card, so you can see what changed and undo it. Pick one below to watch me work.";
 
 const MARI_SCRIPTS: { match: RegExp; reply: string; action?: MariAction; chips: MariSuggestionChip[] }[] = [
   {
@@ -45,7 +45,7 @@ const MARI_SCRIPTS: { match: RegExp; reply: string; action?: MariAction; chips: 
   {
     match: /\b(?:connect\w*|model|api|provider|key|ollama|openai)\b/i,
     reply:
-      "Marinara brings no model of its own. You connect the one you like: a local model on your own computer, or a provider such as OpenAI, Anthropic, OpenRouter or NanoGPT with your key. Open Connections, add one, and I can check it works for you. The guide [Connecting to a provider](#/docs/connections/connecting-to-a-provider.md) walks through it.",
+      "Marinara Engine brings no model of its own. You connect the one you like: a local model on your own computer, or a provider such as OpenAI, Anthropic, OpenRouter or NanoGPT with your key. Open Connections, add one, and I can check it works for you. The guide [Connecting to a provider](#/docs/connections/connecting-to-a-provider.md) walks through it.",
     chips: [
       chip("Open Connections", { action: { kind: "panel", panel: "connections" } }),
       chip("Explain what agents do"),
@@ -54,7 +54,7 @@ const MARI_SCRIPTS: { match: RegExp; reply: string; action?: MariAction; chips: 
   {
     match: /\b(?:theme|dark|light|accent|colou?r|look)\b/i,
     reply:
-      "The theme lives on your screen, not in your library, so here is the way. Open the settings (the gear in the top bar), then Appearance. Theme switches between dark and light, and Accent picks the colour of buttons and highlights. You can also load community themes there. The [appearance guide](#/docs/appearance/appearance-settings.md) shows every option.",
+      "Themes are available in the full app. In Marinara Engine you open Settings, then Appearance: Theme switches between dark and light, Accent picks the colour of buttons and highlights, and you can load community themes. This demo has no settings. The [appearance guide](#/docs/appearance/appearance-settings.md) shows every option.",
     chips: [chip("Create a cozy café character"), chip("Explain what agents do")],
   },
 ];
@@ -63,7 +63,7 @@ export function pickMariScript(text: string) {
   return (
     MARI_SCRIPTS.find((script) => script.match.test(text)) ?? {
       reply:
-        "I can help with that in your own Marinara, where I read your real data. Here I know a few tricks: I can create a character, add a lorebook entry, or explain agents and connections. Pick one below.",
+        "I can help with that in your own Marinara Engine, where I read your real data. Here I know a few tricks: I can create a character, add a lorebook entry, or explain agents and connections. Pick one below.",
       chips: MARI_STARTER_CHIPS,
       action: undefined,
     }

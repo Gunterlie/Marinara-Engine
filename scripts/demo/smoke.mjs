@@ -370,6 +370,8 @@ try {
     await pages[0].locator(`[data-tour="panel-${panel}"]`).first().click();
     await pages[0].waitForTimeout(400);
   }
+  // The demo replaces the Settings panel with an install note.
+  await pages[0].getByTestId("demo-settings-placeholder").waitFor();
   await pages[0].locator('[data-tour="panel-settings"]').first().click();
   // Feature-page links deep-link a chat and a panel, then settle on plain #/demo.
   await pages[0].evaluate(() => (window.location.hash = "#/demo?chat=demo-chat-rook&panel=lorebooks"));
