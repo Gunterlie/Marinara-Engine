@@ -22,6 +22,7 @@ import { createSeed, DEMO_ASSETS, DEMO_SEED_IDS, DEMO_SPRITES } from "./seed";
 import { pickDemoReply } from "./scenarios";
 import { MARI_CHARACTER, MARI_ENTRY, MARI_STARTER_CHIPS, MARI_WELCOME, pickMariScript, type MariAction } from "./mari";
 import { loadDemoDocs } from "./docs";
+import { demoActivityOverview, demoSchedule, demoStatusNow } from "./activity";
 
 // Browser-only stand-in for the Engine backend. It replaces window.fetch, so the real API client,
 // direct fetch calls and SSE streaming all run unchanged. State lives in memory, one copy per tab.
@@ -786,7 +787,31 @@ function registerRoutes() {
   ])
     on("GET", path, () => json([]));
   on("GET", "/ui-languages", () => json({ installed: [] }));
-  on("GET", "/conversation/status/:id", () => json({ statuses: {} }));
+  on("GET", "/conversation/status/:id", (m) => {
+    const ids = byId(state.chats, m[1]!)?.characterIds;
+    const list: string[] = typeof ids === "string" ? JSON.parse(ids) : ((ids as string[] | undefined) ?? []);
+    return json({
+      statuses: Object.fromEntries(
+        list.flatMap((id) => {
+          const now = demoStatusNow(id);
+          return now ? [[id, { ...now, schedule: demoSchedule(id) }]] : [];
+        }),
+      ),
+      needsRefresh: false,
+    });
+  });
+  on("GET", "/chat-insights/activity", () => json(demoActivityOverview()));
+  // No model writes schedules here: seeded characters keep theirs, the rest are skipped.
+  on("POST", "/conversation/schedule/generate", (_m, _u, b) =>
+    json({
+      results: Object.fromEntries(
+        ((b?.characterIds as string[] | undefined) ?? []).map((id) => [
+          id,
+          { status: demoSchedule(id) ? "fresh" : "renewal_disabled" },
+        ]),
+      ),
+    }),
+  );
   on("GET", "/decision/thinking-pregeneration", () => json({ enabled: false }));
   on("GET", "/decision/smart-order", () => json({ enabled: false }));
   on("GET", "/decision/prompt-question-limit", () =>
@@ -1185,6 +1210,8 @@ function isolateLocalStorage() {
           streamingSpeed: 100,
           // Conversation chats open as messenger bubbles; roleplay and game keep their own look.
           conversationMessageStyle: "bubble",
+          userActivity: "Touring Marinara Engine",
+          recentUserActivities: ["Touring Marinara Engine", "Reading the guides", "Planning a new character"],
         },
         version: UI_PERSISTENCE.version,
       }),

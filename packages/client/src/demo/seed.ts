@@ -1,5 +1,6 @@
 // Immutable example content. The runtime deep-copies it into per-tab memory.
 import { DEFAULT_GENERATION_PARAMS } from "@marinara-engine/shared";
+import { demoSchedule } from "./activity";
 
 export const DEMO_SEED_IDS = {
   characterId: "demo-character-iris",
@@ -430,6 +431,7 @@ export function createSeed() {
       tags: [...tags],
       scenario: "",
       personality: "",
+      extensions: { conversationSchedule: demoSchedule(id) },
     }),
   }));
   const firstMes = Object.fromEntries(extra.map(([id, , , , , first_mes]) => [id, first_mes]));
@@ -643,6 +645,14 @@ export function createSeed() {
       ...(background ? { background } : {}),
       ...(mode === "game" ? { gameId: id, gameSessionStatus: "active" } : {}),
       ...(mode !== "conversation" ? agentMeta(characterIds, id === "demo-chat-kestrel") : {}),
+      ...(mode === "conversation"
+        ? {
+            conversationSchedulesEnabled: true,
+            characterSchedules: Object.fromEntries(
+              characterIds.flatMap((c) => (demoSchedule(c) ? [[c, demoSchedule(c)]] : [])),
+            ),
+          }
+        : {}),
     },
   }));
   const extraMessages = extraChats.flatMap((chat) => {
