@@ -385,6 +385,8 @@ type HomeBrowserHubProps = {
     story: ReactNode;
     page: ReactNode;
     onHome: () => void;
+    /** Opens the website's own changelog instead of GitHub. */
+    releaseNotesHref?: string;
     /** Replaces opening Professor Mari, where no live Mari runtime exists. */
     onProfessor?: () => void;
   };
@@ -2344,9 +2346,8 @@ export function HomeBrowserHub({ pageActive, onOpenCredits, hideProfessor, websi
                             {t("home.whatsNew.open")}
                           </button>
                           <a
-                            href={ENGINE_RELEASE_URL}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                            href={website?.releaseNotesHref ?? ENGINE_RELEASE_URL}
+                            {...(website?.releaseNotesHref ? {} : { target: "_blank", rel: "noopener noreferrer" })}
                             className="mt-2 inline-flex min-h-8 items-center gap-1.5 text-xs font-bold text-[var(--home-module-accent)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--home-module-accent)]"
                           >
                             {t("home.whatsNew.releaseNotes")} <ExternalLink size="0.7rem" />

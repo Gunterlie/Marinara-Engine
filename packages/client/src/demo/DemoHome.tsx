@@ -6,7 +6,7 @@ import { usePageActivity } from "../hooks/use-page-activity";
 import { DemoDownload } from "./DemoWelcome";
 import { DemoFeatures } from "./DemoFeatures";
 import { DemoLanding, DemoLandingHero } from "./DemoLanding";
-import { DemoSiteFooter, DemoSiteLinks, DemoSiteTabs } from "./DemoSiteTabs";
+import { DemoSiteFooter, DemoSiteLinks, DemoSiteTabs, WHATS_NEW } from "./DemoSiteTabs";
 
 const DemoDocs = lazy(() => import("./DemoDocs").then((module) => ({ default: module.DemoDocs })));
 const DemoAgents = lazy(() => import("./DemoAgents").then((module) => ({ default: module.DemoAgents })));
@@ -114,6 +114,7 @@ export function DemoHome() {
             </div>
           ),
           onHome: goHome,
+          releaseNotesHref: WHATS_NEW ? `#/changelog/${WHATS_NEW.version}` : undefined,
         }}
       />
     </div>

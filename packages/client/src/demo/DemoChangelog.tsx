@@ -6,7 +6,7 @@ import { ExternalLink } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { applyInlineMarkdown, renderMarkdownBlocks } from "../lib/markdown";
 import { cn } from "../lib/utils";
-import { DemoBrandMark } from "./DemoSiteTabs";
+import { CHANGELOG_SEEN_KEY, DemoBrandMark, WHATS_NEW } from "./DemoSiteTabs";
 
 interface Release {
   version: string;
@@ -34,6 +34,14 @@ export function DemoChangelog({ version }: { version: string }) {
   const latest = releases.data?.[0]?.version;
   const current = version || latest;
   const isOpen = (release: Release) => toggled[release.version] ?? release.version === current;
+
+  useEffect(() => {
+    try {
+      if (WHATS_NEW) localStorage.setItem(CHANGELOG_SEEN_KEY, WHATS_NEW.version);
+    } catch {
+      // Private mode: the tab keeps its dot.
+    }
+  }, []);
 
   useEffect(() => {
     if (!version || !releases.data) return;

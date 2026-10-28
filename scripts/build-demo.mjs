@@ -5,8 +5,40 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolvePnpmRunner } from "./pnpm-runner.mjs";
 import { AGENTS_GUIDE, agentPages } from "./demo/agents-pages.mjs";
+import { whatsNew } from "./demo/whats-new.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
+
+// Translated guides (docs-i18n) and release notes (main) come from the Engine repository.
+// A failed fetch or a missing branch only drops that part; the English site still builds.
+// No --depth: a shallow fetch would mark the whole local repository shallow.
+const git = (...args) => spawnSync("git", args, { cwd: root, encoding: "utf8", maxBuffer: 1 << 26 });
+const upstreamRemote = process.env.MARINARA_UPSTREAM_REMOTE ?? "https://github.com/Pasta-Devs/Marinara-Engine.git";
+function fetchUpstream(branch) {
+  const ref = `refs/website/upstream/${branch}`;
+  const fetched = git("fetch", "--quiet", "--no-tags", upstreamRemote, `+refs/heads/${branch}:${ref}`);
+  if (fetched.status !== 0)
+    console.warn(`[build-demo] Could not fetch ${branch} from ${upstreamRemote}: ${fetched.stderr?.trim()}`);
+  if (git("rev-parse", "--verify", "--quiet", `${ref}^{commit}`).status === 0) return ref;
+  console.warn(`[build-demo] ${ref} is not available; skipping it.`);
+  return null;
+}
+
+// Release notes: one entry per "## [x.y.z] - date" heading of the released CHANGELOG.md. Without it the page links to GitHub.
+const MAIN_REF = fetchUpstream("main");
+const changelog = MAIN_REF ? git("show", `${MAIN_REF}:CHANGELOG.md`).stdout : "";
+const releases = changelog
+  .split(/^## /m)
+  .slice(1)
+  .map((part) => {
+    const [, version, date = ""] = part.match(/^\[([^\]]+)\](?:[ \t]+-[ \t]+(\S+))?/) ?? [];
+    return { version, date, body: part.slice(part.indexOf("\n") + 1).trim() };
+  })
+  .filter((release) => /^\d+\.\d+\.\d+/.test(release.version ?? "") && release.body);
+// The landing page inlines the newest release's summary, so it needs no fetch and keeps its height.
+const summary = whatsNew(releases[0]);
+process.env.VITE_DEMO_WHATS_NEW = JSON.stringify(summary);
+process.env.VITE_DEMO_BUILT_AT = new Date().toISOString();
 const base = process.env.MARINARA_DEMO_BASE || "/Marinara-Website/";
 if (!/^\/(?:[A-Za-z0-9._-]+\/)*$/.test(base)) {
   throw new Error("MARINARA_DEMO_BASE must be an absolute directory path with a trailing slash.");
@@ -92,20 +124,6 @@ const agents = agentPages(docs.find((doc) => doc.path === AGENTS_GUIDE)?.content
 writeFileSync(resolve(root, "packages/client/dist-demo/agents.json"), JSON.stringify(agents));
 console.log(`[build-demo] Agent pages: ${agents.length}`);
 
-// Translated guides (docs-i18n) and release notes (main) come from the Engine repository.
-// A failed fetch or a missing branch only drops that part; the English site still builds.
-// No --depth: a shallow fetch would mark the whole local repository shallow.
-const git = (...args) => spawnSync("git", args, { cwd: root, encoding: "utf8", maxBuffer: 1 << 26 });
-const upstreamRemote = process.env.MARINARA_UPSTREAM_REMOTE ?? "https://github.com/Pasta-Devs/Marinara-Engine.git";
-function fetchUpstream(branch) {
-  const ref = `refs/website/upstream/${branch}`;
-  const fetched = git("fetch", "--quiet", "--no-tags", upstreamRemote, `+refs/heads/${branch}:${ref}`);
-  if (fetched.status !== 0)
-    console.warn(`[build-demo] Could not fetch ${branch} from ${upstreamRemote}: ${fetched.stderr?.trim()}`);
-  if (git("rev-parse", "--verify", "--quiet", `${ref}^{commit}`).status === 0) return ref;
-  console.warn(`[build-demo] ${ref} is not available; skipping it.`);
-  return null;
-}
 const I18N_REF = fetchUpstream("docs-i18n");
 const languages = [];
 if (I18N_REF) {
@@ -127,18 +145,8 @@ if (I18N_REF) {
 }
 writeFileSync(resolve(root, "packages/client/dist-demo/demo-docs/languages.json"), JSON.stringify(languages));
 
-// Release notes: one entry per "## [x.y.z] - date" heading of the released CHANGELOG.md. Without it the page links to GitHub.
-const MAIN_REF = fetchUpstream("main");
-const changelog = MAIN_REF ? git("show", `${MAIN_REF}:CHANGELOG.md`).stdout : "";
-const releases = changelog
-  .split(/^## /m)
-  .slice(1)
-  .map((part) => {
-    const [, version, date = ""] = part.match(/^\[([^\]]+)\](?:[ \t]+-[ \t]+(\S+))?/) ?? [];
-    return { version, date, body: part.slice(part.indexOf("\n") + 1).trim() };
-  })
-  .filter((release) => /^\d+\.\d+\.\d+/.test(release.version ?? "") && release.body);
 writeFileSync(resolve(root, "packages/client/dist-demo/changelog.json"), JSON.stringify(releases));
+writeFileSync(resolve(root, "packages/client/dist-demo/whats-new.json"), JSON.stringify(summary));
 console.log(`[build-demo] Changelog: ${releases.length} releases`);
 
 mkdirSync(resolve(root, "packages/client/dist-demo/website"), { recursive: true });

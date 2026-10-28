@@ -14,6 +14,24 @@ export const GITHUB_URL = "https://github.com/Pasta-Devs/Marinara-Engine";
 
 export const DISCORD_URL = "https://discord.com/invite/KdAkTg94ME";
 
+/** Newest changelog release, inlined by scripts/build-demo.mjs; null when the build had no changelog. */
+export const WHATS_NEW: { version: string; date: string; highlights: string[] } | null = JSON.parse(
+  import.meta.env.VITE_DEMO_WHATS_NEW || "null",
+);
+/** Released less than 14 days before this site was built. */
+export const WHATS_NEW_IS_NEW =
+  !!WHATS_NEW?.date &&
+  Date.parse(import.meta.env.VITE_DEMO_BUILT_AT ?? "") - Date.parse(WHATS_NEW.date) < 14 * 24 * 60 * 60 * 1000;
+export const CHANGELOG_SEEN_KEY = "marinara-demo:changelog-seen";
+
+function changelogSeen() {
+  try {
+    return localStorage.getItem(CHANGELOG_SEEN_KEY) === WHATS_NEW?.version;
+  } catch {
+    return false;
+  }
+}
+
 const FOCUS =
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--marinara-app-accent-solid)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]";
 
@@ -67,6 +85,7 @@ export function DemoSiteTabs({ tab }: { tab: string | null }) {
   const { t } = useTranslation();
   return TABS.map((item) => {
     const active = tab === item.id;
+    const fresh = item.id === "changelog" && WHATS_NEW_IS_NEW && !active && !changelogSeen();
     return (
       <button
         key={item.id}
@@ -74,7 +93,7 @@ export function DemoSiteTabs({ tab }: { tab: string | null }) {
         role="tab"
         data-testid={`demo-tab-${item.id}`}
         aria-selected={active}
-        aria-label={t(item.key)}
+        aria-label={fresh ? `${t(item.key)}, ${t("demo.site.new")}` : t(item.key)}
         onClick={() => (window.location.hash = `#/${item.id}`)}
         className={cn(
           TAB,
@@ -90,6 +109,9 @@ export function DemoSiteTabs({ tab }: { tab: string | null }) {
           <item.icon className={cn(TAB_ICON, "text-[var(--primary)]")} aria-hidden="true" />
         )}
         <span className={cn("min-w-0 truncate", active ? "block" : "hidden sm:block")}>{t(item.key)}</span>
+        {fresh ? (
+          <span aria-hidden="true" className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-[var(--primary)]" />
+        ) : null}
       </button>
     );
   });

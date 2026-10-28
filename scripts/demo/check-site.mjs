@@ -151,6 +151,27 @@ if (appVersion !== version) errors.push(`APP_VERSION is ${appVersion} in package
 if (builtVersion !== version) errors.push(`dist-demo/demo-build.json says ${builtVersion}, but package.json says ${version}. Rebuild with pnpm build:demo.`);
 if (values.tag && values.tag !== `v${version}`) errors.push(`The release is ${values.tag}, but package.json says ${version}. Check that the overlay does not change the version.`);
 
+// What's new: the landing page's inlined summary is the newest changelog release.
+const changelogFile = join(dist, "changelog.json");
+const whatsNewFile = join(dist, "whats-new.json");
+if (!existsSync(changelogFile) || !existsSync(whatsNewFile)) {
+  errors.push("dist-demo/changelog.json or dist-demo/whats-new.json is missing. Rebuild with pnpm build:demo.");
+} else {
+  const latest = JSON.parse(read(changelogFile))[0];
+  const summary = JSON.parse(read(whatsNewFile));
+  if (!latest) warnings.push("The changelog is empty, so the landing page shows only the GitHub release link.");
+  else if (summary?.version !== latest.version)
+    errors.push(
+      `whats-new.json is for ${summary?.version}, but the newest changelog release is ${latest.version}. Rebuild.`,
+    );
+  else if (!summary.highlights.length)
+    warnings.push(
+      `What's new for ${latest.version} has no highlights. Check scripts/demo/whats-new.mjs against its headings.`,
+    );
+  if (latest && latest.version !== version)
+    warnings.push(`The newest changelog release is ${latest.version}, but package.json says ${version}.`);
+}
+
 const report = [...errors, ...warnings.map((warning) => `warning: ${warning}`)];
 report.forEach((line, i) => console.log(`${i + 1}. ${line}`));
 console.log(
