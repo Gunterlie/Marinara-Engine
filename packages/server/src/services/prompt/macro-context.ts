@@ -33,6 +33,8 @@ import type { DB } from "../../db/connection.js";
 import { loadLorebookIncludes, processLorebooks, type LorebookScanResult } from "../lorebook/index.js";
 import { createCharactersStorage, type PersonaStorageRow } from "../storage/characters.storage.js";
 import { createLorebooksStorage } from "../storage/lorebooks.storage.js";
+import { createChatsStorage, parseCharacterIds } from "../storage/chats.storage.js";
+import { createGameStateStorage } from "../storage/game-state.storage.js";
 import { wrapContent } from "./format-engine.js";
 import { sanitizePromptLeaf } from "./prompt-escaping.js";
 import { logger } from "../../lib/logger.js";
@@ -58,6 +60,8 @@ export interface BuildPromptMacroContextInput {
   lastGenerationType?: string;
   idleDuration?: string;
   timeZone?: string;
+  /** The generation's selected snapshot; explicit null means there is no scene clock. */
+  worldState?: MacroContext["worldState"];
   /** Extra prompt templates that may contain macros outside card/persona fields. */
   macroSources?: readonly string[];
   /**
@@ -239,7 +243,6 @@ function referencedCharacterSourceFields(data: CharacterData): string[] {
     data.description,
     data.personality,
     data.scenario,
-    data.creator_notes,
     data.system_prompt,
     data.post_history_instructions,
     data.extensions?.backstory,
@@ -318,7 +321,6 @@ function buildReferencedCharacterFields(
     { label: "example_dialogue", value: data.mes_example },
     { label: "creator", value: data.creator },
     { label: "character_version", value: data.character_version },
-    { label: "creator_notes", value: data.creator_notes },
     { label: "system_prompt", value: data.system_prompt },
     { label: "post_history_instructions", value: data.post_history_instructions },
     { label: "depth_prompt", value: data.extensions?.depth_prompt?.prompt },
@@ -374,7 +376,6 @@ function buildReferencedPersonaFields(
     { label: "example_dialogue", value: persona.mes_example },
     { label: "creator", value: persona.creator },
     { label: "persona_version", value: persona.personaVersion },
-    { label: "creator_notes", value: persona.creatorNotes },
     { label: "about_me", value: persona.aboutMe },
   ].flatMap(({ label, value }) => {
     if (typeof value !== "string" || !value.trim()) return [];
@@ -805,6 +806,20 @@ export async function buildPromptMacroContext(input: BuildPromptMacroContextInpu
   const groupCharacterMacroData = input.groupCharacterIds
     ? await resolveCharacterMacroData(input.db, input.groupCharacterIds, input.chatId)
     : characterMacroData;
+  const chat = input.chatId && input.db ? await createChatsStorage(input.db).getById(input.chatId) : null;
+  // Only the names cross into the full roster: inactive profiles must not enter
+  // grouped card expansion, reference discovery, or lorebook macro sources.
+  // Game callers supply the party scope, including legacy sessions whose chat row was not mirrored.
+  const rosterIds =
+    chat?.mode === "game"
+      ? (input.groupCharacterIds ?? input.characterIds)
+      : chat?.characterIds !== undefined
+        ? parseCharacterIds(chat.characterIds)
+        : input.characterIds;
+  const rosterNames =
+    rosterIds.length === input.characterIds.length && rosterIds.every((id, index) => id === input.characterIds[index])
+      ? characterMacroData.names
+      : (await resolveCharacterMacroData(input.db, rosterIds, input.chatId)).names;
   const variables = input.variables ?? {};
 
   let lorebookEntryCounts: Record<string, number> = {};
@@ -833,7 +848,7 @@ export async function buildPromptMacroContext(input: BuildPromptMacroContextInpu
     userPhonetic: input.personaPhoneticName || input.personaFields?.phoneticName || input.personaName || "User",
     char: characterMacroData.names[0] || "Character",
     charPhonetic: characterMacroData.phoneticNames[0] || characterMacroData.names[0] || "Character",
-    characters: characterMacroData.names,
+    characters: rosterNames,
     groupCharacters: groupCharacterMacroData.names,
     characterProfiles: characterMacroData.profiles,
     variables,
@@ -845,6 +860,12 @@ export async function buildPromptMacroContext(input: BuildPromptMacroContextInpu
     lastGenerationType: input.lastGenerationType,
     idleDuration: input.idleDuration,
     timeZone: input.timeZone,
+    worldState:
+      input.worldState !== undefined
+        ? input.worldState
+        : input.chatId && input.db
+          ? await createGameStateStorage(input.db).getForGeneration(input.chatId)
+          : null,
     lorebookEntryCounts,
     ...(lorebookIncludes ? { lorebookIncludes } : {}),
     characterFields: {
@@ -1031,6 +1052,7 @@ export async function collectCharacterPostHistoryEntries(
   characterIds: string[],
   macroCtx: MacroContext,
   wrapFormat: WrapFormat,
+  onResolved?: (characterId: string, content: string) => void,
 ): Promise<PromptDepthEntry[]> {
   if (characterIds.length === 0) return [];
 
@@ -1061,6 +1083,7 @@ export async function collectCharacterPostHistoryEntries(
       },
     }).trim();
 
+    onResolved?.(id, content);
     if (content) {
       const label = multiCharacter
         ? `${data.name ?? "Character"} post-history instructions`
@@ -1081,10 +1104,11 @@ export async function collectCharacterAdvancedPromptEntries(
   characterIds: string[],
   macroCtx: MacroContext,
   wrapFormat: WrapFormat,
+  onPostHistoryResolved?: (characterId: string, content: string) => void,
 ): Promise<PromptDepthEntry[]> {
   const [depthEntries, postHistoryEntries] = await Promise.all([
     collectCharacterDepthPromptEntries(db, characterIds, macroCtx),
-    collectCharacterPostHistoryEntries(db, characterIds, macroCtx, wrapFormat),
+    collectCharacterPostHistoryEntries(db, characterIds, macroCtx, wrapFormat, onPostHistoryResolved),
   ]);
   return [...depthEntries, ...postHistoryEntries];
 }

@@ -29,11 +29,13 @@ import {
   logStorageDiagnostics,
 } from "./config/runtime-config.js";
 import { logCsrfTrustSummary } from "./middleware/csrf-protection.js";
-import { getPasswordlessPeers } from "./middleware/ip-allowlist.js";
+import { dockerTrustWarning, getPasswordlessPeers, isLoopbackBind } from "./middleware/ip-allowlist.js";
+import { enableLoginSetupCode } from "./config/login-credential.js";
 import { startEnvWatcher } from "./config/env-watcher.js";
 import { migrateTaskbarShortcuts } from "./services/setup/taskbar-shortcut-migration.js";
 import { sidecarProcessService } from "./services/sidecar/sidecar-process.service.js";
 import { startRuntimeMemoryMonitor } from "./utils/runtime-memory.js";
+import { startModelCatalogRefresh } from "./services/connections/model-catalog.js";
 
 function isAddressInUseError(err: unknown): err is NodeJS.ErrnoException {
   return err instanceof Error && "code" in err && err.code === "EADDRINUSE";
@@ -80,6 +82,7 @@ async function main() {
   const host = getHost();
   let isShuttingDown = false;
   let stopRuntimeMemoryMonitor: () => void = () => undefined;
+  let stopModelCatalogRefresh: () => void = () => undefined;
 
   const reapSidecar = () => {
     sidecarProcessService.killCurrentChildForProcessExit();
@@ -141,6 +144,7 @@ async function main() {
       envWatcher.stop();
       stopRuntimeMemoryMonitor();
       stopFreezeDetector();
+      stopModelCatalogRefresh();
       await app.close();
       logger.info("Shutdown complete");
       process.exit(0);
@@ -173,14 +177,19 @@ async function main() {
     logCsrfTrustSummary();
     // The bound address, not HOST: a DNS name in HOST hides a Tailscale bind.
     const bound = app.server.address();
-    const passwordlessPeers = getPasswordlessPeers(bound && typeof bound === "object" ? bound.address : host);
+    const boundHost = bound && typeof bound === "object" ? bound.address : host;
+    const passwordlessPeers = getPasswordlessPeers(boundHost);
     if (passwordlessPeers.length > 0) {
       logger.warn(
         "[access] These visitors get in without a password: %s. See Settings → Advanced → Access and docs/REMOTE_ACCESS.md.",
         passwordlessPeers.join(", "),
       );
+      const dockerWarning = dockerTrustWarning(passwordlessPeers);
+      if (dockerWarning) logger.warn(dockerWarning);
     }
+    if (!isLoopbackBind(boundHost)) enableLoginSetupCode();
     scheduleTaskbarShortcutMigration();
+    stopModelCatalogRefresh = startModelCatalogRefresh(app.db);
     // The platform launcher opens its browser only after this child has finished
     // loading configuration, registering routes and binding the listener.
     if (process.connected) {

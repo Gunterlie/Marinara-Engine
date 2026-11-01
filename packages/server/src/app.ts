@@ -19,6 +19,8 @@ import { compressJsonHook } from "./middleware/compress-json.js";
 import { seedDefaultPreset } from "./db/seed.js";
 import { seedProfessorMari } from "./db/seed-mari.js";
 import { seedDefaultConnection } from "./db/seed-connection.js";
+import { linkConnectionAccounts } from "./services/storage/connection-accounts.storage.js";
+import { starSavedModels } from "./services/connections/model-stars.js";
 import { seedDefaultBackgrounds } from "./db/seed-backgrounds.js";
 import { seedDefaultGameAssets } from "./db/seed-game-assets.js";
 import { seedDefaultRegexScripts } from "./db/seed-regex.js";
@@ -27,6 +29,7 @@ import { recoverGalleryImages } from "./services/storage/gallery-recovery.js";
 import { createLibraryFoldersStorage } from "./services/storage/library-folders.storage.js";
 import { migrateCharacterExtendedDescriptionsToLorebooks } from "./services/lorebook/extended-descriptions-migration.js";
 import { migrateTtsSettingsToAudioConnection } from "./services/connections/tts-audio-connection-migration.js";
+import { migrateGenerativeAudioConnections } from "./services/connections/generative-audio-connection-migration.js";
 import { migrateTripoConnectionsToApiKey } from "./services/avatars/generation/tripo-key.js";
 import { migrateLegacyDefaultAgentPrompts } from "./services/agents/default-prompt-migration.js";
 import { APP_VERSION, resetTurnGameRegistry } from "@marinara-engine/shared";
@@ -230,6 +233,17 @@ export async function buildApp(https?: { cert: Buffer; key: Buffer }) {
   } else {
     await startup.phase("seed.connection", () => seedDefaultConnection(db));
   }
+  try {
+    // Unlinked Models still work on their own copied credentials, so a failed link must not stop the boot.
+    await startup.phase("migrate.connection-accounts", () => linkConnectionAccounts(db));
+  } catch (error) {
+    app.log.warn(error, "Connection account linking did not complete; it will retry next startup");
+  }
+  try {
+    await startup.phase("migrate.model-stars", () => starSavedModels(db));
+  } catch (error) {
+    app.log.warn(error, "Starring saved models did not complete; it will retry next startup");
+  }
   await startup.phase("seed.regex", () => seedDefaultRegexScripts(db));
   await startup.phase("migrate.agent-prompts", () => migrateLegacyDefaultAgentPrompts(db));
   await startup.phase("migrate.extended-descriptions", () => migrateCharacterExtendedDescriptionsToLorebooks(db));
@@ -254,6 +268,11 @@ export async function buildApp(https?: { cert: Buffer; key: Buffer }) {
     await startup.phase("migrate.tts-audio", () => migrateTtsSettingsToAudioConnection(db));
   } catch (error) {
     app.log.warn(error, "TTS audio-connection migration did not complete; it will retry next startup");
+  }
+  try {
+    await startup.phase("migrate.generative-audio", () => migrateGenerativeAudioConnections(db));
+  } catch (error) {
+    app.log.warn(error, "Generative audio-connection migration did not complete; it will retry next startup");
   }
   try {
     await startup.phase("migrate.tripo-key", () => migrateTripoConnectionsToApiKey(db));

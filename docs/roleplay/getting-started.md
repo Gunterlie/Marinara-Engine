@@ -107,6 +107,16 @@ In **Chat Settings → Agents → Roleplay Commands**, enable **Illustrations** 
 
 Turn on **Render in-line** under **Illustrations** to show each image inside the message instead, at the place the character wrote the command, for example between two paragraphs. The image keeps its controls: select it to see its prompt, or use the **X** to remove it. The character is told it can place the command wherever the picture belongs. The setting applies to new images, so images already in the chat stay where they are. Automatic Illustrator images and the Visual Novel layout keep showing images as before.
 
+## Artifacts on demand
+
+In **Chat Settings → Agents → Roleplay Commands**, enable **HTML Artifacts** to let the narrator make one specific in-world artifact with `[html: prompt="..."]`: a spellbook page, a sign, a sketch on a letter, a terminal readout. It starts off, and needs no agent. You can also ask for one yourself with `/html <what you want>`.
+
+The artifact appears where the narrator placed the command, after the reply has finished. In the Visual Novel layout you see only the marker. The message's own text stays as it was written.
+
+Each artifact is a separate request, at most 3 per reply. It uses the **Immersive HTML** agent's connection if that agent has one, otherwise your default agent connection, otherwise the chat's connection. That connection's **Max Parallel Agent Jobs** sets how many run at once. The request includes the speaking character's description and the last few messages. It follows its own instructions, so edits to the Immersive HTML agent's prompt do not change it. For a plain styled page, the six prebuilt **Documents** kinds are free and instant.
+
+The narrator does not see the artifact's HTML. In later turns it sees a short plain-text version: the artifact's readable text and one line on how it looks. Open the "used html command" marker under the message to read or edit that text, or to delete the artifact, which also removes it from the narrator's memory. If a run fails, the marker says why.
+
 ## Whispers and secrets
 
 In **Chat Settings → Agents → Roleplay Commands**, enable **Whisper** to allow private asides, secrets, or visions inside a reply. It starts off. Choose whether **All** characters or only the appointed **Narrator** can use it. Like Personal Notes, it requires a solo chat or **Individual** group generation.
@@ -134,6 +144,12 @@ With **Personal Notes** enabled under **Roleplay Commands**, write `[notes: cont
 The narrator also stops receiving a character's notes when that character is disabled or removed from the group. Disabling does not delete the saved notes; re-enabling the character makes them available again.
 
 You can also keep a note on a single message. Choose **Bookmark, pin or note** under the message and write a **Private note**. It stays private and is never sent to the model unless you turn on **Show the note to the narrator character** and pick a character. That character then receives the note next to that message, and no other character does. Sharing needs a solo chat or **Individual** group generation, because a merged group reply is written for every character at once. **Remove note** also stops sharing it.
+
+## Video clips
+
+In **Chat Settings → Agents → Roleplay Commands**, enable **Video clips** to let characters ask for a short video clip of a key moment instead of a still picture. It starts off, and needs the **Illustrator** agent in the chat and a video connection under Illustrator's **Scene Videos**.
+
+The model uses `[video: subject="the moment" motion="what moves and how the camera moves" characters="names"]`, and is told to prefer it over `[illustrate]` when the moment is about motion. What the clip starts from follows Illustrator's **First frame** setting: a new Illustrator picture of the moment, the named character's avatar or sprite, or no picture. The clip plays in the reply when it is ready. It is offered only while the **Video Run Interval** allows a clip, and it counts toward **Videos per reply** like Illustrator's own clips.
 
 ## Character interruptions
 

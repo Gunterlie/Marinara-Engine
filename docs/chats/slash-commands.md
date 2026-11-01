@@ -75,17 +75,21 @@ These commands help you steer a story, play a character, and add art. Most of th
 
 | Command | Also works as | What it does |
 |---|---|---|
-| `/guided [direction]` \| `/guided respond for [name] [direction (optional)]` | `/narrator`, `/narrate`, `/nar` | Steers the next AI reply in a direction you describe. |
+| `/guided [direction]` \| `/guided respond as [name] [direction (optional)]` | `/narrator`, `/narrate`, `/nar` | Steers the next AI reply in a direction you describe. |
 | `/as [name] [message (optional)]` | `/respond` | Posts a message as a character, or asks a character to reply. |
 | `/emote [expression (optional)]` \| `/emote "[name]" [expression (optional)]` | `/emotion`, `/sprite` | Lists or switches a character's sprite expression. |
 | `/roll [dice (optional)]` | `/r`, `/dice` | Rolls dice and posts the result. |
 | `/random` | `/rand`, `/event` | Asks the AI to add a surprise event to the story. |
 | `/scene [description (optional)]` | `/rp` | Run from a Conversation chat. Starts a new Roleplay scene that branches off that conversation. |
 | `/illustrate [range=N\|range=N-M (optional)] [prompt (optional)]` | `/ill` | Generates a gallery image for the current chat. |
+| `/html [what you want]` | | Roleplay: makes one in-world artifact at the end of the latest reply, for example `a spellbook page`. |
+| `/video [description (optional)]` | | Roleplay: makes a short clip of the latest reply, or of what you describe, under that reply. It follows Illustrator's **First frame** setting. In Conversation, `/video` sends a video message instead (see below). |
 | `/impersonate [direction (optional)]` | `/imp` | Writes a reply as your persona. |
 | `/impersonate_prompt [prompt\|reset]` | `/imp_prompt` | Sets the instruction that `/impersonate` uses in this chat. |
 
 In **Roleplay**, `/illustrate range=12` illustrates message 12, and `/illustrate range=12-18` sends messages 12 through 18 to the Illustrator. Use the same message numbers as `/goto`, in ascending order, with at most 200 messages. Hidden messages stay excluded. The image attaches to the last visible message in the selected range; prompt review keeps that selection even if newer messages arrive. Earlier messages remain available with Advanced Memory enabled. Without `range=`, the command keeps its usual current-scene behavior. An optional typed prompt is used directly, as before.
+
+`/html a terminal readout` makes one artifact at the end of the latest reply. It needs no agent and works whether or not **HTML Artifacts** is enabled. The narrator can make the same request itself with `[html: prompt="..."]` when **HTML Artifacts** is enabled under **Roleplay Commands**. See [Artifacts on demand](../roleplay/getting-started.md#artifacts-on-demand).
 
 To steer the next reply, add your direction after `/guided`:
 
@@ -93,10 +97,10 @@ To steer the next reply, add your direction after `/guided`:
 /guided make him confess he is lying
 ```
 
-In a group Roleplay chat, use `/guided respond for [name] [direction (optional)]` to choose the responding character. For example:
+In a group Roleplay chat, use `/guided respond as [name] [direction (optional)]` to choose the responding character. `reply as` and `respond for` also work. For example:
 
 ```
-/guided respond for "Powers That Be" describe the approaching storm
+/guided respond as "Powers That Be" describe the approaching storm
 ```
 
 Use `/as [name] [message (optional)]` to post text as a character. Leaving out the message asks the model to generate that character's next response instead:
@@ -113,6 +117,8 @@ The `/roll` command reads dice notation. This rolls two six-sided dice:
 ```
 
 You can add a modifier, like `/roll 1d20+5`. If you type `/roll` with nothing after it, Marinara rolls `1d20`.
+
+To keep only some of the dice, add `kh` (keep highest) or `kl` (keep lowest) and a number: `/roll 4d6kh3` rolls four dice and adds the highest three, and `/roll 2d20kl1` keeps the lower of two. `dl` and `dh` drop the lowest or highest instead, as in `/roll 4d6dl1`. The dice that don't count are still shown, dimmed.
 
 A sprite is a piece of character art that shows an expression. The `/emote` command switches which one is shown. Type `/emote` alone to see the available expressions, or name one to switch to it:
 

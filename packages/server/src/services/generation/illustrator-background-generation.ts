@@ -140,7 +140,7 @@ export function illustratorTrackerLocationChanged(previousLocation: unknown, cur
 export function parseIllustratorBackgroundPlan(value: unknown): IllustratorBackgroundPlan | null {
   const record = parseRecord(value);
   const locationName = readTrimmedString(record.locationName ?? record.location ?? record.name).slice(0, 120);
-  const prompt = readTrimmedString(record.prompt ?? record.description).slice(0, 5_000);
+  const prompt = readTrimmedString(record.prompt ?? record.description);
   if (!locationName || !prompt) return null;
   return {
     locationName,
@@ -382,9 +382,7 @@ async function resolveIllustratorImageConnection(
   }
   connection ??= await connections.getDefaultForImageGeneration();
   if (!connection) {
-    throw new Error(
-      "No image generation connection is set on Illustrator or under Settings -> Connections -> Defaults -> Images.",
-    );
+    throw new Error("No image model is set for Illustrator or as the Images default in the Connections sidebar.");
   }
   return connection;
 }

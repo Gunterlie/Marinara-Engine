@@ -286,6 +286,59 @@ assert.equal(repairedJsonResult.success, true, "structured agents should recover
 assert.equal(repairedJsonProvider.calls, 1, "repairable JSON should not spend another model call");
 assert.deepEqual(repairedJsonResult.data, { weather: "rain", nested: { value: 1 } });
 
+// #8643: a rewrite cut off at the output limit (GLM 5.3 always reasons, even when a JSON agent asks it not to, so
+// the thinking shares the agent's max tokens) holds only the start of the reply. JSON repair closes its editedText
+// as if it were whole, so it used to be applied and the streamed reply became an exact prefix ending mid-sentence.
+class CutOffProvider extends RecordingProvider {
+  override async chatComplete(messages: ChatMessage[], options: ChatOptions): Promise<ChatCompletionResult> {
+    return { ...(await super.chatComplete(messages, options)), finishReason: "length" };
+  }
+}
+const fullReply =
+  "She steps closer.\n\nRain taps the glass while she decides what to say next, and finally she speaks.";
+const cutOffRewrite = '{"editNeeded": true, "editedText": "She steps closer.\\n\\nRain taps the glass while she dec';
+for (const agent of [
+  makeAgent("prose-guardian", "text_rewrite"),
+  { ...makeAgent("custom-rewriter", "text_rewrite"), isCustomAgent: true },
+]) {
+  const cutOff = await executeAgent(
+    agent,
+    { ...context, mainResponse: fullReply },
+    new CutOffProvider(cutOffRewrite),
+    "agent-model",
+  );
+  assert.equal(cutOff.success, false, `${agent.type}: a rewrite cut off at the output limit must not be applied`);
+  assert.match(cutOff.error ?? "", /max tokens/u, `${agent.type}: the failure says how to fix it`);
+  // A rewrite agent with tools answers through the tool loop; its cut-off answer is refused the same way.
+  const cutOffWithTools = await executeAgent(
+    agent,
+    { ...context, mainResponse: fullReply },
+    new CutOffProvider(cutOffRewrite),
+    "agent-model",
+    {
+      tools: [{ type: "function", function: { name: "look_up", description: "look up", parameters: {} } }],
+      executeToolCall: async () => JSON.stringify({ found: "nothing" }),
+    },
+  );
+  assert.equal(cutOffWithTools.success, false, `${agent.type}: a cut-off tool-loop rewrite must not be applied`);
+
+  const whole = await executeAgent(
+    agent,
+    { ...context, mainResponse: fullReply },
+    new RecordingProvider(JSON.stringify({ editNeeded: true, editedText: fullReply.toUpperCase(), changes: [] })),
+    "agent-model",
+  );
+  assert.equal(whole.success, true, `${agent.type}: a finished rewrite still applies`);
+  assert.equal((whole.data as { editedText?: string }).editedText, fullReply.toUpperCase());
+}
+const cutOffTracker = await executeAgent(
+  makeAgent("world-state", "game_state_update"),
+  context,
+  new CutOffProvider('{"weather": "rain"'),
+  "agent-model",
+);
+assert.equal(cutOffTracker.success, true, "other structured agents keep recovering cut-off JSON");
+
 // Inventory replacement is destructive: incomplete JSON and malformed rows
 // must fail before the same patch helper used by generation/retry can save them.
 const inventoryAgent = makeAgent("inventory-tracker", "inventory_tracker_update");
@@ -742,6 +795,28 @@ await createAgentPipeline([spotifyAgent], context).postGenerate("The room settle
 assert.equal(spotifyProvider.calls, 1, "Spotify Music DJ should make one planning request");
 assert.equal(spotifyProvider.options[0]?.tools, undefined, "Spotify planning should not enter the LLM tool loop");
 assert.equal(spotifyToolExecutions, 0, "Spotify tools should run later in the deterministic playback stage");
+
+// #8251: post-reply agents see the map location after the reply, not the one the turn started in.
+const locationProvider = new RecordingProvider(
+  JSON.stringify({ shouldGenerate: false, prompt: "", style: "", characters: [], reason: "quiet beat" }),
+);
+const locationIllustrator: ResolvedAgent = { ...makeAgent("illustrator"), provider: locationProvider };
+const locationContext: AgentContext = {
+  ...context,
+  currentLocation: { path: "Palace > Throne Room", description: "OLD_ROOM_SENTINEL" },
+};
+await createAgentPipeline([locationIllustrator], locationContext).postGenerate("They walk out to the yard.", {
+  currentLocation: { path: "Palace > Palace Yard", description: "NEW_ROOM_SENTINEL" },
+});
+const movedPrompt = locationProvider.messages[0]!.map((message) => message.content).join("\n");
+assert.match(movedPrompt, /Path: Palace > Palace Yard\nDescription: NEW_ROOM_SENTINEL/u);
+assert.doesNotMatch(movedPrompt, /OLD_ROOM_SENTINEL/u);
+await createAgentPipeline([locationIllustrator], locationContext).postGenerate("They stay put.");
+assert.match(
+  locationProvider.messages[1]!.map((message) => message.content).join("\n"),
+  /OLD_ROOM_SENTINEL/u,
+  "without an override the pipeline keeps its own location",
+);
 
 const spotifyFallbackCalls: string[] = [];
 let spotifyFallbackReportsActiveUri = true;

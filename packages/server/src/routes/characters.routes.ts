@@ -73,7 +73,7 @@ import {
 } from "../services/conversation/call-character-videos.service.js";
 import { removeSavedVideoFromDisk } from "../services/video/video-generation.js";
 import { writeFile, mkdir, readFile, readdir, stat, unlink } from "fs/promises";
-import { join } from "path";
+import { join, resolve, sep } from "path";
 import { DATA_DIR } from "../utils/data-dir.js";
 import {
   createJsonSlot,
@@ -102,6 +102,7 @@ import { resolveBaseUrl } from "../services/generation/connection-base-url.js";
 import { cardFieldGenerationSchema, generateCardField } from "../services/generation/card-field-generation.js";
 import { importSTLorebook } from "../services/import/st-lorebook.importer.js";
 import { embeddedSpriteSizesAreWithinLimits, MAX_EMBEDDED_SPRITE_COUNT } from "../services/import/marinara.importer.js";
+import { readOptionalSpriteCatalog, spriteDirectory } from "../services/sprites/sprite-catalog.js";
 import {
   clearEmbeddedLorebookFromCharacter,
   embedLorebookIntoCharacter,
@@ -153,6 +154,10 @@ const ALLOWED_CALL_VIDEO_CLIP_UPLOAD_EXTS = new Set([".mp4"]);
 const renameCardVersionSchema = z.object({ version: z.string().trim().min(1).max(100) });
 const bakeGreetingImagesSchema = z.object({
   urls: z.array(z.string()).min(1).max(GREETING_IMAGE_BAKE_MAX_PER_REQUEST),
+  bakedImages: z
+    .array(z.object({ url: z.string(), file: z.string().min(1).max(255) }))
+    .max(GREETING_IMAGE_BAKE_MAX_PER_REQUEST)
+    .default([]),
 });
 type UploadedMultipartFile = NonNullable<Awaited<ReturnType<FastifyRequest["file"]>>>;
 
@@ -599,6 +604,21 @@ async function readAvatarDataUrl(avatarPath: string | null | undefined): Promise
   return readImageAsDataUrl(join(DATA_DIR, "avatars"), filename);
 }
 
+/** The byte check card-import pictures pass. A file that is not the image its name claims is
+ *  deleted, so a gallery upload never keeps one. */
+async function isValidUploadedGalleryImage(filePath: string, filename: string): Promise<boolean> {
+  const galleryRoot = resolve(DATA_DIR, "gallery");
+  const storedPath = resolve(filePath);
+  if (!storedPath.startsWith(galleryRoot + sep)) return false;
+  const image = await validateImageAssetFile(storedPath, filename);
+  if (image) {
+    await image.handle.close().catch(() => undefined);
+    return true;
+  }
+  await unlink(storedPath).catch(() => undefined);
+  return false;
+}
+
 async function copyGalleryImageToAvatar(
   entityKind: "character" | "persona",
   entityId: string,
@@ -633,7 +653,7 @@ async function readSpritesForId(
   id: string,
   enforcePortableLimits = false,
 ): Promise<Array<{ filename: string; data: string }> | null> {
-  const dir = join(DATA_DIR, "sprites", id);
+  const dir = spriteDirectory(id);
   if (!existsSync(dir)) return [];
   let entries: string[];
   try {
@@ -703,8 +723,9 @@ async function* galleryExportEntries(
 // Read each sprite in data/sprites/<id>/ as it is written; import restores the
 // same expression set under a new id.
 async function* spriteExportEntries(id: string): AsyncGenerator<{ filename: string; data: string }> {
-  const dir = join(DATA_DIR, "sprites", id);
-  if (!id || !existsSync(dir)) return;
+  if (!id) return;
+  const dir = spriteDirectory(id);
+  if (!existsSync(dir)) return;
   let entries: string[];
   try {
     entries = await readdir(dir);
@@ -773,6 +794,7 @@ async function buildNativeCharacterExport(
         spec: "chara_card_v2",
         spec_version: "2.0",
         data: portableData,
+        spriteCatalog: readOptionalSpriteCatalog(char.id),
         // avatar, sprites and gallery are streamed here, in that order.
         [slot]: 0,
         metadata: {
@@ -796,7 +818,7 @@ async function buildNativeCharacterExport(
 export function buildCompatibleCharacterExport(
   data: any,
   sprites: Array<{ filename: string; data: string }> = [],
-  { keepOnboarding = false }: { keepOnboarding?: boolean } = {},
+  { keepOnboarding = false, spriteCatalog }: { keepOnboarding?: boolean; spriteCatalog?: unknown } = {},
 ) {
   // Compatible cards carry no gallery, so baked greeting images go back to their web links.
   data = data ? restoreBakedGreetingImages(data) : data;
@@ -818,10 +840,11 @@ export function buildCompatibleCharacterExport(
   delete extensions.characterSheetImageId;
   if (!keepOnboarding) delete extensions.onboarding;
   extensions.useCharacterSheetAsReference = false;
-  if (sprites.length > 0) {
+  if (sprites.length > 0 || spriteCatalog !== undefined) {
     extensions.marinara = {
       ...parseCharacterDataRecord(extensions.marinara),
       sprites,
+      ...(spriteCatalog !== undefined ? { spriteCatalog } : {}),
     };
   }
   return {
@@ -855,6 +878,7 @@ async function buildNativePersonaExport(
       exportedAt: new Date().toISOString(),
       data: {
         ...personaData,
+        spriteCatalog: personaId ? readOptionalSpriteCatalog(personaId) : undefined,
         // avatar, sprites and gallery are streamed here, in that order.
         [slot]: 0,
         metadata: {
@@ -2117,6 +2141,9 @@ export async function charactersRoutes(app: FastifyInstance) {
     const filePath = join(dir, filename);
 
     await pipeline(data.file, createWriteStream(filePath));
+    if (!(await isValidUploadedGalleryImage(filePath, filename))) {
+      return reply.status(400).send({ error: "Unsupported or invalid image" });
+    }
 
     const fields = data.fields as Record<string, { value?: string } | undefined>;
     const prompt = fields?.prompt?.value ?? "";
@@ -2147,7 +2174,7 @@ export async function charactersRoutes(app: FastifyInstance) {
     "/:id/gallery/bake",
     { config: { rateLimit: GREETING_IMAGE_BAKE_RATE_LIMIT } },
     async (req, reply) => {
-      const { urls } = bakeGreetingImagesSchema.parse(req.body ?? {});
+      const { urls, bakedImages } = bakeGreetingImagesSchema.parse(req.body ?? {});
       const char = await storage.getById(req.params.id);
       if (!char) return reply.status(404).send({ error: "Character not found" });
       // Paths use the stored id, never the raw route parameter.
@@ -2155,7 +2182,17 @@ export async function charactersRoutes(app: FastifyInstance) {
 
       const dir = await ensureCharacterGalleryDir(id);
       const results: Array<{ url: string; file?: string; error?: string }> = [];
+      const gallery = bakedImages.length ? await characterGallery.listByCharacterId(id) : [];
       for (const url of new Set(urls)) {
+        const cached = bakedImages.find((entry) => entry.url === url);
+        const row = cached ? findGalleryRowByFilename(gallery, cached.file) : null;
+        const stored = row ? resolveStoredGalleryFile(row.filePath) : null;
+        const validCopy = stored ? await validateImageAssetFile(stored.absolutePath, stored.filename) : null;
+        if (stored && validCopy) {
+          await validCopy.handle.close();
+          results.push({ url, file: stored.filename });
+          continue;
+        }
         let image: Awaited<ReturnType<typeof downloadGreetingImage>>;
         try {
           image = await downloadGreetingImage(url);
@@ -2388,27 +2425,26 @@ export async function charactersRoutes(app: FastifyInstance) {
         namePrefix: String(charData.name ?? "Character"),
         existingLorebookId:
           typeof embeddedLorebookMetadata.lorebookId === "string" ? embeddedLorebookMetadata.lorebookId : null,
+        beforeCommit: async (tx, result) => {
+          extensions.importMetadata = {
+            ...importMetadata,
+            embeddedLorebook: {
+              ...embeddedLorebookMetadata,
+              hasEmbeddedLorebook: true,
+              lorebookId: result.lorebookId,
+            },
+          };
+
+          const updated = await createCharactersStorage(tx).update(req.params.id, {
+            extensions: extensions as any,
+          });
+
+          if (!updated) throw new Error("Character no longer exists");
+          await syncCharacterBookFromLorebook(tx, result.lorebookId, { throwOnError: true });
+        },
       },
     );
 
-    if (!result || "error" in result) {
-      return reply.status(500).send({ error: result?.error ?? "Failed to import embedded lorebook" });
-    }
-
-    extensions.importMetadata = {
-      ...importMetadata,
-      embeddedLorebook: {
-        ...embeddedLorebookMetadata,
-        hasEmbeddedLorebook: true,
-        lorebookId: result.lorebookId,
-      },
-    };
-
-    await storage.update(req.params.id, {
-      extensions: extensions as any,
-    });
-
-    await syncCharacterBookFromLorebook(app.db, result.lorebookId);
     return {
       success: true,
       lorebookId: result.lorebookId,
@@ -2511,7 +2547,10 @@ export async function charactersRoutes(app: FastifyInstance) {
     if (!sprites) {
       return reply.status(413).send({ error: "Sprite collection exceeds compatible PNG export limits" });
     }
-    const v2Envelope = buildCompatibleCharacterExport(charData, sprites, { keepOnboarding: true });
+    const v2Envelope = buildCompatibleCharacterExport(charData, sprites, {
+      keepOnboarding: true,
+      spriteCatalog: readOptionalSpriteCatalog(char.id),
+    });
     const charaBase64 = Buffer.from(JSON.stringify(v2Envelope), "utf-8").toString("base64");
 
     // Read avatar image or create a minimal 1x1 transparent PNG fallback
@@ -2724,6 +2763,11 @@ export async function charactersRoutes(app: FastifyInstance) {
     if (!parsed.success)
       return reply.status(400).send({ error: "Invalid persona update", issues: parsed.error.issues });
     const body = parsed.data;
+    // Labels the version snapshot this update creates, like the character PATCH route.
+    const versionOptions = {
+      versionSource: typeof rawBody.versionSource === "string" ? rawBody.versionSource : undefined,
+      versionReason: typeof rawBody.versionReason === "string" ? rawBody.versionReason : undefined,
+    };
     if (Object.keys(body).length === 0 && !hasCharacterSheetImageId && !hasUseCharacterSheetAsReference) {
       const current = await storage.getPersona(req.params.id);
       if (!current) return reply.status(404).send({ error: "Persona not found" });
@@ -2744,17 +2788,18 @@ export async function charactersRoutes(app: FastifyInstance) {
             : { characterSheetImageId: null, useCharacterSheetAsReference: "false" };
       }
       if (!Object.hasOwn(body, "trackerCardColors") || completeReset) {
-        return storage.updatePersona(req.params.id, { ...encodePersonaUpdate(body), ...galleryFields });
+        return storage.updatePersona(req.params.id, { ...encodePersonaUpdate(body), ...galleryFields }, versionOptions);
       }
       const current = await storage.getPersona(req.params.id);
       if (!current) return null;
       const trackerCardColors = isTrackerCardClear(body.trackerCardColors)
         ? buildTrackerCardPortraitClear(current.trackerCardColors)
         : mergePersonaTrackerCardColors(current.trackerCardColors, body.trackerCardColors as Record<string, unknown>);
-      return storage.updatePersona(req.params.id, {
-        ...encodePersonaUpdate({ ...body, trackerCardColors }),
-        ...galleryFields,
-      });
+      return storage.updatePersona(
+        req.params.id,
+        { ...encodePersonaUpdate({ ...body, trackerCardColors }), ...galleryFields },
+        versionOptions,
+      );
     });
     if (!updated) return reply.status(404).send({ error: "Persona not found" });
     return projectPersona(updated);
@@ -2849,6 +2894,16 @@ export async function charactersRoutes(app: FastifyInstance) {
       await removeUnattachedAvatarFile({ avatarPath });
       throw error;
     }
+  });
+
+  app.delete<{ Params: { id: string } }>("/personas/:id/avatar", async (req, reply) => {
+    // ponytail: clear the card reference and retain files for frozen chat identities.
+    // Reclaim them only after checking current, historical and trashed references.
+    const updated = await enqueueUpdate(personaUpdateQueues, req.params.id, () =>
+      storage.updatePersona(req.params.id, { avatarPath: null, avatarCrop: "" }, { versionReason: "Avatar removal" }),
+    );
+    if (!updated) return reply.status(404).send({ error: "Persona not found" });
+    return projectPersona(updated);
   });
 
   app.put("/personas/:id/activate", async (_req, reply) =>
@@ -3290,6 +3345,9 @@ export async function charactersRoutes(app: FastifyInstance) {
     const filePath = join(dir, filename);
 
     await pipeline(data.file, createWriteStream(filePath));
+    if (!(await isValidUploadedGalleryImage(filePath, filename))) {
+      return reply.status(400).send({ error: "Unsupported or invalid image" });
+    }
 
     const fields = data.fields as Record<string, { value?: string } | undefined>;
     const prompt = fields?.prompt?.value ?? "";

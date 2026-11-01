@@ -9,6 +9,7 @@ import { charactersRoutes } from "./characters.routes.js";
 import { lorebooksRoutes } from "./lorebooks.routes.js";
 import { promptsRoutes } from "./prompts.routes.js";
 import { connectionsRoutes } from "./connections.routes.js";
+import { connectionAccountsRoutes } from "./connection-accounts.routes.js";
 import { agentsRoutes } from "./agents.routes.js";
 import { customToolsRoutes } from "./custom-tools.routes.js";
 import { generateRoutes, type GenerationRunner } from "./generate.routes.js";
@@ -54,7 +55,7 @@ import { themesRoutes } from "./themes.routes.js";
 import { appSettingsRoutes } from "./app-settings.routes.js";
 import { achievementsRoutes } from "./achievements.routes.js";
 import { gameRoutes } from "./game.routes.js";
-import { combatDirectorRoutes } from "./combat-director.routes.js";
+import { combatDirectorRoutes, type RoomFightBridge } from "./combat-director.routes.js";
 import { gameInventoryRoutes } from "./game-inventory.routes.js";
 import { gameAssetsRoutes } from "./game-assets.routes.js";
 import { gameRulesetsRoutes } from "./game-rulesets.routes.js";
@@ -65,6 +66,7 @@ import { gameWorldsRoutes } from "./game-worlds.routes.js";
 import { turnGamesRoutes } from "./turn-games.routes.js";
 import { sidecarRoutes } from "./sidecar.routes.js";
 import { ttsRoutes } from "./tts.routes.js";
+import { audioRoutes } from "./audio.routes.js";
 import { speechToTextRoutes } from "./speech-to-text.routes.js";
 import { promptOverridesRoutes } from "./prompt-overrides.routes.js";
 import { csrfDiagnosticsRoutes } from "./csrf-diagnostics.routes.js";
@@ -77,6 +79,7 @@ import { personalExtensionsRoutes } from "./personal-extensions.routes.js";
 import { notificationSoundRoutes } from "./notification-sound.routes.js";
 import { libraryFoldersRoutes } from "./library-folders.routes.js";
 import { androidLocalAuthRoutes } from "../middleware/android-local-auth.js";
+import { loginRoutes } from "../middleware/basic-auth.js";
 import { multiplayerRoutes } from "./multiplayer.routes.js";
 import { MultiplayerService, type MultiplayerGameRuntime } from "../services/multiplayer/service.js";
 import { loadTlsOptions, multiplayerAvailable } from "../config/runtime-config.js";
@@ -102,6 +105,7 @@ export async function registerRoutes(app: FastifyInstance) {
   app.decorate("multiplayer", multiplayer);
   app.addHook("onClose", () => multiplayer.close());
   await app.register(androidLocalAuthRoutes, { prefix: "/api/android-auth" });
+  await app.register(loginRoutes);
   await app.register(chatsRoutes, { prefix: "/api/chats" });
   await app.register(advancedMemoryRoutes, { prefix: "/api/chats" });
   await app.register(chatInsightsRoutes, { prefix: "/api/chat-insights" });
@@ -111,6 +115,7 @@ export async function registerRoutes(app: FastifyInstance) {
   await app.register(lorebooksRoutes, { prefix: "/api/lorebooks" });
   await app.register(promptsRoutes, { prefix: "/api/prompts" });
   await app.register(connectionsRoutes, { prefix: "/api/connections" });
+  await app.register(connectionAccountsRoutes, { prefix: "/api/connection-accounts" });
   await app.register(decisionRoutes, { prefix: "/api/decision" });
   await app.register(connectionFoldersRoutes, { prefix: "/api/connection-folders" });
   await app.register(libraryFoldersRoutes, { prefix: "/api/library-folders" });
@@ -162,7 +167,14 @@ export async function registerRoutes(app: FastifyInstance) {
     onRoomRuntimeReady: (runtime: MultiplayerGameRuntime) => multiplayer.setGameRuntime(runtime),
   });
   await app.register(multiplayerRoutes, { prefix: "/api/multiplayer", service: multiplayer });
-  await app.register(combatDirectorRoutes, { prefix: "/api/game/combat/director" });
+  await app.register(combatDirectorRoutes, {
+    prefix: "/api/game/combat/director",
+    room: {
+      absent: (chatId: string) => multiplayer.fightAbsent(chatId),
+      changed: (chatId: string) => multiplayer.fightChanged(chatId),
+      ready: (bridge: RoomFightBridge) => multiplayer.setFightBridge(bridge),
+    },
+  });
   await app.register(gameInventoryRoutes, { prefix: "/api/game/inventory" });
   await app.register(gameAssetsRoutes, { prefix: "/api/game-assets" });
   await app.register(gameRulesetsRoutes, { prefix: "/api/game-rulesets" });
@@ -172,6 +184,7 @@ export async function registerRoutes(app: FastifyInstance) {
   await app.register(gameWorldsRoutes, { prefix: "/api/game-worlds" });
   await app.register(turnGamesRoutes, { prefix: "/api/turn-games" });
   await app.register(ttsRoutes, { prefix: "/api/tts" });
+  await app.register(audioRoutes, { prefix: "/api/audio" });
   await app.register(speechToTextRoutes, { prefix: "/api/speech-to-text" });
   await app.register(promptOverridesRoutes, { prefix: "/api/prompt-overrides" });
   await app.register(csrfDiagnosticsRoutes, { prefix: "/api/csrf" });

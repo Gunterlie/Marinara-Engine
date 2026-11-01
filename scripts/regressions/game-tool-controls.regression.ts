@@ -352,7 +352,12 @@ try {
       connectionId: connection.id,
       promptPresetId: null,
     }))!;
-    await chats.patchMetadata(chat.id, { enableAgents: false, enableTools: false, gameGmToolConnectionId: planner.id });
+    await chats.patchMetadata(chat.id, {
+      enableAgents: false,
+      enableTools: false,
+      gameGmToolConnectionId: planner.id,
+      gameOneRequestDice: false,
+    });
     for (const noCalls of [false, true]) {
       emptyPlan = noCalls;
       expectPlan = true;
@@ -480,6 +485,7 @@ try {
     expectPlan = !continueTurn;
     emptyPlan = false;
     await chats.patchMetadata(chat.id, {
+      gameOneRequestDice: false,
       enableAgents: false,
       enableTools: false,
       gameGmToolConnectionId: planner.id,
@@ -537,6 +543,16 @@ try {
     'The attack is resolved. [skill_check: skill="Coincidence" dc="2" dice="2d2"] [dice: d1]',
   ]) {
     Math.random = nativeDraft.includes("Coincidence") ? () => 0 : originalRandom;
+    // The check's dice come from the shared secure roller (#8489): pin that draw to its lowest face too.
+    if (nativeDraft.includes("Coincidence")) {
+      Object.defineProperty(globalThis.crypto, "getRandomValues", {
+        value: <T extends ArrayBufferView>(array: T) => ((array as unknown as Uint32Array).fill(0), array),
+        configurable: true,
+        writable: true,
+      });
+    } else {
+      Reflect.deleteProperty(globalThis.crypto, "getRandomValues");
+    }
     const chat = (await chats.create({
       name: "Native and text rolls",
       mode: "game",
@@ -544,7 +560,7 @@ try {
       connectionId: nativeConnection.id,
       promptPresetId: null,
     }))!;
-    await chats.patchMetadata(chat.id, { enableAgents: false, enableTools: false });
+    await chats.patchMetadata(chat.id, { enableAgents: false, enableTools: false, gameOneRequestDice: false });
     await chats.createMessage({ chatId: chat.id, role: "user", content: "Attack and roll damage." });
     order.length = 0;
     const response = await app.inject({ method: "POST", url: "/api/generate/", payload: { chatId: chat.id } });
@@ -563,6 +579,7 @@ try {
     );
   }
   Math.random = originalRandom;
+  Reflect.deleteProperty(globalThis.crypto, "getRandomValues");
   nativeDraft = "";
 
   // A tool round's thinking is not the final reply's: an empty, finished reply after it must not
@@ -581,7 +598,7 @@ try {
     connectionId: thinkingConnection.id,
     promptPresetId: null,
   }))!;
-  await chats.patchMetadata(thinkingChat.id, { enableAgents: false, enableTools: false });
+  await chats.patchMetadata(thinkingChat.id, { enableAgents: false, enableTools: false, gameOneRequestDice: false });
   await chats.createMessage({ chatId: thinkingChat.id, role: "user", content: "Pick the lock." });
   order.length = 0;
   const thinkingResponse = await app.inject({
@@ -635,6 +652,7 @@ try {
   // Use a normal text-only connection; the package table is the only boundary stub.
   await connections.update(dedicatedNarrator.id, { treatAsLocalEndpoint: false });
   await chats.patchMetadata(refusalChat.id, {
+    gameOneRequestDice: false,
     enableAgents: false,
     enableTools: false,
     gameExperienceId: "pixelforge",

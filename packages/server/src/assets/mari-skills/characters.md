@@ -1,6 +1,6 @@
 ---
 name: Characters and personas
-description: Read before creating or editing a character or persona card: the fields and aliases, where each value really lives, what a patch replaces, About Me, avatars, folders, and the writes that report success while saving the wrong thing.
+description: Read before creating or editing a character or persona card (its fields and aliases), or when a card write reports success but saved the wrong thing.
 ---
 
 # Characters and personas
@@ -12,6 +12,7 @@ Purpose: create or change a character card or a persona — a field, the About M
 Reads: `character.list|get|search|folder.list|onboarding.get`, `persona.list|get|search`. Writes: `character.create|update|moveToFolder`, `persona.create|update`, values in `data` on a create and `patch` on an update.
 
 - **A new character is one `character.create` with the full card in `data`** — every field the user gave or you wrote, split as below. Only a non-empty `name` is enforced, so a name-only placeholder saves and verifies; never make one to fill with updates, each of which is another change card. If the request is bare — a role or a vibe, no name, situation or voice — ask what the card cannot invent about them (who they are, what the scene is), then build with your best defaults; never interrogate.
+- When the output limit is small (your workspace rules say so, or a reply was cut at it), the full card may not fit one reply: create with `name`, `description` and `personality`, then add the other fields with one `character.update` per reply. The extra change cards are the price of a card that saves.
 - `character.create` and `persona.create` write by default; `character.update`, `character.moveToFolder` and `persona.update` need `apply:true` (sent without `apply` they are refused; `apply:false` previews). `apply` is read from the top level only — `data.apply` and `patch.apply` are ignored.
 - A dry run has no `readBack`; a no-op write returns `No changes: every row already has these values, so nothing was written and no review card was made.` and makes no card.
 - `character.get` keeps the card's attached `lorebooks`; `mari characters get` drops them. Read-back is otherwise equivalent on both paths, so use the CLI only when you want it. Attaching or detaching one is `lorebook.linkCharacter` / `lorebook.unlinkCharacter` with `lorebookId` and `characterId`, never a `lorebooks` field on `character.update`; `builtin-lorebook` owns that workflow.
@@ -35,7 +36,7 @@ A character card is JSON in `characters.data`, snake_case. Keep the meanings apa
 - `avatarPath`, `spriteFolderPath`, `folderId`, ids, timestamps are row columns — a patch value sits in `data` unread.
 - Extensions such as `nameColor` and `convoBehavior` are reachable only as `patch.extensions.<key>`. A `nameColor` inside `patch` lands at `data.nameColor`, which the client never reads; at the envelope's top level it is ignored outright. `onboarding` is the exception: write it with `character.onboarding.update`, because a raw `patch.extensions.onboarding` bypasses `buildOnboardingUpdate` and its validation.
 
-**Personas are columns, not extensions:** `description`, `personality`, `scenario`, `backstory`, `appearance`, `aboutMe`, `creator`, `creatorNotes`, `convoBehavior`, `tags`, `comment` (aliases like `creator_notes`). A plain-string `convoBehavior` becomes `{instruction, insertionStrategy: "constant_after"}`; `avatarPath` is not settable here.
+**Personas are columns, not extensions:** `description`, `personality`, `scenario`, `backstory`, `appearance`, `imageAppearance`, `imageAppearanceEnabled` (a boolean), `aboutMe`, `summary`, `mes_example`, `phoneticName`, `convoDisplayName`, `creator`, `creatorNotes`, `convoBehavior`, `tags`, `comment` (aliases like `creator_notes`, `phonetic_name`). A plain-string `convoBehavior` becomes `{instruction, insertionStrategy: "constant_after"}`; `avatarPath` is not settable here.
 
 ## About Me
 
@@ -45,7 +46,7 @@ Read the entity first, then write it in its own first-person voice into `aboutMe
 
 - Character: `character.update`, `apply:true`, `patch.aboutMe` → `data.extensions.aboutMe`; read it with `character.get`.
 - Persona: `persona.update` → the `aboutMe` column; read with `persona.get`.
-- **Clearing differs.** A character clears with `{"aboutMe": ""}`; `{"aboutMe": null}` is dropped before the patch. A persona's `""` through `app_data` is silently ignored — and that is true of **every persona string field except `summary` and `mes_example`** (those two clear with `""`): alone it throws `persona.update needs a patch field…`, beside another field it no-ops while reporting `verified`. Clear any persona string with the CLI, e.g. `mari personas update <id> --about-me "" --apply`.
+- **Clearing:** characters and personas both clear a string with `""` (e.g. `{"aboutMe": ""}`); `null` is dropped.
 
 `builtin-onboarding` fills the five template fields and sets no About Me — write it on the finished persona.
 

@@ -1,7 +1,7 @@
 // ──────────────────────────────────────────────
 // Storage: Characters, Personas & Groups
 // ──────────────────────────────────────────────
-import { and, asc, desc, eq, inArray, like, ne, or } from "../../db/file-query.js";
+import { and, asc, desc, eq, inArray, jsonStringArrayContainsAll, like, ne, or } from "../../db/file-query.js";
 import type { DB } from "../../db/connection.js";
 import {
   characters,
@@ -17,10 +17,12 @@ import {
 import { newId, now } from "../../utils/id-generator.js";
 import {
   PROFESSOR_MARI_ID,
+  parseCardTagSearchTerms,
   applyCharacterCardFieldAlternatives,
   applyPersonaCardFieldAlternatives,
   cardEntityBelongsToChat,
   unassignCardFieldAlternatives,
+  referencedBakedGreetingImages,
   characterBookSchema,
   characterExtensionsSchema,
   type CharacterData,
@@ -101,6 +103,12 @@ function characterVersioningEnabled(data: CharacterData): boolean {
 }
 
 function normalizeCharacterData(data: CharacterData): CharacterData {
+  if (Array.isArray(data.extensions?.bakedGreetingImages)) {
+    data = {
+      ...data,
+      extensions: { ...data.extensions, bakedGreetingImages: referencedBakedGreetingImages(data) },
+    };
+  }
   const name = data.name.trim();
   return name === data.name ? data : { ...data, name };
 }
@@ -437,7 +445,15 @@ export function createCharactersStorage(db: DB) {
       const clauses = [];
       if (!options.includeBuiltIn) clauses.push(ne(characters.id, PROFESSOR_MARI_ID));
       const pattern = likePattern(options.search);
-      if (pattern) clauses.push(or(like(characters.data, pattern), like(characters.comment, pattern)));
+      if (pattern) {
+        clauses.push(
+          or(
+            like(characters.data, pattern),
+            like(characters.comment, pattern),
+            jsonStringArrayContainsAll(characters.data, parseCardTagSearchTerms(options.search ?? ""), "tags"),
+          ),
+        );
+      }
       const whereClause = clauses.length > 0 ? and(...clauses) : undefined;
       const favoriteFilter =
         options.favoriteFilter === "favorites" || options.favoriteFilter === "non-favorites"
@@ -646,8 +662,9 @@ export function createCharactersStorage(db: DB) {
       });
       const nextComment = options?.comment !== undefined ? (options.comment ?? "") : (existing.comment ?? "");
       const nextAvatarPath = avatarPath !== undefined ? avatarPath : existing.avatarPath;
+      // Storage normalization alone is not an authored card revision.
       const versionedContentChanged =
-        characterVersionedContentChanged(currentData, merged) ||
+        characterVersionedContentChanged(normalizeCharacterData(currentData), merged) ||
         nextComment !== (existing.comment ?? "") ||
         nextAvatarPath !== existing.avatarPath;
       const requestedVersionChanged =
@@ -958,6 +975,7 @@ export function createCharactersStorage(db: DB) {
             like(personas.appearance, pattern),
             like(personas.mes_example, pattern),
             like(personas.tags, pattern),
+            jsonStringArrayContainsAll(personas.tags, parseCardTagSearchTerms(options.search ?? "")),
           )
         : undefined;
       const rows = await (whereClause

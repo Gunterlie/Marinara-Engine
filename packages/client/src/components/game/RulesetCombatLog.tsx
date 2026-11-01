@@ -1,11 +1,14 @@
 // The log of a fight on a board, under the board: newest first, each round named once in a column of
 // its own, names in their side's colour and the arithmetic of every roll in a chip. The sentences are
 // the plain log's own (`rulesetCombatEventLine`); only how they are drawn is new.
+import { useRulesetText } from "../../lib/ruleset-text";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { DirectedRulesetView, RulesetDefinition } from "@marinara-engine/shared";
 import { useTranslation } from "react-i18next";
 import { rulesetRichLogLines, rulesetWindowLineSeq, type RulesetLogPiece } from "../../lib/ruleset-combat-log-rich";
+import { rulesetFightNoteText } from "../../lib/ruleset-combat-log";
 import { cn } from "../../lib/utils";
+import { useUIStore } from "../../stores/ui.store";
 
 const PIECE_CLASS: Record<RulesetLogPiece["kind"], string> = {
   text: "",
@@ -27,9 +30,15 @@ export function RulesetCombatLog({
   className?: string;
 }) {
   const { t } = useTranslation();
+  // With Debug on, the Engine's reason for each of its AI's steps follows the step.
+  const debugMode = useUIStore((state) => state.debugMode);
   // Built fresh from the events on every view, as the plain log is, so a fight read back or a
   // language changed mid-battle prints in the language on screen now.
-  const lines = useMemo(() => rulesetRichLogLines(definition, view, t), [definition, view, t]);
+  const text = useRulesetText();
+  const lines = useMemo(
+    () => rulesetRichLogLines(definition, view, t, debugMode, text),
+    [definition, view, t, debugMode, text],
+  );
   const newestFirst = useMemo(() => [...lines].reverse(), [lines]);
   const asking = rulesetWindowLineSeq(view);
   const box = useRef<HTMLDivElement>(null);
@@ -71,30 +80,42 @@ export function RulesetCombatLog({
         {adjustmentsOpen && view.adjustments.length > 0 && (
           <ul className="m-0 mb-1.5 list-none space-y-1 rounded-md border border-[var(--border)] p-2 text-xs text-[var(--muted-foreground)]">
             {view.adjustments.map((line) => (
-              <li key={line}>{line}</li>
+              <li key={line}>{rulesetFightNoteText(line, t, text)}</li>
             ))}
           </ul>
         )}
         <ol aria-live="polite" className="m-0 list-none p-0 text-[0.78rem] leading-relaxed">
           {newestFirst.map((line, index) => {
-            // A round is named once, at the top of its own block: its newest line.
+            // A round is named once, at the top of its own block: its newest line. Each turn inside
+            // it is a block of its own under its taker's name, so "what did they just do" reads as one.
             const newer = newestFirst[index - 1];
             const firstOfRound = line.round > 0 && newer?.round !== line.round;
+            const firstOfTurn = !!line.turnOf && (firstOfRound || newer?.turnOf !== line.turnOf);
+            const taker = firstOfTurn ? view.combatants.find((one) => one.id === line.turnOf)?.name : undefined;
             return (
               <li
                 key={line.seq}
                 className={cn(
                   "grid grid-cols-[4.25rem_minmax(0,1fr)] gap-2 rounded px-1 py-0.5",
                   line.seq === asking && "bg-amber-400/15",
+                  index > 0 && firstOfTurn && "mt-1 border-t border-[var(--border)] pt-1",
                 )}
               >
                 <span
                   aria-hidden="true"
-                  className="pt-0.5 text-[0.6rem] font-bold uppercase tracking-[0.08em] text-amber-700 dark:text-amber-300"
+                  className="flex flex-col pt-0.5 text-[0.6rem] font-bold uppercase tracking-[0.08em] text-amber-700 dark:text-amber-300"
                 >
                   {firstOfRound ? t("game.combat.ruleset.status.round", { round: line.round }) : ""}
+                  {taker && (
+                    <span className="truncate font-semibold normal-case tracking-normal text-[var(--muted-foreground)]">
+                      {taker}
+                    </span>
+                  )}
                 </span>
-                <span className="min-w-0 text-[var(--muted-foreground)]">
+                <span
+                  data-log-reason={line.reason ? "" : undefined}
+                  className={cn("min-w-0 text-[var(--muted-foreground)]", line.reason && "pl-3 text-[0.92em] italic")}
+                >
                   {line.pieces.map((piece, n) => (
                     <span key={n} className={PIECE_CLASS[piece.kind]}>
                       {piece.text}

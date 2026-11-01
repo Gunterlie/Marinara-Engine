@@ -7,7 +7,11 @@ import {
   normalizeAgentPromptTemplateOptions,
   normalizeTextForMatch,
   resolveGameSetupArtStylePrompt,
+  rulesetBestiaryNamedIn,
+  rulesetCombatStyle,
   summarizeTacticalBattlefield,
+  type RulesetCatalogEntriesById,
+  type RulesetDefinition,
   type GameActiveState,
   type GameCampaignPlan,
   type GameMap,
@@ -23,6 +27,55 @@ import { sidecarModelService } from "../sidecar/sidecar-model.service.js";
 import { isInferenceAvailable as isSidecarInferenceAvailable } from "../sidecar/sidecar-inference.service.js";
 import { cardPromptText } from "../prompt/card-text.js";
 import { buildPartyNpcId, isPartyNpcId } from "./game-party-utils.js";
+import { loadRulesetCatalogEntries } from "../game/ruleset-catalog.service.js";
+import { logger } from "../../lib/logger.js";
+
+/** The bestiaries read for a turn's hint, by ruleset and package, the latest few kept. */
+const turnBestiaries = new Map<string, Promise<RulesetCatalogEntriesById>>();
+
+/**
+ * The bestiary creatures some words of the story name (laptop 2026-10-26: a player's "the Giant
+ * Crocodile from the river, the real beast itself" met an "Enraged River Queen" the Game Master made
+ * up). Only for a ruleset that resolves its own fights and holds a bestiary; empty on any failure.
+ */
+export async function gameBestiaryNamed(
+  definition: RulesetDefinition | undefined,
+  packageId: string | null | undefined,
+  texts: ReadonlyArray<string | undefined>,
+): Promise<string[]> {
+  const catalogs = definition?.combat ? (definition.catalogs ?? []).filter((one) => one.holds === "creatures") : [];
+  if (!definition || catalogs.length === 0 || !texts.some((text) => text?.trim())) return [];
+  const key = `${packageId ?? ""}|${definition.id}@${definition.version}`;
+  let read = turnBestiaries.get(key);
+  if (!read) {
+    read = (async () => {
+      const entries: RulesetCatalogEntriesById = {};
+      for (const catalog of catalogs) {
+        const loaded = await loadRulesetCatalogEntries(packageId ?? null, definition, catalog);
+        if (loaded.ok) entries[catalog.id] = loaded.entries;
+      }
+      return entries;
+    })();
+    turnBestiaries.set(key, read);
+    while (turnBestiaries.size > 4) turnBestiaries.delete(turnBestiaries.keys().next().value!);
+  }
+  try {
+    return rulesetBestiaryNamedIn(await read, texts).map((one) => one.label);
+  } catch (error) {
+    turnBestiaries.delete(key);
+    logger.warn(error, "[game] Could not read the bestiary of %s", definition.id);
+    return [];
+  }
+}
+
+/** A prompt message's words, whether it holds a string or parts. */
+function promptMessageText(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  return content
+    .map((part) => (part && typeof part === "object" && typeof part.text === "string" ? part.text : ""))
+    .join(" ");
+}
 
 type PromptMessage = {
   role: "system" | "user" | "assistant";
@@ -155,12 +208,16 @@ export async function injectGameGmPromptRuntime(args: {
   /** The game's world (worldgen W1), as `loadGameWorld` reads it. */
   world: GameWorld | null;
   ruleset?: GmPromptContext["ruleset"];
+  /** The package the ruleset came from, for its bestiary. */
+  rulesetPackageId?: string | null;
   characterIds: string[];
   chars: CharactersStore;
   chats: ChatsStore;
   selectedGameStateSnapshotPromise: Promise<any | null>;
-  mappedMessages: Array<{ role: string }>;
+  mappedMessages: Array<{ role: string; content?: unknown }>;
   personaName: string;
+  /** Whether the chat has a persona or a character playing the player. Absent counts as having one. */
+  hasPlayerIdentity?: boolean;
   resolvePromptMacros(value: string): string;
 }): Promise<GameGmPromptRuntime> {
   const setupConfig =
@@ -285,7 +342,8 @@ export async function injectGameGmPromptRuntime(args: {
       participant.persona.description,
     ];
     appendGameCardDetails(parts, gameCardByName.get(normalizeTextForMatch(name)));
-    partyNames.push(name);
+    // Never among the ones the Game Master "also plays" (laptop room playtest 2026-10-30: told so, it
+    // gave a seated guest's Guest Hero lines of their own).
     partyIdNamePairs.push({ id: participant.id, name });
     partyCards.push({ name, card: parts.join("\n") });
   }
@@ -317,7 +375,8 @@ export async function injectGameGmPromptRuntime(args: {
       : null;
   const snapshotCombatStyle = combatSnapshot?.combatStyle;
   const pinnedCombatStyle =
-    gameActiveState === "combat" && (snapshotCombatStyle === "classic" || snapshotCombatStyle === "tactical")
+    // Any pinned style, a client-registered one included (#8109); only "tactical" changes the prompt.
+    gameActiveState === "combat" && typeof snapshotCombatStyle === "string" && snapshotCombatStyle
       ? snapshotCombatStyle
       : null;
   const legacyTacticalCombatStyle =
@@ -331,7 +390,11 @@ export async function injectGameGmPromptRuntime(args: {
   const resolvedCombatStyle =
     pinnedCombatStyle ??
     legacyTacticalCombatStyle ??
-    ((args.chatMetadata.gameCombatStyle as string) || (setupConfig?.combatStyle as string) || "classic");
+    // A style the game's ruleset leaves out plays as the first one it lists (1.379).
+    rulesetCombatStyle(
+      args.ruleset,
+      (args.chatMetadata.gameCombatStyle as string) || (setupConfig?.combatStyle as string) || "classic",
+    );
 
   const lastMapPos = args.chatMetadata.lastMapPosition as string | { x: number; y: number } | undefined;
   const currentMapPos = gameMap?.partyPosition;
@@ -394,6 +457,7 @@ export async function injectGameGmPromptRuntime(args: {
     partyCards,
     playerName: args.personaName,
     playerCard,
+    playerIsParty: !playerCard && args.hasPlayerIdentity === false && partyNames.length > 0,
     gmCharacterCard,
     difficulty: (setupConfig?.difficulty as string) || "normal",
     // An active encounter keeps the style it started with. Legacy snapshots did
@@ -429,6 +493,9 @@ export async function injectGameGmPromptRuntime(args: {
     playerMoved,
     turnNumber: gameTurnNumber,
     perceptionHints: perceptionHintsBlock,
+    bestiaryNamed: await gameBestiaryNamed(args.ruleset, args.rulesetPackageId, [
+      promptMessageText([...args.mappedMessages].reverse().find((message) => message.role === "user")?.content),
+    ]),
     moraleContext: (() => {
       const morale = (args.chatMetadata.gameMorale as number) ?? 50;
       const tier = getMoraleTier(morale);

@@ -1,6 +1,6 @@
 ---
 name: Personal Extensions
-description: Read before drafting, editing or reviewing a personal extension — its manifest and contributions, the capabilities it may declare, and the code hash the user reviews.
+description: Read before drafting, editing or reviewing a personal extension.
 ---
 
 # Personal Extensions
@@ -24,6 +24,7 @@ Actions: reads `personal_extension.list|get|search`; writes `create|update`. No 
 1. Pick the runtime: browser (`"client"`, `css` or `js`) or server (`"server"`, non-empty `serverJs`, no capabilities). A server extension needs a working OS sandbox: approval returns 503 on Windows, Android and default Docker, so check before planning one.
 2. Design the UI first: kind, id, label, panel elements. A button activates code; only a panel holds controls.
 3. Create the whole payload in one call, id in the envelope. `name` is not unique-checked; a duplicate quietly makes a second draft.
+   When the output limit is small (your workspace rules say so, or a reply was cut at it) and a browser extension has both `css` and `js`: create with one, then send the other in an update (it merges), one per reply. `serverJs` cannot be split.
 4. `get` it: `contentHash`, `approvedHash: null`, `enabled: "false"`, `source: "professor_mari"`, `revisions: []`; request an elided `js`/`css` before describing code.
 5. Quote the hash and capabilities; the draft runs only after "Review and run", then "Run Exact Code". Later edits: `apply: true`, `get`, and state whether the hash moved.
 
@@ -41,7 +42,7 @@ Browser payload: `name` 1–200; `version` ≤64 or a number; `description` ≤2
 
 Legal names: `read_active_characters`, `read_active_persona`, `full_page_access`; only the two read ones are usable. Without one `marinara.context` still exposes `chatId`, `characterId` (single-Character chats only) and `characterIds`, plus private storage, `log`, timers, `onCleanup` and the host-rendered UI. `read_active_characters` adds `characters[]` for the active chat's cards, allowlisted fields only, at 32 000 characters per field, 256 000 total, 100 tags; `read_active_persona` adds `persona` and `personaId`. An undeclared capability yields `characters: []`, `persona: null`, `personaId: null` — empty values, not an error.
 
-**Never declare `full_page_access`.** `app_data` skips the normalization that refuses it, so it is stored, silently stripped when the row is mapped, while the trust path hashes the raw row — the hash you report can never match the one the user approves. An extension that needs it is not a personal extension.
+**Never declare `full_page_access`.** `create` and `update` refuse it and write nothing; an existing draft that still carries it must be updated with `capabilities` that leave it out. An extension that needs it is not a personal extension.
 
 **The surface is host-rendered descriptors plus declared reads.** Approval and enable belong to the user's review screen; the host draws every element with `textContent`, and panel clicks arrive as `{contributionId, elementId, values}` strings through `onEvent` (`onActivate` covers `button`, `menu-item`, `panel`). An extension that needs the DOM, the network or direct app data is not a personal extension.
 
@@ -62,6 +63,7 @@ Legal names: `read_active_characters`, `read_active_persona`, `full_page_access`
 | `No personal extension has the id "<id>". …`                                                                                                                                                | No such row — `list`, then `create`.                                        |
 | `A personal_extensions row with id "…" already exists; a create cannot overwrite it. Use an update instead.`                                                                                | The id is taken; pick another, or `update` that row.                        |
 | `personal_extension.update needs a code or metadata patch`                                                                                                                                  | Send at least one code or metadata field; a misspelled one counts as empty. |
+| `Personal Extensions cannot request "full_page_access"; only External Extensions can. Nothing was changed. …`                                                                               | Resend `capabilities` without it.                                           |
 | `Professor Mari can save Personal Extension drafts but cannot approve or enable them.`                                                                                                      | A raw DB write touched `enabled`/`approvedHash`.                            |
 | `Server personal extensions require server JavaScript` / `Server personal extensions cannot request browser context capabilities` / `Browser personal extensions require CSS or JavaScript` | Fix the runtime payload and resend it whole.                                |
 | `Extension content changed before approval. Review the current code and try again.`                                                                                                         | Quote the new `contentHash`; the user reviews again.                        |

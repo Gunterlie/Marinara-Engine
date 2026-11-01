@@ -1,6 +1,6 @@
 ---
 name: Interactive onboarding
-description: Writing, editing, reviewing or debugging a character's interactive onboarding: the persona template, persona questions, character questions, and conditions.
+description: Read before writing, editing, reviewing or debugging a character's interactive onboarding: its persona template and questions.
 ---
 
 # Interactive onboarding
@@ -77,6 +77,9 @@ false for those answers — say which.
    sentence. Checked the other way round, the update reports every such question as unused,
    because the card text it is checked against does not carry the `{{name}}` yet. With no
    character questions, skip the card patch.
+   When the output limit is small (your workspace rules say so, or a reply was cut at it), send the card patch and the block in separate replies, the patch first, and the block
+   only once the patch has applied (its `readBack`, or the user's Accept when it is held). The block
+   itself cannot go in parts, since each question list you send replaces the whole list: keep it short.
 6. **Write with `apply: true`** and a one-sentence `reason` that says what the player gets ("Players
    build their newcomer with a few questions when a chat starts"). The result is a change card the
    user reviews; the template itself is not applied to any existing chat. Report the shape in one or
@@ -150,6 +153,7 @@ next send can reveal the next group.
 | ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `Onboarding not saved, the block doesn't match the shape:`    | A value has the wrong JSON type: `enabled`, `allowCustom` and `multiSelect` are booleans; `variables`, `cardVariables` and `options` are arrays; the five fields are strings.                                                                            |
 | `Unknown onboarding key(s): …`                                | You sent a key that is not `enabled`, `description`, `personality`, `backstory`, `appearance`, `scenario`, `variables`, `cardVariables`. Typos are rejected, not ignored.                                                                                |
+| `The block is nested one level too deep`                      | The error follows `Unknown onboarding key(s): onboarding` (or `patch`, `data`). Send the fields (`enabled`, `variables`, …) directly as the `onboarding` argument, not inside another object.                                                            |
 | `… has unknown key(s): …`                                     | A question or option key is misspelled (for example `allowcustom`). Question keys: `variableName` (`name`), `question`, `options`, `allowCustom`, `multiSelect`, `separator`, `displayMode`, `optionSort`. Option keys: `label`, `value`, `description`. |
 | `A question has no variableName`                              | Fill it in.                                                                                                                                                                                                                                              |
 | `"X" is not a valid variableName`                             | Use letters, digits and `_`, starting with a letter or `_`. No spaces or hyphens.                                                                                                                                                                        |

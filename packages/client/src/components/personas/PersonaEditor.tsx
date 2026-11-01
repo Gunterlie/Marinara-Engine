@@ -1,9 +1,26 @@
+import {
+  useSpriteLibrary,
+  SpriteLibraryShell,
+  SpriteSelection,
+  SpriteFolderGrid,
+  SpriteFolderSelect,
+} from "../characters/SpriteLibrary";
 // ──────────────────────────────────────────────
 // Persona Editor — Full-page detail view
 // Replaces the chat area when editing a persona.
 // Sections: Metadata, Card, Convo, Lorebook, Sprites, Gallery, Colors, Stats
 // ──────────────────────────────────────────────
-import { useState, useEffect, useRef, useCallback, useMemo, type ChangeEvent, type ReactNode } from "react";
+import {
+  useState,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useCallback,
+  useEffectEvent,
+  useMemo,
+  type ChangeEvent,
+  type ReactNode,
+} from "react";
 import { toast } from "sonner";
 import {
   useCreateCharacter,
@@ -11,6 +28,7 @@ import {
   useUpdatePersona,
   useUploadAvatar,
   useUploadPersonaAvatar,
+  useRemovePersonaAvatar,
   useDeletePersona,
   useDuplicatePersona,
   usePersonaVersions,
@@ -38,6 +56,7 @@ import { CardFieldAlternatives } from "../characters/CardFieldAlternatives";
 import { CardFieldWand } from "../characters/CardFieldWand";
 import { useConnections } from "../../hooks/use-connections";
 import { useUIStore } from "../../stores/ui.store";
+import { withCssPaintAlpha } from "../../lib/css-colors";
 import {
   ArrowLeft,
   Save,
@@ -70,6 +89,8 @@ import {
   Pencil,
   Check,
   MessageCircleQuestion,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import type { AvatarCrop } from "@marinara-engine/shared";
 import { normalizeAvatarCrop } from "@marinara-engine/shared";
@@ -80,6 +101,7 @@ import { dataImageUrlToFile } from "../../lib/data-image-file";
 import { extractColorsFromImage } from "../../lib/avatar-color-extraction";
 import { HelpTooltip } from "../ui/HelpTooltip";
 import { RulesetSheetsSection } from "../rulesets/RulesetSheetsSection";
+import { PersonaCombatIconSection } from "../characters/GameModeIconSection";
 import { ColorPicker } from "../ui/ColorPicker";
 import { StatIconPicker } from "../ui/StatIconPicker";
 import { MacroTextarea } from "../ui/MacroTextarea";
@@ -101,6 +123,7 @@ import {
 import { estimateTextTokens, formatEstimatedTokens } from "../../lib/character-token-count";
 import {
   useCharacterSprites,
+  useImportSpriteFolder,
   useUploadSprite,
   useDeleteSprite,
   useExportSprites,
@@ -121,6 +144,9 @@ import { SpriteWandCleanupEditor } from "../ui/SpriteWandCleanupEditor";
 import { ExportFormatDialog, type ExportFormatChoice } from "../ui/ExportFormatDialog";
 import { Modal } from "../ui/Modal";
 import { requestProfessorMariOpen } from "../../lib/professor-mari-open";
+import { formFieldValue } from "../../lib/mari-editor-fields";
+import { useMariCompanionEditor, useMariEditorFields } from "../../hooks/use-mari-editor-fields";
+import { MariFieldReview, MariFieldReviewProvider, useMariFieldReview } from "../characters/MariFieldReview";
 import { EditorTabNavigation } from "../ui/EditorTabNavigation";
 import { useEditorSections } from "../../hooks/use-editor-sections";
 import { useEditorLeaveSave } from "../../hooks/use-editor-leave-save";
@@ -288,7 +314,7 @@ function formatPersonaFieldValue<K extends keyof PersonaFormData>(
 
 /** Persona mutations the editor coordinates. Only one may run at a time,
  *  because each writes or removes the same Persona row. */
-type PersonaMutationKind = "save" | "avatar" | "gallery-avatar" | "delete";
+type PersonaMutationKind = "save" | "avatar" | "gallery-avatar" | "remove-avatar" | "delete";
 
 /** The decoded PATCH contract this editor writes: the shared update input plus
  *  the character-sheet fields the Persona route still handles separately. */
@@ -1314,11 +1340,12 @@ export function PersonaEditor() {
   const personaId = useUIStore((s) => s.personaDetailId);
   const personaInitialTab = useUIStore((s) => s.personaDetailInitialTab) as TabId | null;
   const closeDetail = useUIStore((s) => s.closePersonaDetail);
-  const { data: allPersonas, isLoading } = usePersonas();
+  const { data: allPersonas, isLoading, refetch: refetchPersonas } = usePersonas();
   const createCharacter = useCreateCharacter();
   const updatePersona = useUpdatePersona();
   const uploadCharacterAvatar = useUploadAvatar();
   const uploadAvatar = useUploadPersonaAvatar();
+  const removeAvatar = useRemovePersonaAvatar();
   const setGalleryImageAsAvatar = useSetPersonaGalleryImageAsAvatar(personaId ?? "");
   const deletePersona = useDeletePersona();
   const duplicatePersona = useDuplicatePersona();
@@ -1335,7 +1362,7 @@ export function PersonaEditor() {
   // what asynchronous save/upload continuations read, so reconciliation never
   // depends on a render having happened; the state is what re-renders the UI.
   const [formData, setFormDataState] = useState<PersonaFormData | null>(null);
-  const { contentRef, scrollToSection } = useEditorSections(
+  const { contentRef, scrollToSection, scrollToElement } = useEditorSections(
     personaId,
     !!formData,
     personaInitialTab ?? "metadata",
@@ -1394,7 +1421,7 @@ export function PersonaEditor() {
 
   const mutationBusy = mutationKind !== null;
   const saving = mutationKind === "save";
-  const avatarBusy = mutationKind === "avatar" || mutationKind === "gallery-avatar";
+  const avatarUploading = mutationKind === "avatar" || mutationKind === "gallery-avatar";
 
   const beginMutation = useCallback((kind: PersonaMutationKind) => {
     if (mutationTokenRef.current) return null;
@@ -1499,7 +1526,10 @@ export function PersonaEditor() {
 
     // An avatar/gallery replacement owns the preview and crop until it settles;
     // an interim refetch must not flip the image back and forth underneath it.
-    const avatarOperationActive = mutationKindRef.current === "avatar" || mutationKindRef.current === "gallery-avatar";
+    const avatarOperationActive =
+      mutationKindRef.current === "avatar" ||
+      mutationKindRef.current === "gallery-avatar" ||
+      mutationKindRef.current === "remove-avatar";
     const baseline = baselineFormRef.current;
     const avatarUnchanged = authoritativeAvatarPathRef.current === rawPersona.avatarPath;
     if (
@@ -1515,12 +1545,13 @@ export function PersonaEditor() {
   // Forced teardown (unmount, or a Persona switch that never re-hydrates) drops the
   // local identity so an in-flight completion can still update shared caches through
   // the hooks but can no longer write this editor's state.
-  useEffect(() => {
+  useLayoutEffect(() => {
     return () => {
       editorSessionRef.current = generateClientId();
       loadedPersonaIdRef.current = null;
       mutationTokenRef.current = null;
       mutationKindRef.current = null;
+      setMutationKind(null);
     };
   }, [personaId]);
 
@@ -1661,6 +1692,41 @@ export function PersonaEditor() {
     },
     [adoptAuthoritativePersona, commitFormData, isCurrentEditorSession, updateField, uploadAvatar],
   );
+
+  const handleAvatarRemove = useCallback(async () => {
+    if (!personaId || !avatarPreview) return;
+    const token = beginMutation("remove-avatar");
+    if (!token) return;
+    const session = editorSessionRef.current;
+    try {
+      const confirmed = await showConfirmDialog({
+        title: localizeUi("ui.ui.avatarcropwidget.removeAvatar"),
+        message: localizeUi("persona.avatar.removeConfirm", { name: formDataRef.current?.name ?? "" }),
+        confirmLabel: localizeUi("settings.notifications.customSound.actions.remove"),
+        tone: "destructive",
+      });
+      if (!confirmed || !isCurrentEditorSession(session)) return;
+      const updated = await removeAvatar.mutateAsync(personaId);
+      if (!isCurrentEditorSession(session)) return;
+      adoptAuthoritativePersona(updated, { adoptAvatar: true });
+      toast.success(localizeUi("persona.avatar.removed"));
+    } catch (error) {
+      if (isCurrentEditorSession(session)) {
+        toast.error(error instanceof Error ? error.message : localizeUi("persona.avatar.removeFailed"));
+      }
+    } finally {
+      finishMutation(token);
+    }
+  }, [
+    adoptAuthoritativePersona,
+    avatarPreview,
+    beginMutation,
+    finishMutation,
+    isCurrentEditorSession,
+    localizeUi,
+    personaId,
+    removeAvatar,
+  ]);
 
   const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1889,6 +1955,74 @@ export function PersonaEditor() {
 
   useEditorLeaveSave(`personaDetailId:${personaId}`, dirty, handleSave, mutationBusy);
 
+  // Prof. Mari and the persona's fields, as in the Character editor: focused field, reveal and
+  // working glow, the companion panel or sheet, and her change reviewed in the fields.
+  const editorReady = !isLoading && !!formData;
+  const { workingOffscreen, revealWorkingField } = useMariEditorFields(
+    contentRef,
+    personaId,
+    editorReady,
+    scrollToElement,
+  );
+  useMariCompanionEditor(contentRef, editorReady);
+  // Her change lands on a saved persona and Undo restores that saved text. Fields the user took over
+  // with Edit get the user's text back after her change lands, unsaved, for the user's own Save.
+  const takenOverRef = useRef<{ personaId: string; values: Record<string, string> } | null>(null);
+  useEffect(() => {
+    takenOverRef.current = null;
+  }, [personaId]);
+  const mariReview = useMariFieldReview({
+    entityId: personaId,
+    current: (fieldId) => formFieldValue(formData, fieldId),
+    touched: (fieldId) => dirty && formFieldValue(formData, fieldId) !== formFieldValue(baselineForm, fieldId),
+    edit: (fieldId, text) => updateField(fieldId as keyof PersonaFormData, text as never),
+    beforeKeep: async (takenOver) => {
+      if (takenOver)
+        takenOverRef.current = personaId
+          ? {
+              personaId,
+              values: Object.fromEntries(
+                takenOver.map((fieldId) => [fieldId, formFieldValue(formDataRef.current, fieldId)]),
+              ),
+            }
+          : null;
+      const draft = formDataRef.current;
+      const baseline = baselineFormRef.current;
+      if (!draft || !baseline || personaFieldsDifferingFromBaseline(draft, baseline).length === 0) return "clean";
+      if (await handleSave()) return "saved";
+      if (takenOver) takenOverRef.current = null;
+      return "failed";
+    },
+    keepDropped: () => {
+      takenOverRef.current = null;
+    },
+  });
+  const handledKeptRef = useRef(mariReview.review?.mode === "kept" ? mariReview.review.key : null);
+  const reviewModeRef = useRef(mariReview.review?.mode);
+  const restoreTakenOver = useEffectEvent(async () => {
+    const taken = takenOverRef.current;
+    takenOverRef.current = null;
+    const mine = taken?.personaId === personaId ? taken.values : {};
+    if (!personaId || Object.keys(mine).length === 0) return;
+    const session = editorSessionRef.current;
+    const fresh = (await refetchPersonas()).data?.find((persona) => persona.id === personaId);
+    if (!fresh || !isCurrentEditorSession(session)) return;
+    adoptAuthoritativePersona(fresh);
+    for (const [fieldId, text] of Object.entries(mine)) updateField(fieldId as keyof PersonaFormData, text as never);
+  });
+  useEffect(() => {
+    const review = mariReview.review;
+    const wasBusy = reviewModeRef.current === "busy";
+    reviewModeRef.current = review?.mode;
+    // Her apply failed and the change waits again: the text captured for that Keep is stale.
+    const taken = takenOverRef.current;
+    if (wasBusy && review?.mode === "waiting" && review.fields.some((field) => field.entityId === taken?.personaId))
+      takenOverRef.current = null;
+    if (review?.mode !== "kept" || handledKeptRef.current === review.key) return;
+    handledKeptRef.current = review.key;
+    if (review.fields.some((field) => field.entityId === personaId)) void restoreTakenOver();
+  }, [mariReview.review, personaId]);
+
   if (isLoading || !formData) {
     return (
       <div className="flex flex-1 items-center justify-center">
@@ -2083,6 +2217,7 @@ export function PersonaEditor() {
                 value={formData.name}
                 onChange={(e) => updateField("name", e.target.value)}
                 className="mari-editor-title-input"
+                data-mari-field="name"
                 placeholder={localizeUi("ui.personas.personaeditor.personaName")}
                 size={Math.max(1, Math.min(formData.name.length || 12, 80))}
               />
@@ -2137,76 +2272,103 @@ export function PersonaEditor() {
       </div>
 
       {/* ── Body ── */}
-      <div className="mari-editor-body">
+      <div className="mari-editor-body relative">
+        {workingOffscreen && (
+          <button
+            type="button"
+            className="mari-topbar-status mari-field-chip"
+            data-state="working"
+            data-edge={workingOffscreen}
+            onClick={revealWorkingField}
+          >
+            {workingOffscreen === "above" ? (
+              <ArrowUp size="0.75rem" aria-hidden="true" />
+            ) : (
+              <ArrowDown size="0.75rem" aria-hidden="true" />
+            )}
+            {localizeUi("ui.characters.charactereditor.mariIsHere")}
+          </button>
+        )}
         {/* Tab Content */}
-        <div ref={contentRef} className="mari-editor-content @max-5xl:p-4">
-          <div className="mari-editor-content-inner">
-            <section data-editor-section="metadata">
-              <PersonaMetadataTab
-                personaId={personaId}
-                formData={formData}
-                updateField={updateField}
-                avatarPreview={avatarPreview}
-                onSelectAvatar={() => {
-                  if (!mutationBusy) fileInputRef.current?.click();
-                }}
-                onGenerateAvatar={() => {
-                  if (!mutationBusy) setAvatarGeneratorOpen(true);
-                }}
-                imageGenerationAvailable={imageGenerationAvailable}
-                avatarUploading={avatarBusy}
-                hasUnsavedChanges={dirty}
-                avatarMutationBusy={mutationBusy}
-              />
-            </section>
-            <section data-editor-section="card">
-              <PersonaCardTab formData={formData} updateField={updateField} />
-            </section>
-            <section data-editor-section="convo">
-              <PersonaConvoTab
-                key={personaId ?? "new-persona"}
-                personaId={personaId}
-                formData={formData}
-                updateField={updateField}
-              />
-            </section>
-            <LazyEditorSection key={`lorebook:${personaId}`} id="lorebook">
-              {personaId && <PersonaLorebookTab personaId={personaId} personaName={formData.name} />}
-            </LazyEditorSection>
-            <LazyEditorSection key={`sprites:${personaId}`} id="sprites">
-              {personaId && (
-                <PersonaSpritesTab
+        <MariFieldReviewProvider value={mariReview.value}>
+          <div ref={contentRef} className="mari-editor-content @max-5xl:p-4">
+            <div className="mari-editor-content-inner">
+              <section data-editor-section="metadata">
+                <PersonaMetadataTab
                   personaId={personaId}
-                  personaName={formData.name}
-                  defaultAppearance={formData.appearance || formData.description}
-                  defaultAvatarUrl={avatarPreview}
-                  characterSheetImageId={formData.characterSheetImageId}
-                  useCharacterSheetAsReference={formData.useCharacterSheetAsReference}
+                  formData={formData}
                   updateField={updateField}
-                  onCreateCharacterSheet={() => setCharacterSheetGeneratorOpen(true)}
+                  avatarPreview={avatarPreview}
+                  onSelectAvatar={() => {
+                    if (!mutationBusy) fileInputRef.current?.click();
+                  }}
+                  onRemoveAvatar={() => void handleAvatarRemove()}
+                  onGenerateAvatar={() => {
+                    if (!mutationBusy) setAvatarGeneratorOpen(true);
+                  }}
+                  imageGenerationAvailable={imageGenerationAvailable}
+                  avatarUploading={avatarUploading}
+                  avatarRemoving={
+                    mutationKind === "remove-avatar" && removeAvatar.isPending && removeAvatar.variables === personaId
+                  }
+                  hasUnsavedChanges={dirty}
+                  avatarMutationBusy={mutationBusy}
                 />
-              )}
-            </LazyEditorSection>
-            <LazyEditorSection key={`gallery:${personaId}`} id="gallery">
-              {personaId && (
-                <PersonaGalleryTab
+              </section>
+              <section data-editor-section="card">
+                <PersonaCardTab formData={formData} updateField={updateField} />
+              </section>
+              <section data-editor-section="convo">
+                <PersonaConvoTab
+                  key={personaId ?? "new-persona"}
                   personaId={personaId}
-                  personaName={formData.name}
-                  onCreateCharacterSheet={() => setCharacterSheetGeneratorOpen(true)}
-                  editorBusy={mutationBusy}
-                  galleryAvatarPending={mutationKind === "gallery-avatar"}
-                  onSetAvatar={handleSetGalleryAvatar}
+                  formData={formData}
+                  updateField={updateField}
                 />
-              )}
-            </LazyEditorSection>
-            <section data-editor-section="colors">
-              <PersonaColorsTab formData={formData} updateField={updateField} avatarUrl={avatarPreview} />
-            </section>
-            <section data-editor-section="stats">
-              <PersonaStatsTab formData={formData} updateField={updateField} />
-            </section>
+              </section>
+              <LazyEditorSection key={`lorebook:${personaId}`} id="lorebook">
+                {personaId && <PersonaLorebookTab personaId={personaId} personaName={formData.name} />}
+              </LazyEditorSection>
+              <LazyEditorSection key={`sprites:${personaId}`} id="sprites">
+                {personaId && (
+                  <PersonaSpritesTab
+                    personaId={personaId}
+                    personaName={formData.name}
+                    defaultAppearance={formData.appearance || formData.description}
+                    defaultAvatarUrl={avatarPreview}
+                    characterSheetImageId={formData.characterSheetImageId}
+                    useCharacterSheetAsReference={formData.useCharacterSheetAsReference}
+                    updateField={updateField}
+                    onCreateCharacterSheet={() => setCharacterSheetGeneratorOpen(true)}
+                  />
+                )}
+              </LazyEditorSection>
+              <LazyEditorSection key={`gallery:${personaId}`} id="gallery">
+                {personaId && (
+                  <PersonaGalleryTab
+                    personaId={personaId}
+                    personaName={formData.name}
+                    onCreateCharacterSheet={() => setCharacterSheetGeneratorOpen(true)}
+                    editorBusy={mutationBusy}
+                    galleryAvatarPending={mutationKind === "gallery-avatar"}
+                    onSetAvatar={handleSetGalleryAvatar}
+                  />
+                )}
+              </LazyEditorSection>
+              <section data-editor-section="colors">
+                <PersonaColorsTab formData={formData} updateField={updateField} avatarUrl={avatarPreview} />
+              </section>
+              <section data-editor-section="stats">
+                <PersonaStatsTab
+                  formData={formData}
+                  updateField={updateField}
+                  personaId={personaId}
+                  avatarUrl={avatarPreview}
+                />
+              </section>
+            </div>
           </div>
-        </div>
+        </MariFieldReviewProvider>
       </div>
     </div>
   );
@@ -2264,6 +2426,7 @@ function PersonaSpritesTab({
   const { data: sprites, isLoading } = useCharacterSprites(personaId);
   const { data: spriteCapabilities } = useSpriteCapabilities();
   const uploadSprite = useUploadSprite();
+  const importFolder = useImportSpriteFolder();
   const deleteSprite = useDeleteSprite();
   const exportSprites = useExportSprites();
   const cleanupSavedSprites = useCleanupSavedSprites();
@@ -2283,24 +2446,33 @@ function PersonaSpritesTab({
   const [wandCleanupSprite, setWandCleanupSprite] = useState<SpriteInfo | null>(null);
   const [savingWandCleanup, setSavingWandCleanup] = useState(false);
   const [deleteSpriteRequest, setDeleteSpriteRequest] = useState<SpriteInfo | null>(null);
+  const [movingExpression, setMovingExpression] = useState<string | null>(null);
   const [deletingSprites, setDeletingSprites] = useState<"single" | "all" | null>(null);
   const [folderProgress, setFolderProgress] = useState<{ done: number; total: number } | null>(null);
   const [spriteGenOpen, setSpriteGenOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
   const pendingExpressionRef = useRef("");
+  const pendingReplaceRef = useRef(false);
 
-  const allSprites = (sprites as SpriteInfo[] | undefined) ?? [];
-  const portraitExpressionSprites = allSprites.filter((s) => !s.expression.toLowerCase().startsWith("full_"));
-  const visibleSprites = allSprites.filter((s) =>
+  const allSprites = useMemo(() => sprites ?? [], [sprites]);
+  const categorySprites = allSprites.filter((s) =>
     category === "clips"
       ? false
       : category === "full-body"
         ? s.expression.startsWith("full_")
         : !s.expression.startsWith("full_"),
   );
+  const library = useSpriteLibrary(personaId, categorySprites, category === "full-body" ? "full-body" : "expressions");
+  const visibleSprites = library.visible;
+  const movingSprite = categorySprites.find((sprite) => sprite.expression === movingExpression);
+  const portraitExpressionSprites = allSprites.filter((sprite) => !sprite.expression.toLowerCase().startsWith("full_"));
   const existingExpressions = new Set(
-    visibleSprites.map((s) => (category === "full-body" ? s.expression.replace(/^full_/, "") : s.expression)),
+    categorySprites.map((sprite) =>
+      category === "full-body"
+        ? (sprite.label ?? sprite.expression).replace(/^full_/, "")
+        : (sprite.label ?? sprite.expression),
+    ),
   );
   const suggestedExpressions = DEFAULT_EXPRESSIONS.filter((e) => !existingExpressions.has(e));
   const spriteGenerationUnavailable = spriteCapabilities?.spriteGenerationAvailable === false;
@@ -2338,8 +2510,11 @@ function PersonaSpritesTab({
   };
 
   const displayExpression = useCallback(
-    (stored: string) => (category === "full-body" ? stored.replace(/^full_/, "") : stored),
-    [category],
+    (stored: string) => {
+      const label = allSprites.find((sprite) => sprite.expression === stored)?.label ?? stored;
+      return category === "full-body" ? label.replace(/^full_/, "") : label;
+    },
+    [allSprites, category],
   );
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2352,9 +2527,16 @@ function PersonaSpritesTab({
     const reader = new FileReader();
     reader.onload = async () => {
       try {
-        await uploadSprite.mutateAsync({ characterId: personaId, expression, image: reader.result as string });
+        await uploadSprite.mutateAsync({
+          characterId: personaId,
+          expression,
+          image: reader.result as string,
+          ...(!pendingReplaceRef.current ? { folderId: null } : {}),
+        });
         setNewExpression("");
         pendingExpressionRef.current = "";
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : String(error));
       } finally {
         setUploading(false);
       }
@@ -2364,37 +2546,60 @@ function PersonaSpritesTab({
   };
 
   /** Open the sprite picker unless another single-file upload is already running. */
-  const startUpload = (expression: string) => {
+  const startUpload = (expression: string, replace = false) => {
     if (uploading || !expression) return;
     pendingExpressionRef.current = expression;
+    pendingReplaceRef.current = replace;
     fileInputRef.current?.click();
   };
 
   const handleFolderUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
-    const imageFiles = Array.from(files).filter((f) => /\.(png|jpg|jpeg|gif|webp|avif)$/i.test(f.name));
-    if (imageFiles.length === 0) return;
-
-    setFolderProgress({ done: 0, total: imageFiles.length });
-    for (let i = 0; i < imageFiles.length; i++) {
-      const file = imageFiles[i]!;
-      const expression = file.name.replace(/\.[^.]+$/, "").trim();
-      const normalized = normalizeExpressionForCategory(expression);
-      if (!normalized) continue;
-      const dataUrl = await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.readAsDataURL(file);
+    try {
+      const result = await importFolder.mutateAsync({
+        characterId: personaId,
+        files: Array.from(files),
+        folderId: null,
+        preserveFolders: true,
+        fullBody: category === "full-body",
+        onProgress: setFolderProgress,
       });
-      try {
-        await uploadSprite.mutateAsync({ characterId: personaId, expression: normalized, image: dataUrl });
-      } catch {
-        /* skip */
-      }
-      setFolderProgress({ done: i + 1, total: imageFiles.length });
+      const notify =
+        result.imported === 0
+          ? result.failed
+            ? toast.error
+            : toast.warning
+          : result.failed || result.catalogIgnored
+            ? toast.warning
+            : toast.success;
+      notify(
+        localizeUi(
+          result.imported
+            ? "sprites.library.importResult"
+            : result.failed
+              ? "sprites.library.importFailed"
+              : "sprites.library.noImages",
+          { count: result.imported || result.failed },
+        ),
+        {
+          description:
+            [
+              result.imported > 0 &&
+                result.failed > 0 &&
+                localizeUi("sprites.library.importFailed", { count: result.failed }),
+              result.firstError,
+              result.catalogIgnored && localizeUi("sprites.library.catalogIgnored"),
+            ]
+              .filter(Boolean)
+              .join(" ") || undefined,
+        },
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : String(error));
+    } finally {
+      setFolderProgress(null);
     }
-    setFolderProgress(null);
     e.target.value = "";
   };
 
@@ -2410,17 +2615,17 @@ function PersonaSpritesTab({
   }, [deleteSprite, deleteSpriteRequest, personaId]);
 
   const handleDeleteVisibleSprites = useCallback(async () => {
-    if (visibleSprites.length === 0) return;
+    if (categorySprites.length === 0) return;
     setDeletingSprites("all");
     try {
-      for (const sprite of visibleSprites) {
+      for (const sprite of categorySprites) {
         await deleteSprite.mutateAsync({ characterId: personaId, expression: sprite.expression });
       }
       setDeleteSpriteRequest(null);
     } finally {
       setDeletingSprites(null);
     }
-  }, [deleteSprite, personaId, visibleSprites]);
+  }, [deleteSprite, personaId, categorySprites]);
 
   const handleExportSprites = useCallback(
     async (spritesToExport: SpriteInfo[], modeLabel: "visible" | "all") => {
@@ -2467,16 +2672,19 @@ function PersonaSpritesTab({
   );
 
   const handleCleanVisibleSprites = useCallback(async () => {
-    if (visibleSprites.length === 0) return;
+    const cleanupSprites = library.selected.length
+      ? visibleSprites.filter((sprite) => library.selected.includes(sprite.expression))
+      : visibleSprites;
+    if (cleanupSprites.length === 0) return;
 
     const modeLabel = category === "full-body" ? "full-body" : "expression";
     if (
       !(await showConfirmDialog({
         title: localizeUi("ui.personas.personaspritestab.cleanSpriteBackgrounds"),
         message: localizeUi("ui.personas.personaspritestab.cleanBackgroundsOnValue1SavedValue2SpriteValue3At", {
-          value1: visibleSprites.length,
+          value1: cleanupSprites.length,
           value2: modeLabel,
-          value3: visibleSprites.length === 1 ? "" : localizeUi("ui.noodle.stageprofileview.s"),
+          value3: cleanupSprites.length === 1 ? "" : localizeUi("ui.noodle.stageprofileview.s"),
           value4: savedCleanupStrength,
         }),
         confirmLabel: localizeUi("ui.personas.personaspritestab.clean"),
@@ -2489,7 +2697,7 @@ function PersonaSpritesTab({
     try {
       const result = await cleanupSavedSprites.mutateAsync({
         characterId: personaId,
-        expressions: visibleSprites.map((sprite) => sprite.expression),
+        expressions: cleanupSprites.map((sprite) => sprite.expression),
         cleanupStrength: savedCleanupStrength,
         engine: "auto",
       });
@@ -2523,7 +2731,7 @@ function PersonaSpritesTab({
     } finally {
       setCleaningSprites(false);
     }
-  }, [category, cleanupSavedSprites, personaId, savedCleanupStrength, visibleSprites, localizeUi]);
+  }, [library.selected, category, cleanupSavedSprites, personaId, savedCleanupStrength, visibleSprites, localizeUi]);
 
   const handleRestoreLastCleanup = useCallback(async () => {
     if (!lastCleanupBackupId) return;
@@ -2647,399 +2855,442 @@ function PersonaSpritesTab({
 
       {categoryTabs}
 
-      <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleUpload} />
-      <input
-        ref={folderInputRef}
-        type="file"
-        accept="image/*"
-        multiple
-        // @ts-expect-error — webkitdirectory is non-standard but widely supported
-        webkitdirectory=""
-        className="hidden"
-        onChange={handleFolderUpload}
-      />
+      <SpriteLibraryShell library={library}>
+        <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleUpload} />
+        <input
+          ref={folderInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          // @ts-expect-error — webkitdirectory is non-standard but widely supported
+          webkitdirectory=""
+          className="hidden"
+          onChange={handleFolderUpload}
+        />
 
-      {/* Upload new expression */}
-      <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 space-y-3">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <h4 className="text-xs font-semibold flex items-center gap-1.5">
-            <Upload size="0.8125rem" className="text-[var(--primary)]" />
-            {localizeUi("ui.personas.personaspritestab.addSprite")}
-          </h4>
-          <div className="flex flex-wrap items-center gap-2 md:justify-end">
-            <button
-              type="button"
-              onClick={() => setSpriteGenOpen(true)}
-              disabled={spriteGenerationUnavailable}
-              className="mari-chrome-accent-surface mari-accent-animated flex min-w-0 items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-center text-[0.6875rem] font-medium leading-tight transition-all disabled:cursor-not-allowed disabled:opacity-40 max-md:flex-1 max-md:basis-[calc(50%-0.25rem)] max-md:px-2.5"
-              title={
-                spriteGenerationUnavailable
-                  ? spriteGenerationReason
-                  : localizeUi("ui.personas.personaspritestab.generateSpritesUsingAiImageGeneration")
-              }
-            >
-              <Wand2 size="0.8125rem" />
-              {localizeUi("ui.personas.personaspritestab.generateSprite")}
-            </button>
-            <button
-              type="button"
-              onClick={() => folderInputRef.current?.click()}
-              disabled={!!folderProgress}
-              className="flex min-w-0 items-center justify-center gap-1.5 rounded-lg bg-[var(--secondary)] px-3 py-1.5 text-center text-[0.6875rem] font-medium leading-tight text-[var(--muted-foreground)] ring-1 ring-[var(--border)] transition-all hover:bg-[var(--accent)] hover:text-[var(--foreground)] disabled:opacity-40 max-md:flex-1 max-md:basis-[calc(50%-0.25rem)] max-md:px-2.5"
-              title={localizeUi("ui.personas.personaspritestab.selectAFolderOfPngs")}
-            >
-              <FolderOpen size="0.8125rem" />
-              {localizeUi("ui.personas.personaspritestab.uploadFolder")}
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleCleanVisibleSprites()}
-              disabled={cleaningSprites || backgroundCleanupUnavailable || visibleSprites.length === 0}
-              className="flex min-w-0 items-center justify-center gap-1.5 rounded-lg bg-[var(--secondary)] px-3 py-1.5 text-center text-[0.6875rem] font-medium leading-tight text-[var(--muted-foreground)] ring-1 ring-[var(--border)] transition-all hover:bg-[var(--accent)] hover:text-[var(--foreground)] disabled:opacity-40 max-md:flex-1 max-md:basis-[calc(50%-0.25rem)] max-md:px-2.5"
-              title={
-                backgroundCleanupUnavailable
-                  ? backgroundCleanupReason
-                  : localizeUi("ui.personas.personaspritestab.cleanBackgroundsOnTheCurrentlyVisibleSavedSprites")
-              }
-            >
-              {cleaningSprites ? <Loader2 size="0.8125rem" className="animate-spin" /> : <Eraser size="0.8125rem" />}
-              {cleaningSprites
-                ? localizeUi("ui.personas.personaspritestab.cleaning")
-                : localizeUi("ui.personas.personaspritestab.cleanBackgrounds")}
-            </button>
-            <div className="relative max-md:flex-1 max-md:basis-[calc(50%-0.25rem)]">
+        {/* Upload new expression */}
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 space-y-3">
+          <div className="flex flex-col gap-3 @lg:flex-row @lg:items-center @lg:justify-between">
+            <h4 className="text-xs font-semibold flex shrink-0 items-center gap-1.5 whitespace-nowrap">
+              <Upload size="0.8125rem" className="text-[var(--primary)]" />
+              {localizeUi("ui.personas.personaspritestab.addSprite")}
+            </h4>
+            <div className="flex flex-wrap items-center gap-2 @lg:justify-end">
               <button
                 type="button"
-                onClick={() => setExportMenuOpen((open) => !open)}
-                disabled={exporting || allSprites.length === 0}
-                className="flex w-full min-w-0 items-center justify-center gap-1.5 rounded-lg bg-[var(--secondary)] px-3 py-1.5 text-center text-[0.6875rem] font-medium leading-tight text-[var(--muted-foreground)] ring-1 ring-[var(--border)] transition-all hover:bg-[var(--accent)] hover:text-[var(--foreground)] disabled:opacity-40 max-md:px-2.5"
-                title={localizeUi("ui.personas.personaspritestab.chooseWhichSavedSpritesToExport")}
+                onClick={() => setSpriteGenOpen(true)}
+                disabled={spriteGenerationUnavailable}
+                className="mari-chrome-accent-surface mari-accent-animated flex min-w-0 items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-center text-[0.6875rem] font-medium leading-tight transition-all disabled:cursor-not-allowed disabled:opacity-40 max-md:flex-1 max-md:basis-[calc(50%-0.25rem)] max-md:px-2.5"
+                title={
+                  spriteGenerationUnavailable
+                    ? spriteGenerationReason
+                    : localizeUi("ui.personas.personaspritestab.generateSpritesUsingAiImageGeneration")
+                }
               >
-                <ImageDown size="0.8125rem" />
-                {exporting
-                  ? localizeUi("ui.personas.personaspritestab.exporting")
-                  : localizeUi("ui.personas.personaspritestab.export")}
+                <Wand2 size="0.8125rem" />
+                {localizeUi("ui.personas.personaspritestab.generateSprite")}
               </button>
-              {exportMenuOpen && !exporting && (
-                <div className="absolute right-0 top-[calc(100%+0.35rem)] z-30 min-w-44 rounded-lg border border-[var(--border)] bg-[var(--card)] p-1 text-xs shadow-xl">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setExportMenuOpen(false);
-                      void handleExportSprites(visibleSprites, "visible");
-                    }}
-                    disabled={visibleSprites.length === 0}
-                    className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[var(--foreground)] transition-colors hover:bg-[var(--secondary)] disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    <ImageDown size="0.75rem" />
-                    {category === "full-body"
-                      ? localizeUi("ui.personas.personaspritestab.fullBodyOnly")
-                      : localizeUi("ui.personas.personaspritestab.expressionsOnly")}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setExportMenuOpen(false);
-                      void handleExportSprites(allSprites, "all");
-                    }}
-                    disabled={allSprites.length === 0}
-                    className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[var(--foreground)] transition-colors hover:bg-[var(--secondary)] disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    <ImageDown size="0.75rem" />
-                    {localizeUi("ui.personas.personaspritestab.allSprites")}
-                  </button>
-                </div>
-              )}
+              <button
+                type="button"
+                onClick={() => folderInputRef.current?.click()}
+                disabled={!!folderProgress}
+                className="flex min-w-0 items-center justify-center gap-1.5 rounded-lg bg-[var(--secondary)] px-3 py-1.5 text-center text-[0.6875rem] font-medium leading-tight text-[var(--muted-foreground)] ring-1 ring-[var(--border)] transition-all hover:bg-[var(--accent)] hover:text-[var(--foreground)] disabled:opacity-40 max-md:flex-1 max-md:basis-[calc(50%-0.25rem)] max-md:px-2.5"
+                title={localizeUi("ui.personas.personaspritestab.selectAFolderOfPngs")}
+              >
+                <FolderOpen size="0.8125rem" />
+                {localizeUi("ui.personas.personaspritestab.uploadFolder")}
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleCleanVisibleSprites()}
+                disabled={cleaningSprites || backgroundCleanupUnavailable || visibleSprites.length === 0}
+                className="flex min-w-0 items-center justify-center gap-1.5 rounded-lg bg-[var(--secondary)] px-3 py-1.5 text-center text-[0.6875rem] font-medium leading-tight text-[var(--muted-foreground)] ring-1 ring-[var(--border)] transition-all hover:bg-[var(--accent)] hover:text-[var(--foreground)] disabled:opacity-40 max-md:flex-1 max-md:basis-[calc(50%-0.25rem)] max-md:px-2.5"
+                title={
+                  backgroundCleanupUnavailable
+                    ? backgroundCleanupReason
+                    : localizeUi("ui.personas.personaspritestab.cleanBackgroundsOnTheCurrentlyVisibleSavedSprites")
+                }
+              >
+                {cleaningSprites ? <Loader2 size="0.8125rem" className="animate-spin" /> : <Eraser size="0.8125rem" />}
+                {cleaningSprites
+                  ? localizeUi("ui.personas.personaspritestab.cleaning")
+                  : localizeUi("ui.personas.personaspritestab.cleanBackgrounds")}
+              </button>
+              <div className="relative max-md:flex-1 max-md:basis-[calc(50%-0.25rem)]">
+                <button
+                  type="button"
+                  onClick={() => setExportMenuOpen((open) => !open)}
+                  disabled={exporting || allSprites.length === 0}
+                  className="flex w-full min-w-0 items-center justify-center gap-1.5 rounded-lg bg-[var(--secondary)] px-3 py-1.5 text-center text-[0.6875rem] font-medium leading-tight text-[var(--muted-foreground)] ring-1 ring-[var(--border)] transition-all hover:bg-[var(--accent)] hover:text-[var(--foreground)] disabled:opacity-40 max-md:px-2.5"
+                  title={localizeUi("ui.personas.personaspritestab.chooseWhichSavedSpritesToExport")}
+                >
+                  <ImageDown size="0.8125rem" />
+                  {exporting
+                    ? localizeUi("ui.personas.personaspritestab.exporting")
+                    : localizeUi("ui.personas.personaspritestab.export")}
+                </button>
+                {exportMenuOpen && !exporting && (
+                  <div className="absolute right-0 top-[calc(100%+0.35rem)] z-30 min-w-44 rounded-lg border border-[var(--border)] bg-[var(--card)] p-1 text-xs shadow-xl">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setExportMenuOpen(false);
+                        void handleExportSprites(
+                          library.selected.length
+                            ? visibleSprites.filter((sprite) => library.selected.includes(sprite.expression))
+                            : visibleSprites,
+                          "visible",
+                        );
+                      }}
+                      disabled={visibleSprites.length === 0}
+                      className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[var(--foreground)] transition-colors hover:bg-[var(--secondary)] disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <ImageDown size="0.75rem" />
+                      {localizeUi(
+                        library.selected.length ? "sprites.library.exportSelected" : "sprites.library.exportView",
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setExportMenuOpen(false);
+                        void handleExportSprites(allSprites, "all");
+                      }}
+                      disabled={allSprites.length === 0}
+                      className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[var(--foreground)] transition-colors hover:bg-[var(--secondary)] disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <ImageDown size="0.75rem" />
+                      {localizeUi("ui.personas.personaspritestab.allSprites")}
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="flex flex-wrap items-center gap-2 rounded-lg bg-[var(--secondary)]/60 px-3 py-2">
-          <span className="text-[0.6875rem] font-medium text-[var(--foreground)]">
-            {localizeUi("ui.personas.personaspritestab.cleanupStrength")}
-          </span>
-          <span className="text-[0.625rem] text-[var(--muted-foreground)]">
-            {localizeUi("ui.personas.personaspritestab.soft")}
-          </span>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            step={1}
-            value={savedCleanupStrength}
-            onChange={(e) => setSavedCleanupStrength(Number(e.target.value))}
-            disabled={cleaningSprites}
-            className="min-w-40 flex-1 accent-[var(--primary)] disabled:opacity-50"
-          />
-          <span className="text-[0.625rem] text-[var(--muted-foreground)]">
-            {localizeUi("ui.personas.personaspritestab.aggressive")}
-          </span>
-          <span className="w-8 text-right text-[0.6875rem] tabular-nums text-[var(--muted-foreground)]">
-            {savedCleanupStrength}
-          </span>
-        </div>
+          <div className="flex flex-wrap items-center gap-2 rounded-lg bg-[var(--secondary)]/60 px-3 py-2">
+            <span className="text-[0.6875rem] font-medium text-[var(--foreground)]">
+              {localizeUi("ui.personas.personaspritestab.cleanupStrength")}
+            </span>
+            <span className="text-[0.625rem] text-[var(--muted-foreground)]">
+              {localizeUi("ui.personas.personaspritestab.soft")}
+            </span>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={1}
+              value={savedCleanupStrength}
+              onChange={(e) => setSavedCleanupStrength(Number(e.target.value))}
+              disabled={cleaningSprites}
+              className="min-w-40 flex-1 accent-[var(--primary)] disabled:opacity-50"
+            />
+            <span className="text-[0.625rem] text-[var(--muted-foreground)]">
+              {localizeUi("ui.personas.personaspritestab.aggressive")}
+            </span>
+            <span className="w-8 text-right text-[0.6875rem] tabular-nums text-[var(--muted-foreground)]">
+              {savedCleanupStrength}
+            </span>
+          </div>
 
-        {folderProgress && (
-          <div className="flex items-center gap-2 rounded-lg bg-[var(--secondary)] px-3 py-2 text-xs text-[var(--muted-foreground)]">
-            <Loader2 size="0.75rem" className="animate-spin text-[var(--primary)]" />
-            {localizeUi("ui.noodle.noodleprofilesurface.uploading_de27240")} {folderProgress.done}/
-            {folderProgress.total} {localizeUi("ui.personas.personaspritestab.sprites")}
-          </div>
-        )}
-        {cleaningSprites && (
-          <div className="flex items-center gap-2 rounded-lg bg-[var(--secondary)] px-3 py-2 text-xs text-[var(--muted-foreground)]">
-            <Loader2 size="0.75rem" className="animate-spin text-[var(--primary)]" />
-            {localizeUi("ui.personas.personaspritestab.applyingAutomaticMatteCleanupToSavedSprites")}
-          </div>
-        )}
-        {lastCleanupBackupId && (
-          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-[var(--secondary)] px-3 py-2 text-xs text-[var(--muted-foreground)]">
-            <span>{localizeUi("ui.personas.personaspritestab.lastCleanupHasARestorePoint")}</span>
+          {folderProgress && (
+            <div className="flex items-center gap-2 rounded-lg bg-[var(--secondary)] px-3 py-2 text-xs text-[var(--muted-foreground)]">
+              <Loader2 size="0.75rem" className="animate-spin text-[var(--primary)]" />
+              {localizeUi("ui.noodle.noodleprofilesurface.uploading_de27240")} {folderProgress.done}/
+              {folderProgress.total} {localizeUi("ui.personas.personaspritestab.sprites")}
+            </div>
+          )}
+          {cleaningSprites && (
+            <div className="flex items-center gap-2 rounded-lg bg-[var(--secondary)] px-3 py-2 text-xs text-[var(--muted-foreground)]">
+              <Loader2 size="0.75rem" className="animate-spin text-[var(--primary)]" />
+              {localizeUi("ui.personas.personaspritestab.applyingAutomaticMatteCleanupToSavedSprites")}
+            </div>
+          )}
+          {lastCleanupBackupId && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-[var(--secondary)] px-3 py-2 text-xs text-[var(--muted-foreground)]">
+              <span>{localizeUi("ui.personas.personaspritestab.lastCleanupHasARestorePoint")}</span>
+              <button
+                type="button"
+                onClick={() => void handleRestoreLastCleanup()}
+                disabled={restoringCleanup}
+                className="flex items-center gap-1.5 rounded-md bg-[var(--card)] px-2.5 py-1 text-[0.6875rem] font-medium text-[var(--foreground)] ring-1 ring-[var(--border)] transition-colors hover:bg-[var(--accent)] disabled:opacity-40"
+              >
+                {restoringCleanup ? <Loader2 size="0.75rem" className="animate-spin" /> : <RotateCcw size="0.75rem" />}
+                {localizeUi("ui.personas.personaspritestab.undoCleanup")}
+              </button>
+            </div>
+          )}
+          {spriteGenerationUnavailable && (
+            <div className="rounded-lg bg-[var(--secondary)] px-3 py-2 text-xs text-[var(--muted-foreground)]">
+              {spriteGenerationReason}
+            </div>
+          )}
+          {backgroundCleanupUnavailable && !spriteGenerationUnavailable && (
+            <div className="rounded-lg bg-[var(--secondary)] px-3 py-2 text-xs text-[var(--muted-foreground)]">
+              {backgroundCleanupReason}
+            </div>
+          )}
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <input
+              value={newExpression}
+              onChange={(e) => setNewExpression(e.target.value)}
+              placeholder={
+                category === "full-body"
+                  ? localizeUi("ui.personas.personaspritestab.poseNameEGIdleWalkBattleStance")
+                  : localizeUi("ui.personas.personaspritestab.expressionNameEGHappySadAngry")
+              }
+              className="min-w-0 flex-1 rounded-xl border border-[var(--border)] bg-[var(--secondary)] px-3 py-2 text-sm outline-none focus:border-[var(--primary)]/40 focus:ring-1 focus:ring-[var(--primary)]/20"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && newExpression.trim()) {
+                  startUpload(normalizeExpressionForCategory(newExpression));
+                }
+              }}
+            />
             <button
               type="button"
-              onClick={() => void handleRestoreLastCleanup()}
-              disabled={restoringCleanup}
-              className="flex items-center gap-1.5 rounded-md bg-[var(--card)] px-2.5 py-1 text-[0.6875rem] font-medium text-[var(--foreground)] ring-1 ring-[var(--border)] transition-colors hover:bg-[var(--accent)] disabled:opacity-40"
+              onClick={() => newExpression.trim() && startUpload(normalizeExpressionForCategory(newExpression))}
+              disabled={!newExpression.trim() || uploading}
+              className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-[var(--primary)] px-4 py-2 text-xs font-medium text-[var(--primary-foreground)] shadow-sm transition-all hover:shadow-md disabled:opacity-40 sm:w-auto"
             >
-              {restoringCleanup ? <Loader2 size="0.75rem" className="animate-spin" /> : <RotateCcw size="0.75rem" />}
-              {localizeUi("ui.personas.personaspritestab.undoCleanup")}
+              <Plus size="0.8125rem" />
+              {localizeUi("ui.personas.personaspritestab.upload")}
             </button>
           </div>
-        )}
-        {spriteGenerationUnavailable && (
-          <div className="rounded-lg bg-[var(--secondary)] px-3 py-2 text-xs text-[var(--muted-foreground)]">
-            {spriteGenerationReason}
-          </div>
-        )}
-        {backgroundCleanupUnavailable && !spriteGenerationUnavailable && (
-          <div className="rounded-lg bg-[var(--secondary)] px-3 py-2 text-xs text-[var(--muted-foreground)]">
-            {backgroundCleanupReason}
-          </div>
-        )}
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <input
-            value={newExpression}
-            onChange={(e) => setNewExpression(e.target.value)}
-            placeholder={
-              category === "full-body"
-                ? localizeUi("ui.personas.personaspritestab.poseNameEGIdleWalkBattleStance")
-                : localizeUi("ui.personas.personaspritestab.expressionNameEGHappySadAngry")
-            }
-            className="min-w-0 flex-1 rounded-xl border border-[var(--border)] bg-[var(--secondary)] px-3 py-2 text-sm outline-none focus:border-[var(--primary)]/40 focus:ring-1 focus:ring-[var(--primary)]/20"
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && newExpression.trim()) {
-                startUpload(normalizeExpressionForCategory(newExpression));
-              }
-            }}
+
+          {category === "expressions" && suggestedExpressions.length > 0 && (
+            <div>
+              <p className="text-[0.625rem] text-[var(--muted-foreground)] mb-1.5">
+                {localizeUi("ui.personas.personaspritestab.quickAdd")}
+              </p>
+              <div className="flex flex-wrap gap-1">
+                {suggestedExpressions.slice(0, 12).map((expr) => (
+                  <button
+                    type="button"
+                    key={expr}
+                    onClick={() => startUpload(expr)}
+                    className="rounded-lg bg-[var(--secondary)] px-2.5 py-1 text-[0.6875rem] font-medium text-[var(--muted-foreground)] ring-1 ring-[var(--border)] transition-all hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
+                  >
+                    {expr}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Sprite grid */}
+        {framingSprite && (
+          <SpriteFrameEditor
+            imageUrl={framingSprite.url}
+            label={displayExpression(framingSprite.expression)}
+            applying={savingFrame}
+            onApply={handleApplySpriteFrame}
+            onClose={() => setFramingSprite(null)}
           />
-          <button
-            type="button"
-            onClick={() => newExpression.trim() && startUpload(normalizeExpressionForCategory(newExpression))}
-            disabled={!newExpression.trim() || uploading}
-            className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-[var(--primary)] px-4 py-2 text-xs font-medium text-[var(--primary-foreground)] shadow-sm transition-all hover:shadow-md disabled:opacity-40 sm:w-auto"
+        )}
+
+        {wandCleanupSprite && (
+          <SpriteWandCleanupEditor
+            imageUrl={wandCleanupSprite.url}
+            label={displayExpression(wandCleanupSprite.expression)}
+            applying={savingWandCleanup}
+            onApply={handleApplyWandCleanup}
+            onClose={() => setWandCleanupSprite(null)}
+          />
+        )}
+
+        {isLoading ? (
+          <div className="grid grid-cols-2 gap-3 @md:grid-cols-3 @xl:grid-cols-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="shimmer aspect-[3/4] rounded-xl" />
+            ))}
+          </div>
+        ) : visibleSprites.length || library.folders.length ? (
+          <SpriteFolderGrid
+            key={category}
+            library={library}
+            renderSprite={(sprite) => (
+              <div
+                key={sprite.expression}
+                className="group relative overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--card)] transition-all hover:border-[var(--primary)]/30 hover:shadow-md"
+              >
+                <SpriteSelection library={library} sprite={sprite} />
+                <button
+                  type="button"
+                  onClick={() => setWandCleanupSprite(sprite)}
+                  data-drag-surface
+                  className="group/preview relative block aspect-[3/4] w-full bg-[var(--secondary)]"
+                  title={localizeUi("ui.personas.personaspritestab.openWandCleanup")}
+                >
+                  <img
+                    src={sprite.url}
+                    alt={sprite.label ?? sprite.expression}
+                    loading="lazy"
+                    draggable={false}
+                    className="h-full w-full object-contain"
+                  />
+                  <span className="pointer-events-none absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-full bg-[var(--card)]/90 text-[var(--primary)] opacity-0 shadow-lg ring-1 ring-[var(--border)] transition-opacity group-hover/preview:opacity-100 max-md:opacity-100">
+                    <Wand2 size="0.875rem" />
+                  </span>
+                </button>
+                <div className="flex flex-col items-start gap-2 p-2">
+                  <span
+                    className="w-full break-words text-xs font-medium capitalize"
+                    title={displayExpression(sprite.expression)}
+                  >
+                    {displayExpression(sprite.expression)}
+                  </span>
+                  <div className="absolute bottom-2 left-2 right-2 flex flex-wrap gap-1 rounded-lg bg-[var(--card)] p-1 opacity-0 shadow-sm ring-1 ring-[var(--border)] transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 max-md:static max-md:opacity-100 pointer-coarse:static pointer-coarse:opacity-100">
+                    {library.folders.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setMovingExpression(sprite.expression)}
+                        className="rounded-lg p-1 text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
+                        title={localizeUi("sprites.library.moveSprite")}
+                      >
+                        <FolderOpen size="0.6875rem" />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setFramingSprite(sprite)}
+                      className="rounded-lg p-1 text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
+                      title={localizeUi("ui.personas.personaspritestab.frame")}
+                    >
+                      <Crop size="0.6875rem" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void downloadSpriteFile(sprite)}
+                      className="rounded-lg p-1 text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
+                      title={localizeUi("ui.personas.personagallerytab.download")}
+                    >
+                      <ImageDown size="0.6875rem" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => startUpload(sprite.expression, true)}
+                      className="rounded-lg p-1 text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
+                      title={localizeUi("settings.notifications.customSound.actions.replace")}
+                    >
+                      <Upload size="0.6875rem" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDeleteSpriteRequest(sprite)}
+                      className="rounded-lg p-1 text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
+                      title={localizeUi("lorebook.editor.batch.delete")}
+                    >
+                      <Trash2 size="0.6875rem" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          />
+        ) : (
+          <div className="flex flex-col items-center gap-3 rounded-xl border-2 border-dashed border-[var(--border)] py-12 text-center">
+            <Image size="1.75rem" className="text-[var(--muted-foreground)]/40" />
+            <div>
+              <p className="text-sm font-medium text-[var(--muted-foreground)]">
+                {localizeUi(
+                  categorySprites.length && library.search
+                    ? "sprites.library.noMatches"
+                    : "ui.personas.personaspritestab.noSpritesYet",
+                )}
+              </p>
+              <p className="mt-0.5 text-xs text-[var(--muted-foreground)]/60">
+                {categorySprites.length && library.search
+                  ? localizeUi("sprites.library.tryAnotherSearch")
+                  : category === "full-body"
+                    ? localizeUi("ui.personas.personaspritestab.uploadFullBodySpritesAboveUseTransparentPngsFor")
+                    : localizeUi("ui.personas.personaspritestab.uploadExpressionSpritesAboveUseTransparentPngsForBest")}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {movingSprite && (
+          <Modal
+            open
+            onClose={() => setMovingExpression(null)}
+            title={localizeUi("sprites.library.moveSprite")}
+            width="max-w-sm"
           >
-            <Plus size="0.8125rem" />
-            {localizeUi("ui.personas.personaspritestab.upload")}
-          </button>
-        </div>
-
-        {category === "expressions" && suggestedExpressions.length > 0 && (
-          <div>
-            <p className="text-[0.625rem] text-[var(--muted-foreground)] mb-1.5">
-              {localizeUi("ui.personas.personaspritestab.quickAdd")}
-            </p>
-            <div className="flex flex-wrap gap-1">
-              {suggestedExpressions.slice(0, 12).map((expr) => (
-                <button
-                  type="button"
-                  key={expr}
-                  onClick={() => startUpload(expr)}
-                  className="rounded-lg bg-[var(--secondary)] px-2.5 py-1 text-[0.6875rem] font-medium text-[var(--muted-foreground)] ring-1 ring-[var(--border)] transition-all hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
-                >
-                  {expr}
-                </button>
-              ))}
-            </div>
-          </div>
+            <SpriteFolderSelect library={library} sprite={movingSprite} busy={uploading || !!deletingSprites} />
+          </Modal>
         )}
-      </div>
-
-      {/* Sprite grid */}
-      {framingSprite && (
-        <SpriteFrameEditor
-          imageUrl={framingSprite.url}
-          label={displayExpression(framingSprite.expression)}
-          applying={savingFrame}
-          onApply={handleApplySpriteFrame}
-          onClose={() => setFramingSprite(null)}
-        />
-      )}
-
-      {wandCleanupSprite && (
-        <SpriteWandCleanupEditor
-          imageUrl={wandCleanupSprite.url}
-          label={displayExpression(wandCleanupSprite.expression)}
-          applying={savingWandCleanup}
-          onApply={handleApplyWandCleanup}
-          onClose={() => setWandCleanupSprite(null)}
-        />
-      )}
-
-      {isLoading ? (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="shimmer aspect-[3/4] rounded-xl" />
-          ))}
-        </div>
-      ) : visibleSprites.length ? (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-          {visibleSprites.map((sprite) => (
-            <div
-              key={sprite.expression}
-              className="group relative overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--card)] transition-all hover:border-[var(--primary)]/30 hover:shadow-md"
-            >
-              <button
-                type="button"
-                onClick={() => setWandCleanupSprite(sprite)}
-                className="group/preview relative block aspect-[3/4] w-full bg-[var(--secondary)]"
-                title={localizeUi("ui.personas.personaspritestab.openWandCleanup")}
-              >
-                <img src={sprite.url} alt={sprite.expression} loading="lazy" className="h-full w-full object-contain" />
-                <span className="pointer-events-none absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-full bg-[var(--card)]/90 text-[var(--primary)] opacity-0 shadow-lg ring-1 ring-[var(--border)] transition-opacity group-hover/preview:opacity-100 max-md:opacity-100">
-                  <Wand2 size="0.875rem" />
-                </span>
-              </button>
-              <div className="flex items-center justify-between p-2">
-                <span
-                  className="max-w-[10rem] truncate text-[0.6875rem] font-medium capitalize"
-                  title={displayExpression(sprite.expression)}
-                >
-                  {displayExpression(sprite.expression)}
-                </span>
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 max-md:opacity-100 transition-opacity">
+        {deleteSpriteRequest && (
+          <Modal
+            open
+            onClose={() => {
+              if (!deletingSprites) setDeleteSpriteRequest(null);
+            }}
+            title={localizeUi("ui.personas.personaspritestab.deleteSprite")}
+            width="max-w-sm"
+          >
+            <div className="space-y-4">
+              <p className="text-sm leading-relaxed text-[var(--foreground)]">
+                {localizeUi("ui.personas.personaspritestab.deleteSpriteFor")}
+                {displayExpression(deleteSpriteRequest.expression)}"?
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                {categorySprites.length > 1 ? (
                   <button
                     type="button"
-                    onClick={() => setFramingSprite(sprite)}
-                    className="rounded-lg p-1 text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
-                    title={localizeUi("ui.personas.personaspritestab.frame")}
+                    onClick={() => void handleDeleteVisibleSprites()}
+                    disabled={!!deletingSprites}
+                    className="mr-auto inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-2 text-xs font-medium text-[var(--muted-foreground)] ring-1 ring-[var(--border)] transition-colors hover:bg-[var(--accent)] hover:text-[var(--foreground)] disabled:opacity-50 sm:px-3 sm:text-sm"
                   >
-                    <Crop size="0.6875rem" />
+                    {deletingSprites === "all" ? (
+                      <Loader2 size="0.875rem" className="animate-spin" />
+                    ) : (
+                      <Trash2 size="0.875rem" />
+                    )}
+                    {localizeUi("ui.personas.personaspritestab.deleteAll")}{" "}
+                    {category === "full-body"
+                      ? localizeUi("ui.personas.personaspritestab.fullBody")
+                      : localizeUi("ui.personas.personaspritestab.expressions")}
+                  </button>
+                ) : null}
+                <div className="ml-auto flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setDeleteSpriteRequest(null)}
+                    disabled={!!deletingSprites}
+                    className="rounded-lg px-2.5 py-2 text-xs font-medium text-[var(--muted-foreground)] transition-colors hover:bg-[var(--accent)] hover:text-[var(--foreground)] disabled:opacity-50 sm:px-3 sm:text-sm"
+                  >
+                    {localizeUi("chat.delete.dialog.cancel")}
                   </button>
                   <button
                     type="button"
-                    onClick={() => void downloadSpriteFile(sprite)}
-                    className="rounded-lg p-1 text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
-                    title={localizeUi("ui.personas.personagallerytab.download")}
+                    onClick={() => void handleDeleteSingleSprite()}
+                    disabled={!!deletingSprites}
+                    className="mari-chrome-accent-surface mari-accent-animated inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs font-medium transition-colors disabled:opacity-50 sm:px-3 sm:text-sm"
                   >
-                    <ImageDown size="0.6875rem" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => startUpload(sprite.expression)}
-                    className="rounded-lg p-1 text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
-                    title={localizeUi("settings.notifications.customSound.actions.replace")}
-                  >
-                    <Upload size="0.6875rem" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDeleteSpriteRequest(sprite)}
-                    className="rounded-lg p-1 text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
-                    title={localizeUi("lorebook.editor.batch.delete")}
-                  >
-                    <Trash2 size="0.6875rem" />
+                    {deletingSprites === "single" && <Loader2 size="0.875rem" className="animate-spin" />}
+                    {localizeUi("lorebook.editor.batch.delete")}
                   </button>
                 </div>
               </div>
             </div>
-          ))}
-        </div>
-      ) : (
-        <div className="flex flex-col items-center gap-3 rounded-xl border-2 border-dashed border-[var(--border)] py-12 text-center">
-          <Image size="1.75rem" className="text-[var(--muted-foreground)]/40" />
-          <div>
-            <p className="text-sm font-medium text-[var(--muted-foreground)]">
-              {localizeUi("ui.personas.personaspritestab.noSpritesYet")}
-            </p>
-            <p className="mt-0.5 text-xs text-[var(--muted-foreground)]/60">
-              {category === "full-body"
-                ? localizeUi("ui.personas.personaspritestab.uploadFullBodySpritesAboveUseTransparentPngsFor")
-                : localizeUi("ui.personas.personaspritestab.uploadExpressionSpritesAboveUseTransparentPngsForBest")}
-            </p>
-          </div>
-        </div>
-      )}
+          </Modal>
+        )}
 
-      {deleteSpriteRequest && (
-        <Modal
-          open
-          onClose={() => {
-            if (!deletingSprites) setDeleteSpriteRequest(null);
+        {/* Sprite Generation Modal */}
+        <SpriteGenerationModal
+          open={spriteGenOpen}
+          onClose={() => setSpriteGenOpen(false)}
+          entityId={personaId}
+          initialSpriteType={category === "full-body" ? "full-body" : "expressions"}
+          existingExpressionSprites={portraitExpressionSprites}
+          defaultAppearance={defaultAppearance}
+          defaultAvatarUrl={defaultAvatarUrl}
+          onSpritesGenerated={() => {
+            queryClient.invalidateQueries({ queryKey: spriteKeys.list(personaId) });
           }}
-          title={localizeUi("ui.personas.personaspritestab.deleteSprite")}
-          width="max-w-sm"
-        >
-          <div className="space-y-4">
-            <p className="text-sm leading-relaxed text-[var(--foreground)]">
-              {localizeUi("ui.personas.personaspritestab.deleteSpriteFor")}
-              {displayExpression(deleteSpriteRequest.expression)}"?
-            </p>
-            <div className="flex flex-wrap items-center gap-2">
-              {visibleSprites.length > 1 ? (
-                <button
-                  type="button"
-                  onClick={() => void handleDeleteVisibleSprites()}
-                  disabled={!!deletingSprites}
-                  className="mr-auto inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-2 text-xs font-medium text-[var(--muted-foreground)] ring-1 ring-[var(--border)] transition-colors hover:bg-[var(--accent)] hover:text-[var(--foreground)] disabled:opacity-50 sm:px-3 sm:text-sm"
-                >
-                  {deletingSprites === "all" ? (
-                    <Loader2 size="0.875rem" className="animate-spin" />
-                  ) : (
-                    <Trash2 size="0.875rem" />
-                  )}
-                  {localizeUi("ui.personas.personaspritestab.deleteAll")}{" "}
-                  {category === "full-body"
-                    ? localizeUi("ui.personas.personaspritestab.fullBody")
-                    : localizeUi("ui.personas.personaspritestab.expressions")}
-                </button>
-              ) : null}
-              <div className="ml-auto flex shrink-0 items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setDeleteSpriteRequest(null)}
-                  disabled={!!deletingSprites}
-                  className="rounded-lg px-2.5 py-2 text-xs font-medium text-[var(--muted-foreground)] transition-colors hover:bg-[var(--accent)] hover:text-[var(--foreground)] disabled:opacity-50 sm:px-3 sm:text-sm"
-                >
-                  {localizeUi("chat.delete.dialog.cancel")}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void handleDeleteSingleSprite()}
-                  disabled={!!deletingSprites}
-                  className="mari-chrome-accent-surface mari-accent-animated inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs font-medium transition-colors disabled:opacity-50 sm:px-3 sm:text-sm"
-                >
-                  {deletingSprites === "single" && <Loader2 size="0.875rem" className="animate-spin" />}
-                  {localizeUi("lorebook.editor.batch.delete")}
-                </button>
-              </div>
-            </div>
-          </div>
-        </Modal>
-      )}
-
-      {/* Sprite Generation Modal */}
-      <SpriteGenerationModal
-        open={spriteGenOpen}
-        onClose={() => setSpriteGenOpen(false)}
-        entityId={personaId}
-        initialSpriteType={category === "full-body" ? "full-body" : "expressions"}
-        existingExpressionSprites={portraitExpressionSprites}
-        defaultAppearance={defaultAppearance}
-        defaultAvatarUrl={defaultAvatarUrl}
-        onSpritesGenerated={() => {
-          queryClient.invalidateQueries({ queryKey: spriteKeys.list(personaId) });
-        }}
-      />
+        />
+      </SpriteLibraryShell>
     </div>
   );
 }
@@ -3056,6 +3307,7 @@ function PersonaColorsTab({
   avatarUrl: string | null;
 }) {
   const { t: localizeUi } = useUiTranslation();
+  const chatFontOpacity = useUIStore((state) => state.chatFontOpacity);
   const [extracting, setExtracting] = useState(false);
 
   const handleExtract = async () => {
@@ -3138,9 +3390,10 @@ function PersonaColorsTab({
             </span>
             <div
               className="rounded-2xl rounded-tr-sm px-4 py-3 text-[0.8125rem] leading-[1.8] backdrop-blur-md ring-1 ring-white/10"
+              data-roleplay-color-preview
               style={
                 formData.boxColor
-                  ? { backgroundColor: formData.boxColor }
+                  ? { backgroundColor: withCssPaintAlpha(formData.boxColor, String(chatFontOpacity / 100)) }
                   : { backgroundColor: "rgba(255, 255, 255, 0.12)" }
               }
             >
@@ -3181,7 +3434,7 @@ function PersonaColorsTab({
         value={formData.boxColor}
         onChange={(v) => updateField("boxColor", v)}
         label={localizeUi("ui.personas.personacolorstab.messageBoxColor")}
-        helpText="Background color for your persona's chat message bubbles. Use a semi-transparent color for best results (e.g. rgba)."
+        helpText={localizeUi("ui.colors.messageBoxHelp")}
       />
     </div>
   );
@@ -3227,9 +3480,13 @@ function createNewRpgPool(existing: readonly RPGStatPool[]): RPGStatPool {
 function PersonaStatsTab({
   formData,
   updateField,
+  personaId,
+  avatarUrl,
 }: {
   formData: PersonaFormData;
   updateField: <K extends keyof PersonaFormData>(key: K, value: PersonaFormData[K]) => void;
+  personaId: string | null;
+  avatarUrl: string | null;
 }) {
   const { t: localizeUi } = useUiTranslation();
   // Form state keeps personaStats decoded (hydrated from the projected Persona);
@@ -3539,6 +3796,17 @@ function PersonaStatsTab({
         )}
       </div>
 
+      <PersonaCombatIconSection
+        personaId={personaId}
+        name={formData.name}
+        avatarUrl={avatarUrl}
+        value={parsed.combatIcon}
+        onChange={(combatIcon) => {
+          const { combatIcon: _previous, ...rest } = parsed;
+          save(combatIcon ? { ...rest, combatIcon } : rest);
+        }}
+      />
+
       <RulesetSheetsSection
         sheets={parsed.rulesetSheets}
         onChange={(rulesetSheets) => {
@@ -3561,8 +3829,10 @@ function PersonaMetadataTab({
   avatarPreview,
   onSelectAvatar,
   onGenerateAvatar,
+  onRemoveAvatar,
   imageGenerationAvailable,
   avatarUploading,
+  avatarRemoving,
   hasUnsavedChanges,
   // The editor's live save/avatar/gallery mutex. Replacing or reframing the avatar
   // while one of those is running would race the image the server is about to
@@ -3575,8 +3845,10 @@ function PersonaMetadataTab({
   avatarPreview: string | null;
   onSelectAvatar: () => void;
   onGenerateAvatar: () => void;
+  onRemoveAvatar: () => void;
   imageGenerationAvailable: boolean;
   avatarUploading: boolean;
+  avatarRemoving: boolean;
   hasUnsavedChanges: boolean;
   avatarMutationBusy: boolean;
 }) {
@@ -3648,6 +3920,8 @@ function PersonaMetadataTab({
               src={avatarPreview}
               alt={formData.name}
               crop={formData.avatarCrop}
+              onRemove={onRemoveAvatar}
+              removing={avatarRemoving}
               onChange={(next) => {
                 if (avatarMutationBusy) return;
                 updateField("avatarCrop", next);
@@ -3668,33 +3942,37 @@ function PersonaMetadataTab({
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <label className="space-y-1.5 sm:col-span-2">
+        <label className="space-y-1.5 sm:col-span-2" data-mari-field="name">
           <span className="inline-flex items-center gap-1 text-xs font-medium text-[var(--muted-foreground)]">
             {localizeUi("ui.personas.personastatstab.name")}{" "}
             <HelpTooltip
               text={localizeUi("ui.personas.personametadatatab.yourPersonaSDisplayNameThisIsInjectedInto")}
             />
           </span>
-          <input
-            value={formData.name}
-            onChange={(e) => updateField("name", e.target.value)}
-            className="w-full rounded-xl border border-[var(--border)] bg-[var(--secondary)] px-3 py-2 text-sm outline-none focus:border-[var(--primary)]/40 focus:ring-1 focus:ring-[var(--primary)]/20"
-            placeholder={localizeUi("ui.personas.personaeditor.personaName")}
-          />
+          <MariFieldReview field="name">
+            <input
+              value={formData.name}
+              onChange={(e) => updateField("name", e.target.value)}
+              className="w-full rounded-xl border border-[var(--border)] bg-[var(--secondary)] px-3 py-2 text-sm outline-none focus:border-[var(--primary)]/40 focus:ring-1 focus:ring-[var(--primary)]/20"
+              placeholder={localizeUi("ui.personas.personaeditor.personaName")}
+            />
+          </MariFieldReview>
         </label>
-        <label className="space-y-1.5 sm:col-span-2">
+        <label className="space-y-1.5 sm:col-span-2" data-mari-field="comment">
           <span className="inline-flex items-center gap-1 text-xs font-medium text-[var(--muted-foreground)]">
             {localizeUi("ui.personas.personametadatatab.titleComment")}{" "}
             <HelpTooltip text={localizeUi("ui.personas.personametadatatab.aShortNoteShownUnderThePersonaNameIn")} />
           </span>
-          <input
-            value={formData.comment}
-            onChange={(e) => updateField("comment", e.target.value)}
-            className="w-full rounded-xl border border-[var(--border)] bg-[var(--secondary)] px-3 py-2 text-sm outline-none focus:border-[var(--primary)]/40 focus:ring-1 focus:ring-[var(--primary)]/20"
-            placeholder={localizeUi("ui.personas.personametadatatab.modernAuVersion")}
-          />
+          <MariFieldReview field="comment">
+            <input
+              value={formData.comment}
+              onChange={(e) => updateField("comment", e.target.value)}
+              className="w-full rounded-xl border border-[var(--border)] bg-[var(--secondary)] px-3 py-2 text-sm outline-none focus:border-[var(--primary)]/40 focus:ring-1 focus:ring-[var(--primary)]/20"
+              placeholder={localizeUi("ui.personas.personametadatatab.modernAuVersion")}
+            />
+          </MariFieldReview>
         </label>
-        <label className="space-y-1.5">
+        <label className="space-y-1.5" data-mari-field="phoneticName">
           <span className="inline-flex items-center gap-1 text-xs font-medium text-[var(--muted-foreground)]">
             {localizeUi("ui.personas.personametadatatab.phoneticName")}{" "}
             <HelpTooltip
@@ -3703,26 +3981,30 @@ function PersonaMetadataTab({
               )}
             />
           </span>
-          <input
-            value={formData.phoneticName}
-            onChange={(e) => updateField("phoneticName", e.target.value)}
-            className="w-full rounded-xl border border-[var(--border)] bg-[var(--secondary)] px-3 py-2 text-sm outline-none focus:border-[var(--primary)]/40 focus:ring-1 focus:ring-[var(--primary)]/20"
-            placeholder={formData.name}
-          />
+          <MariFieldReview field="phoneticName">
+            <input
+              value={formData.phoneticName}
+              onChange={(e) => updateField("phoneticName", e.target.value)}
+              className="w-full rounded-xl border border-[var(--border)] bg-[var(--secondary)] px-3 py-2 text-sm outline-none focus:border-[var(--primary)]/40 focus:ring-1 focus:ring-[var(--primary)]/20"
+              placeholder={formData.name}
+            />
+          </MariFieldReview>
         </label>
-        <label className="space-y-1.5">
+        <label className="space-y-1.5" data-mari-field="creator">
           <span className="inline-flex items-center gap-1 text-xs font-medium text-[var(--muted-foreground)]">
             {localizeUi("ui.personas.personametadatatab.creator")}{" "}
             <HelpTooltip
               text={localizeUi("ui.personas.personametadatatab.thePersonWhoMadeThisPersonaUsefulForCredit")}
             />
           </span>
-          <input
-            value={formData.creator}
-            onChange={(e) => updateField("creator", e.target.value)}
-            className="w-full rounded-xl border border-[var(--border)] bg-[var(--secondary)] px-3 py-2 text-sm outline-none focus:border-[var(--primary)]/40 focus:ring-1 focus:ring-[var(--primary)]/20"
-            placeholder={localizeUi("ui.personas.personametadatatab.yourName")}
-          />
+          <MariFieldReview field="creator">
+            <input
+              value={formData.creator}
+              onChange={(e) => updateField("creator", e.target.value)}
+              className="w-full rounded-xl border border-[var(--border)] bg-[var(--secondary)] px-3 py-2 text-sm outline-none focus:border-[var(--primary)]/40 focus:ring-1 focus:ring-[var(--primary)]/20"
+              placeholder={localizeUi("ui.personas.personametadatatab.yourName")}
+            />
+          </MariFieldReview>
         </label>
         <div className="space-y-1.5">
           <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
@@ -3765,7 +4047,7 @@ function PersonaMetadataTab({
         </div>
       </div>
 
-      <div className="space-y-2">
+      <div className="space-y-2" data-mari-field="tags">
         <div className="flex items-center justify-between gap-2">
           <span className="inline-flex items-center gap-1 text-xs font-medium text-[var(--muted-foreground)]">
             {localizeUi("ui.personas.personametadatatab.tags")}{" "}
@@ -3822,22 +4104,24 @@ function PersonaMetadataTab({
         </div>
       </div>
 
-      <div className="block space-y-1.5">
+      <div className="block space-y-1.5" data-mari-field="creatorNotes">
         <span className="inline-flex items-center gap-1 text-xs font-medium text-[var(--muted-foreground)]">
           {localizeUi("ui.personas.personametadatatab.creatorNotes")}{" "}
           <HelpTooltip
             text={localizeUi("ui.personas.personametadatatab.privateNotesAboutThisPersonaTipsForUseKnown")}
           />
         </span>
-        <MacroTextarea
-          value={formData.creatorNotes}
-          onChange={(value) => updateField("creatorNotes", value)}
-          rows={4}
-          title={localizeUi("ui.personas.personametadatatab.creatorNotes")}
-          showMarkdownPreview
-          className="w-full resize-y rounded-xl border border-[var(--border)] bg-[var(--secondary)] p-3 text-sm outline-none placeholder:text-[var(--muted-foreground)]/40 focus:border-[var(--primary)]/40 focus:ring-1 focus:ring-[var(--primary)]/20"
-          placeholder={localizeUi("ui.personas.personametadatatab.notesAboutThisPersonaIntendedUseTipsForBest")}
-        />
+        <MariFieldReview field="creatorNotes">
+          <MacroTextarea
+            value={formData.creatorNotes}
+            onChange={(value) => updateField("creatorNotes", value)}
+            rows={4}
+            title={localizeUi("ui.personas.personametadatatab.creatorNotes")}
+            showMarkdownPreview
+            className="w-full resize-y rounded-xl border border-[var(--border)] bg-[var(--secondary)] p-3 text-sm outline-none placeholder:text-[var(--muted-foreground)]/40 focus:border-[var(--primary)]/40 focus:ring-1 focus:ring-[var(--primary)]/20"
+            placeholder={localizeUi("ui.personas.personametadatatab.notesAboutThisPersonaIntendedUseTipsForBest")}
+          />
+        </MariFieldReview>
       </div>
     </div>
   );
@@ -4194,7 +4478,7 @@ function PersonaVersionHistoryPanel({
 
   return (
     <div className="rounded-xl border border-[var(--border)] bg-[var(--secondary)]/70 p-2.5">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="inline-flex items-center gap-1.5 text-[0.6875rem] font-medium text-[var(--muted-foreground)]">
           <History size="0.75rem" />
           {localizeUi("ui.personas.personaversionhistorypanel.versionHistory")}
@@ -4486,6 +4770,7 @@ function PersonaCardTab({
       <div className="space-y-10">
         <EditorSectionAnchor id="persona-card-summary">
           <TextareaTab
+            mariField="summary"
             title={localizeUi("ui.characters.summary.label")}
             subtitle={localizeUi("ui.cardFields.personaSummaryHelp")}
             value={formData.summary}
@@ -4506,6 +4791,7 @@ function PersonaCardTab({
         </EditorSectionAnchor>
         <EditorSectionAnchor id="persona-card-personality">
           <TextareaTab
+            mariField="personality"
             title={localizeUi("chat.settings.inlineEditor.fields.personality")}
             subtitle={localizeUi("ui.personas.personacardtab.yourPersonalityTraitsTemperamentAndBehavioralPatterns")}
             helpText={PERSONA_PERSONALITY_HELP}
@@ -4521,6 +4807,7 @@ function PersonaCardTab({
         </EditorSectionAnchor>
         <EditorSectionAnchor id="persona-card-backstory">
           <TextareaTab
+            mariField="backstory"
             title={localizeUi("chat.settings.inlineEditor.fields.backstory")}
             subtitle={localizeUi("ui.personas.personacardtab.yourCharacterSHistoryOriginStoryAndFormativeLife")}
             helpText={PERSONA_BACKSTORY_HELP}
@@ -4536,6 +4823,7 @@ function PersonaCardTab({
         </EditorSectionAnchor>
         <EditorSectionAnchor id="persona-card-appearance">
           <TextareaTab
+            mariField="appearance"
             title={localizeUi("chat.settings.inlineEditor.fields.appearance")}
             subtitle={localizeUi(
               "ui.personas.personacardtab.physicalDescriptionHeightBuildHairEyesClothingDistinguishingFeatures",
@@ -4569,6 +4857,7 @@ function PersonaCardTab({
           {formData.imageAppearanceEnabled && (
             <div className="mt-3">
               <TextareaTab
+                mariField="imageAppearance"
                 title={localizeUi("ui.characters.charactercardtab.imageAppearanceToggle")}
                 subtitle={localizeUi("ui.characters.charactercardtab.imageAppearanceSubtitle")}
                 value={formData.imageAppearance}
@@ -4581,6 +4870,7 @@ function PersonaCardTab({
         </EditorSectionAnchor>
         <EditorSectionAnchor id="persona-card-scenario">
           <TextareaTab
+            mariField="scenario"
             title={localizeUi("chat.settings.inlineEditor.fields.scenario")}
             subtitle={localizeUi("ui.personas.personacardtab.yourDefaultSituationOrContextWithinRoleplays")}
             helpText={PERSONA_SCENARIO_HELP}
@@ -4598,6 +4888,7 @@ function PersonaCardTab({
         </EditorSectionAnchor>
         <EditorSectionAnchor id="persona-card-dialogue">
           <TextareaTab
+            mariField="mes_example"
             title={localizeUi("chat.settings.inlineEditor.fields.exampleDialogue")}
             subtitle={localizeUi("ui.cardFields.personaDialogueHelp")}
             value={formData.mes_example}
@@ -4642,7 +4933,7 @@ function DescriptionTab({
 }) {
   const { t: localizeUi } = useUiTranslation();
   return (
-    <div className="mari-editor-panel space-y-3 p-3">
+    <div className="mari-editor-panel space-y-3 p-3" data-mari-field="description">
       <div className="flex items-start justify-between gap-3">
         <SectionHeader
           title={localizeUi("chat.settings.inlineEditor.fields.description")}
@@ -4651,23 +4942,25 @@ function DescriptionTab({
         />
         {actions}
       </div>
-      <MacroTextarea
-        value={formData.description}
-        onChange={(value) => updateField("description", value)}
-        placeholder={
-          localizeUi("ui.personas.descriptiontab.describeWhoYouAreYourRoleInTheStory") +
-          " " +
-          localizeUi("ui.cardFields.seedPlaceholder")
-        }
-        rows={12}
-        title={localizeUi("chat.settings.inlineEditor.fields.description")}
-        ariaLabel={localizeUi("chat.settings.inlineEditor.fields.description")}
-        showMarkdownPreview
-        className="w-full resize-y rounded-xl border border-[var(--border)] bg-[var(--secondary)] p-4 text-sm leading-relaxed outline-none transition-colors placeholder:text-[var(--muted-foreground)]/40 focus:border-emerald-400/40 focus:ring-1 focus:ring-emerald-400/20"
-      />
-      <p className="mt-1.5 text-right text-[0.625rem] text-[var(--muted-foreground)]">
-        {formatEstimatedTokens(estimateTextTokens(formData.description), localizeUi)}
-      </p>
+      <MariFieldReview field="description">
+        <MacroTextarea
+          value={formData.description}
+          onChange={(value) => updateField("description", value)}
+          placeholder={
+            localizeUi("ui.personas.descriptiontab.describeWhoYouAreYourRoleInTheStory") +
+            " " +
+            localizeUi("ui.cardFields.seedPlaceholder")
+          }
+          rows={12}
+          title={localizeUi("chat.settings.inlineEditor.fields.description")}
+          ariaLabel={localizeUi("chat.settings.inlineEditor.fields.description")}
+          showMarkdownPreview
+          className="w-full resize-y rounded-xl border border-[var(--border)] bg-[var(--secondary)] p-4 text-sm leading-relaxed outline-none transition-colors placeholder:text-[var(--muted-foreground)]/40 focus:border-emerald-400/40 focus:ring-1 focus:ring-emerald-400/20"
+        />
+        <p className="mt-1.5 text-right text-[0.625rem] text-[var(--muted-foreground)]">
+          {formatEstimatedTokens(estimateTextTokens(formData.description), localizeUi)}
+        </p>
+      </MariFieldReview>
       {footer}
     </div>
   );
@@ -4705,9 +4998,12 @@ function TextareaTab({
   helpText,
   actions,
   footer,
+  mariField,
 }: {
   actions?: ReactNode;
   footer?: ReactNode;
+  /** The field id Prof. Mari knows this field by (see lib/mari-editor-fields). */
+  mariField: string;
   title: string;
   subtitle: string;
   helpText?: ReactNode;
@@ -4718,24 +5014,26 @@ function TextareaTab({
 }) {
   const { t: localizeUi } = useUiTranslation();
   return (
-    <div className="mari-editor-panel space-y-3 p-3">
+    <div className="mari-editor-panel space-y-3 p-3" data-mari-field={mariField}>
       <div className="flex items-start justify-between gap-3">
         <SectionHeader title={title} subtitle={subtitle} helpText={helpText} />
         {actions}
       </div>
-      <MacroTextarea
-        value={value}
-        onChange={onChange}
-        placeholder={placeholder}
-        rows={rows}
-        title={title}
-        ariaLabel={title}
-        showMarkdownPreview
-        className="w-full resize-y rounded-xl border border-[var(--border)] bg-[var(--secondary)] p-4 text-sm leading-relaxed outline-none transition-colors placeholder:text-[var(--muted-foreground)]/40 focus:border-emerald-400/40 focus:ring-1 focus:ring-emerald-400/20"
-      />
-      <p className="mt-1.5 text-right text-[0.625rem] text-[var(--muted-foreground)]">
-        {formatEstimatedTokens(estimateTextTokens(value), localizeUi)}
-      </p>
+      <MariFieldReview field={mariField}>
+        <MacroTextarea
+          value={value}
+          onChange={onChange}
+          placeholder={placeholder}
+          rows={rows}
+          title={title}
+          ariaLabel={title}
+          showMarkdownPreview
+          className="w-full resize-y rounded-xl border border-[var(--border)] bg-[var(--secondary)] p-4 text-sm leading-relaxed outline-none transition-colors placeholder:text-[var(--muted-foreground)]/40 focus:border-emerald-400/40 focus:ring-1 focus:ring-emerald-400/20"
+        />
+        <p className="mt-1.5 text-right text-[0.625rem] text-[var(--muted-foreground)]">
+          {formatEstimatedTokens(estimateTextTokens(value), localizeUi)}
+        </p>
+      </MariFieldReview>
       {footer}
     </div>
   );

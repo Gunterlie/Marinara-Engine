@@ -1,3 +1,4 @@
+import { chooseConnection } from "./connection-picker.js";
 import { expect, test, type Locator, type Page, type TestInfo } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { WORLD_STARTER_KITS, parseWorldKit } from "@marinara-engine/shared";
@@ -75,11 +76,7 @@ async function mountWizard(page: Page, testInfo: TestInfo): Promise<Locator> {
   });
   const wizard = page.locator('[data-component="GameSetupWizard"]');
   await expect(wizard).toBeVisible();
-  await wizard
-    .locator("select")
-    .filter({ has: page.locator('option[value="wizard-connection"]') })
-    .first()
-    .selectOption("wizard-connection");
+  await chooseConnection(page, wizard.locator("[data-connection-value]").first(), "wizard-connection");
   return wizard;
 }
 
@@ -100,7 +97,7 @@ async function stepTo(wizard: Locator, title: string) {
 
 /** Walks on to the last step and starts the game; the setup it started. */
 async function start(page: Page, wizard: Locator): Promise<Record<string, any>> {
-  const startButton = wizard.getByRole("button", { name: "Start Game", exact: true });
+  const startButton = wizard.getByRole("button", { name: "Create world", exact: true });
   for (let guard = 0; guard < 8 && !(await startButton.isVisible()); guard++) await next(wizard);
   await startButton.click();
   await expect.poll(() => page.evaluate(() => Boolean(window.__styleSetup))).toBe(true);

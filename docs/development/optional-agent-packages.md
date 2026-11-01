@@ -24,6 +24,21 @@ Client capability elements receive the Engine's selected UI locale through their
 English; the Engine does not translate package prompts or package-authored machine values. Locale changes reuse the
 existing `marinara-capability-props` event so an installed interface can rerender without an Engine restart.
 
+### Shared connection picker
+
+Client capability elements also receive `capabilityProps.ui.pickConnection(options)`. It opens the
+Engine's searchable saved-model picker, filtered by `chat`, `image`, `video`, `audio`, `decision`, or
+`all`. Models stay grouped by their account, and unavailable choices explain their state.
+
+The result distinguishes an explicit selection (`{ status: "selected", value }`, where `null` means
+the caller's inherited/default choice) from cancellation (`{ status: "cancelled" }`). Opening or using
+the picker does not save package settings, change a chat, or change global defaults. The package owns
+those actions after selection. Older Engines may lack this optional UI method: feature-detect it.
+
+See the [shared picker API and package example](../../packages/shared/CONNECTION_PICKER.md) for the
+public TypeScript types, filter meanings, lifecycle, and Engine component usage. Packages must not
+import private Engine React components or build another picker merely to list Connections.
+
 ### Delivery and caching
 
 Installed package files are served with strong validators derived from the manifest's per-file
@@ -82,31 +97,40 @@ update, for example), each package shows its existing load error and the rest of
 TypeScript type is `MarinaraHostV1` in `packages/client/src/lib/marinara-host-contract.ts`, together with the lists on
 this page. Package builds declare matching structural types instead of importing Engine source.
 
-| Member              | Value                                                                                                                                                                         |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `version`           | `1`. It changes only when the shape breaks.                                                                                                                                   |
-| `capabilityApi`     | The Engine's `supportedCapabilityApi`, for example `{ major: 1, minor: 341 }`.                                                                                                |
-| `stores`            | The live zustand stores `ui`, `chat`, `agent`, `sidecar`, `dialog`, `gallery`, `encounter`, `gameState` and `backfill`. `chat` includes the pending spatial transition slice. |
-| `services.tts`      | The `lib/tts-service.ts` module (`ttsService`, `playWhenAvailable`, ...).                                                                                                     |
-| `services.dialogs`  | The `lib/app-dialogs.ts` module (`showAlertDialog`, `showConfirmDialog`, `showPromptDialog`, `showChoiceDialog`).                                                             |
-| `modules`           | Library modules, keyed by bare specifier (below).                                                                                                                             |
-| `queryClient`       | The one React Query `QueryClient` the Engine renders with.                                                                                                                    |
-| `components.Modal`  | The Engine's `Modal`, with its overlay order, Escape and back-button handling.                                                                                                |
-| `data.emojiCatalog` | The `lib/emoji-catalog.generated.ts` module.                                                                                                                                  |
-| `api`               | The `lib/api-client.ts` module (`api`, `ApiError`, `getApiErrorMessage`, ...).                                                                                                |
+| Member                    | Value                                                                                                                                                                                    |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `version`                 | `1`. It changes only when the shape breaks.                                                                                                                                              |
+| `capabilityApi`           | The Engine's `supportedCapabilityApi`, for example `{ major: 1, minor: 341 }`.                                                                                                           |
+| `stores`                  | The live zustand stores `ui`, `chat`, `agent`, `sidecar`, `dialog`, `gallery`, `encounter`, `gameState` and `backfill`. `chat` includes the pending spatial transition slice.            |
+| `services.tts`            | The `lib/tts-service.ts` module (`ttsService`, `playWhenAvailable`, ...).                                                                                                                |
+| `services.audio`          | From capability API 1.381, the `lib/audio-service.ts` module: independent music/SFX players, the shared asset manifest and default music selection. See [Package audio](#package-audio). |
+| `services.dialogs`        | The `lib/app-dialogs.ts` module (`showAlertDialog`, `showConfirmDialog`, `showPromptDialog`, `showChoiceDialog`).                                                                        |
+| `services.imageDownloads` | From capability API 1.385, the gallery's existing `downloadUrlToDevice`, `shouldUseIosImageShare`, `prepareImageSave` and `savePreparedImageToDevice` helpers.                           |
+| `modules`                 | Library modules, keyed by bare specifier (below).                                                                                                                                        |
+| `queryClient`             | The one React Query `QueryClient` the Engine renders with.                                                                                                                               |
+| `components.Modal`        | The Engine's `Modal`, with its overlay order, Escape and back-button handling.                                                                                                           |
+| `data.emojiCatalog`       | The `lib/emoji-catalog.generated.ts` module.                                                                                                                                             |
+| `api`                     | The `lib/api-client.ts` module (`api`, `ApiError`, `getApiErrorMessage`, ...).                                                                                                           |
 
 A package reads a member only after checking it, for example
 `const host = globalThis.__MARINARA_HOST__; if (host?.version === 1 && typeof host.stores?.ui?.getState === "function")`.
+For image downloads, use `shouldUseIosImageShare()` to follow the gallery's platform policy. On iPhone,
+prepare the image with `prepareImageSave(url, filename)` before the user's save gesture, then call
+`savePreparedImageToDevice(prepared)` directly from that gesture. It handles cancelled sharing silently and
+does not replace a failed share with a WebKit download preview. Other platforms use `downloadUrlToDevice`.
+These helpers save to the client device, including when the Engine server runs in Docker.
 The namespace only grows: a new member comes with a capability API minor, and a package that needs it requires that
 minor. Packages built for the namespace require the capability API version that added it, so an older Engine never
 installs them and keeps the version it has. When a member is missing anyway, the package never falls back to a bundled
 copy of a stateful Engine service: the `ui` and `chat` stores become read-only copies that never write, and every other
 member reports that the feature needs a newer Marinara Engine.
 
-**Host modules.** `modules[specifier]` is exactly what `import * as m from "<specifier>"` returns in the Engine's own
-build, including `default` where the library has one. The specifiers are `react`, `react/jsx-runtime`, `react-dom`,
+**Host modules.** `modules[specifier]` is a complete module namespace, including `default` where the library has one.
+`MARINARA_HOST_MODULE_IMPORTS` in the client contract maps each public slot to the dependency it imports. Most map
+to themselves. The stable `framer-motion` slot maps to `framer-motion-v13` (an exact npm alias of Motion 13.5.1),
+while the opt-in `motion/react` slot maps to the Engine's primary `framer-motion` 14 dependency. Package tooling uses this mapping for both its export inventory and TypeScript paths; public slot names need not be physical dependencies. The specifiers are `react`, `react/jsx-runtime`, `react-dom`,
 `react-dom/client`, `@tanstack/react-query`, `zustand`, `zustand/middleware`, `sonner`, `zod`, `i18next`,
-`react-i18next`, `framer-motion`, `tailwind-merge` and `clsx`. A package build resolves these specifiers to shims that
+`react-i18next`, `framer-motion`, `motion/react`, `tailwind-merge` and `clsx`. A package build resolves these specifiers to shims that
 read the namespace, so the package renders with the Engine's one React and shares its React Query cache and toasts.
 
 - Packages never render a `<Toaster>` and never create a `QueryClient`. A `toast` from `sonner` shows at the user's
@@ -117,10 +141,22 @@ read the namespace, so the package renders with the Engine's one React and share
 - `lucide-react`, `chess.js`, `scheduler` and `@marinara-engine/shared` are not host modules; packages bundle what they
   use of them.
 - Packages are built against these majors: `react` 19, `react-dom` 19, `@tanstack/react-query` 5, `zustand` 5,
-  `sonner` 2, `zod` 3, `i18next` 26, `react-i18next` 17, `framer-motion` 13, `tailwind-merge` 3 and `clsx` 2. A major
-  upgrade of one of them in the Engine (React first) breaks every package built against the old major, so it requires a
-  capability API **major**. `scripts/regressions/marinara-host-namespace.regression.ts` fails when a major in
-  `packages/client/package.json` changes and the contract does not.
+  `sonner` 2, `zod` 3, `i18next` 26, `react-i18next` 17, `framer-motion` 13, `motion` 14 (the `motion/react` slot),
+  `tailwind-merge` 3 and `clsx` 2. Replacing the major behind an existing public slot requires a capability API **major**.
+  Adding a distinct slot is additive: capability API 1.377 adds `motion/react` without changing `framer-motion`.
+  `scripts/regressions/marinara-host-namespace.regression.ts` pins each slot's mapped dependency and major.
+- The Engine validates its own data with native Zod 4. Existing packages keep Zod 3 through the explicit
+  `zod-v3` compatibility dependency, both in the client `zod` slot and in package-server imports. This preserves
+  their existing records, defaults and module exports. The alias carries the reviewed bounded-collection security
+  backport in `patches/zod@3.25.76.patch`; it is not stock Zod 3. These legacy package validators retain Zod 3
+  behavior apart from that documented security repair. The core upgrade does not apply Zod 4's other validation
+  changes to them.
+- Existing installed packages keep their full Motion 13 namespace and do not need rebuilding. A package choosing
+  Motion 14 imports `motion/react` through the host shim and declares capability API 1.377 or newer. Older hosts
+  reject that declaration rather than silently substituting Motion 13. Keep each animation tree on one version:
+  `AnimatePresence`, `MotionConfig`, `LayoutGroup`, motion values and their consumers must come from the same slot.
+  The versions have distinct contexts; no context bridge is provided. Package views mount their own React roots,
+  while the host `Modal` uses CSS animations. Do not expect shared layout or presence across the version boundary.
 
 **Store fields packages read.** Published packages read these fields today. The Engine keeps each of them, and
 dropping or renaming one needs a capability API major (`MARINARA_HOST_STORE_FIELDS` pins them with `Pick<>`):
@@ -568,7 +604,7 @@ events and spatial snapshots. `chat-read` gates chat, message, game-state and sp
 The same checks apply inside persistence transactions and chat locks; a write permission does not
 implicitly grant read permission. Engine-owned persistence calls remain trusted.
 
-The Download Agents detail view shows the installed version's declared permissions after installation.
+The Agent Organizer detail view shows the installed version's declared permissions after installation.
 When the catalog version requests different permissions, it shows those separately. Installing or
 updating code still requires the existing approval bound to that exact version and checksum; model
 commands do not request separate approval on every turn.
@@ -727,7 +763,7 @@ Design every use for a user with no Decision model. A statement with no answer r
 
 ### A note for Game Mode Experience developers
 
-Engine combat decides what ordinary enemies do on its own. Every non-boss enemy on the GM's side of a fight gets a role from its skills and class (bruiser, bulwark, skirmisher, marksman, spellcaster, supporter or controller), a proficiency from its level unless the enemy sets one (novice, trained, veteran or master), and a temperament such as reckless, cautious, opportunistic or protective. Beasts and monstrosities are always mindless. Engine code picks these from a seed with no model call, and the game's difficulty changes how consistently enemies play to type. Only authored bosses are directed by the GM through a model call. See [Game Mode combat AI](game-combat-ai-design.md).
+Engine combat decides what ordinary enemies do on its own. Every non-boss enemy on the GM's side of a fight gets a role from its skills and class (bruiser, bulwark, skirmisher, marksman, spellcaster, supporter or controller), a proficiency from its level unless the enemy sets one (novice, trained, veteran or master), and a temperament such as reckless, cautious, opportunistic or protective. Beasts and monstrosities are always mindless. Engine code picks these from a seed with no model call, and the game's difficulty changes how consistently enemies play to type. Only authored bosses are directed by the GM through a model call. See [Game Mode combat AI](game-combat-ai.md).
 
 More combat improvements are on the way. Before involving a decision model anywhere in the combat pipeline, check that vanilla Engine combat does not already do what you need. If an enemy needs a particular personality, give it the matching proficiency and temperament first. A decision per enemy turn would add model work and a time limit; a hosted backend would also add network requests and charges. The fight would then depend on answers from a model the user may not have set up, so it would need a sensible no-answer fallback.
 
@@ -747,9 +783,9 @@ The base keeps the package manager, catalog client, generic agent pipeline contr
 
 ## Trust and installation
 
-The official catalog is a schema-validated, versioned JSON document fetched over HTTPS. Each release entry includes immutable artifact URLs, SHA-256 digests, byte sizes, engine compatibility, permissions, and whether its runtime requires a restart.
+The official catalog is a schema-validated, versioned JSON document fetched over HTTPS. Each release entry includes immutable artifact URLs, SHA-256 digests, byte sizes, engine compatibility, permissions, and whether its runtime requires a restart. A ruleset entry may also list `locales`, its language packs by language (Capability API 1.811), each with its own URL, SHA-256 digest and byte size and the store card's translated name and description. The Engine fetches only the pack in its current language after installing the ruleset, and again when its language changes (`POST /api/capability-packages/rulesets/language`, sent by the page as it opens and on each change), keeping it with the installed version and removing the others; see [Writing Rulesets](../extending/writing-rulesets.md).
 
-Updates need the user's consent: apart from one-time migrations that keep an upgraded install's former built-ins (see [Compatibility migration](#compatibility-migration)), startup never downloads or installs a package. `GET /api/capability-packages/updates/pending` lists each installed official package whose catalog version is newer and compatible with the running Engine and capability API, leaving out a version the user already declined. The client shows them in one **Agent updates available** prompt. **Update all** installs each through the normal installation pipeline, pinned to the offered version and artifact SHA-256. **Not now** records the declined versions in `DATA_DIR/capability-packages/update-decisions-v1.json` (`POST /api/capability-packages/updates/decline`), so that version is not offered again, while a newer one is. **Update** stays available in **Download Agents** either way. Failures are isolated per package. Existing files and registry state remain usable when the catalog is offline or verification fails, and server-runtime readiness failures use the previous-version rollback path.
+Updates need the user's consent: apart from one-time migrations that keep an upgraded install's former built-ins (see [Compatibility migration](#compatibility-migration)), startup never downloads or installs a package. `GET /api/capability-packages/updates/pending` lists each installed official package whose catalog version is newer and compatible with the running Engine and capability API, leaving out a version the user already declined. The client shows them in one **Agent updates available** prompt. The prompt installs each selected update through the normal installation pipeline, pinned to the offered version and artifact SHA-256. Updates the user leaves unselected are declined the same way as **Not now**. **Not now** records the declined versions in `DATA_DIR/capability-packages/update-decisions-v1.json` (`POST /api/capability-packages/updates/decline`), so that version is not offered again, while a newer one is. **Update** stays available in **Agent Organizer** either way. Failures are isolated per package. Existing files and registry state remain usable when the catalog is offline or verification fails, and server-runtime readiness failures use the previous-version rollback path.
 
 Release notes are published as `notes.json` beside the `catalog.json` they describe, never inside a catalog entry or a manifest: an older Engine drops a catalog entry with a key it does not know. Each pending update carries, as `releaseNotes`, the notes of every version after the installed one up to the offered one, newest first, and `releaseHighlight` is true when any of them is marked as a change the user will notice. Notes are plain text and are never rendered as Markdown or HTML.
 
@@ -805,9 +841,9 @@ Every uninstall requires confirmation. Affected chats fall back to their ordinar
 
 ## Catalog interface
 
-The Agents panel contains a `Download Agents` control matching the `Download` button in the Characters and Personas panels, which opens the Card Browser. It opens a full-screen responsive library with search, package kinds, compatibility information, install/update state, permissions, storage cost, documentation, and uninstall controls.
+The Agents panel contains an `Agent Organizer` control matching the `Download` button in the Characters and Personas panels, which opens the Card Browser. It opens a full-screen responsive library with search, package kinds, compatibility information, install/update state, permissions, storage cost, documentation, and uninstall controls.
 
-Desktop uses a browse list with an adjacent detail region. Mobile uses one pane with explicit back navigation and touch-sized actions. Empty, offline, incompatible, corrupt-download, interrupted-install, update, rollback, and restart-required states are first-class.
+Desktop shows a sidebar with search, mode filter and sections next to the store pages. Mobile shows search, mode filter and section chips above the page; an agent page replaces the list, with explicit back navigation and touch-sized actions. Empty, offline, incompatible, corrupt-download, interrupted-install, update, rollback, and restart-required states are first-class.
 
 ## Extraction gate
 
@@ -1146,9 +1182,9 @@ A ruleset package needs no permission, no server or client entrypoint and no age
 asset go together: a package of kind `ruleset` must list `ruleset.json`, and a package that lists
 `ruleset.json` must declare the kind, so a ruleset cannot ride in under another kind. Nothing in the
 file is executed: there are no expression strings, and a mechanic that no resolution kind expresses
-is an Engine change that adds a kind, not something a ruleset can do. The format, the first-party 5e
-file and the reasons behind its shape are in
-[`game-rulesets-and-sheets-implementation.md`](game-rulesets-and-sheets-implementation.md).
+is an Engine change that adds a kind, not something a ruleset can do. The format is documented in the
+author guide, [`writing-rulesets.md`](../extending/writing-rulesets.md), and the code that reads it in
+[Game Mode architecture](game-mode-architecture.md).
 
 This is not a soft seam. A ruleset package does nothing on an Engine that cannot read it, so a
 manifest that lists `ruleset.json` must declare Capability API 1.20, and an older Engine refuses the
@@ -1751,6 +1787,151 @@ Rules worth knowing:
 
 `scenes` is refused on a manifest that declares a `capabilityApi` older than 1.66.
 
+### Capability API 1.376: Home browser fullscreen
+
+A `home-browser-tab` view receives `capabilityProps.browserFullscreen`:
+
+- `active`: whether this package currently fills the Home browser content area.
+- `setActive(boolean)`: enter or leave fullscreen for this active package.
+- `enterLabel` and `exitLabel`: localized accessible labels for the toggle.
+
+This is in-app fullscreen: Home's tabs, address bar and bookmarks are hidden, while the Engine
+topbar stays available. It does not call the browser Fullscreen API or require browser fullscreen
+support. The state is temporary and resets on navigation away from the package or Home. Keep an
+exit button available on every package screen and use `aria-pressed` to reflect `active`. Prop updates
+must update the button without replacing unfinished forms. Packages depending on this control
+declare capability API 1.376 or newer; older packages can keep their existing layouts.
+
+### Capability API 1.391: Advanced Memory scene summaries and the memory block
+
+`persistence.listChatSummaries(chatId)` also returns `advancedMemory`: the chat's enabled, completed
+Advanced Memory scene summaries, in the order they were written; a scene summarized again moves to the end,
+so use `startMessageId` for story order. Each one has its `id`, `sceneId`, `kind` (`"scene"`), `title`,
+`content`, `timeline`, `startMessageId`, `endMessageId`, `audienceCharacterIds`, `sourceFingerprint`,
+`updatedAt` and `memory`. Older chats can hold several copies of one scene with the same `sceneId`.
+Constant, temporary, excerpt and recollection records are not listed.
+
+The `long-term-memory:runtime` service can add an optional `summaryMemoryInstruction()` method that
+returns one paragraph, or `null`. When the chat lists Long-Term Memory as an active agent, the Engine
+appends that paragraph to each first-pass request of a scene summary (every part of a scene split into
+several) and asks for a `"memory"` string in the same JSON reply. It stores that string untouched and returns it as `memory`; the Engine never parses
+it, so the package owns its format. A scene summarized in several parts gets each part's block, joined
+by a blank line; the combining requests never see the blocks. The paragraph is capped at 4,000
+characters.
+
+`memory` is `null` when the reply had no block, after the user edits the summary by hand, and on records
+written before 1.391. Without the method, or in a chat that does not list Long-Term Memory, the summary
+request is unchanged.
+
+The block is one flat string written from the whole scene, including messages some participants never
+saw; unlike the recap, it has no per-reader sections. A package that shows memories to a character must
+scope the record by `audienceCharacterIds` itself.
+
+Older Engines do not return `advancedMemory`: check that it exists, or declare 1.391.
+
+```ts
+const scenes = (await api.runtime.persistence.listChatSummaries?.(chatId))?.advancedMemory ?? [];
+```
+
+### Capability API 1.390: the Engine draws an agent page header
+
+A package with `contributions.agentDetail` can set `"header": "engine"`. The Engine then draws the
+same header as on every other agent page: Back, the store banner and logo, the name, the Active
+toggle for the open chat and Manage package. The `detail` view gets two extra props:
+`engineHeader: true` and `headerSlot`, an element in the header actions. Hide your own header when
+`engineHeader` is set, and render extra header buttons (for example "Add memories" or help) into
+`headerSlot`, with a React portal or `appendChild`. `headerSlot` is `null` on the first render, so
+wait for the next props update. Without the flag, the package keeps the full page as before.
+Declare capability API 1.390 when you set it.
+
+### Capability API 1.389: hide or show messages from the AI
+
+`persistence.setMessagesHiddenFromAI(chatId, messageIds, hidden)` hides messages of one chat from the AI,
+or shows them again, as the Engine's summary does with **Hide summarised messages**. It needs the
+`chat-write` permission and changes the message and every swipe. A chat that is not found rejects.
+
+- Ids that are not messages of this chat are ignored.
+- A message whose visibility the user set by hand is never changed.
+- It resolves the ids whose flag this call changed. A message that was already hidden (by the summary,
+  for example) is not returned, so record the returned ids and show only those again later.
+
+Older Engines do not have the method: check that it exists, or declare 1.389.
+
+```ts
+const hidden = (await api.runtime.persistence.setMessagesHiddenFromAI?.(chatId, messageIds, true)) ?? [];
+```
+
+### Capability API 1.388: a service only the Engine can read
+
+Every service a package registers is readable by every other package through `runtime.services.get(key)`. A
+service meant for the Engine alone, such as a runtime the Engine calls during generation, takes a third argument:
+
+```ts
+api.registerService("my-package:runtime", service, { hostOnly: true });
+```
+
+The Engine's own lookup still returns it. `runtime.services.get` returns `null` for it to every package, the owner
+included. Releasing the service clears the flag, so the key can be registered again without it. An Engine older than
+1.388 ignores the argument, so the service stays readable there; do not rely on `hostOnly` for secrecy on older
+Engines.
+
+### Capability API 1.387: read a chat's summaries
+
+`persistence.listChatSummaries(chatId)` returns the summaries the Engine keeps for a chat, so a package
+does not parse the chat's metadata for them. It needs the `chat-read` permission, like `listMessages`,
+and returns copies:
+
+- `day` and `week`: Conversation summaries by date (`"DD.MM.YYYY"`, a week by its Monday), each
+  `{ summary, keyDetails }`.
+- `rolling`: the rolling summary entries in the chat's order, disabled ones included (check `enabled`).
+  A chat that only has the older single summary reads it as one entry with `origin: "legacy"`, dated
+  with the chat's last update time.
+- `gameSessions`: a Game's summary of each previous session. Every entry is complete: a missing text
+  field reads `""`, a missing list `[]`, an older `revelations` list joins `keyDiscoveries`, and a missing
+  `sessionNumber` is the entry's position (from 1). An entry without a date takes the chat's last update time.
+
+A chat without summaries, or one that is not found, gets empty values. Older Engines do not have the
+method: check that it exists, or declare 1.387.
+
+```ts
+const { day, week, rolling, gameSessions } = (await api.runtime.persistence.listChatSummaries?.(chatId)) ?? {};
+```
+
+### Capability API 1.386: open a connection, and raw generation for packages
+
+The browser view gets `openConnection(connectionId)`. It opens the connection editor on that saved
+connection, so a package that lets the user pick a connection can offer "Edit connection" instead of
+its own provider settings. When the editor closes, Home comes back to the package's tab; leaving the
+editor another way, such as opening a chat, does not. The desktop layout unmounts Home, and the
+package view with it, while the editor is open: save what the user typed first. Older Engines do not
+have it: check that `openConnection` exists before you show the button.
+
+```ts
+if (typeof props.openConnection === "function") props.openConnection(connectionId);
+```
+
+A browser package can also write text with a saved connection, without a server part of its own:
+`POST /api/generate/raw` through the host api client, which adds the CSRF and admin headers.
+
+- `connectionId`: the saved connection. Its saved parameters apply, and `parameters` (`temperature`,
+  `maxTokens`, `maxContext`, `topP`, `topK`, `minP`, `frequencyPenalty`, `presencePenalty`,
+  `reasoningEffort`, `verbosity`, `serviceTier`, `customParameters`, `enabledParameters`) overrides
+  them one field at a time.
+- `messages`: 1 to 200 `{ role: "system" | "user" | "assistant", content }`. Adjacent messages of one
+  role are merged and the prompt is fitted to the model's context, as for the Engine's own generations.
+- `streaming`: `true` answers with server-sent events; otherwise the answer is `{ content, runId }`, or
+  `{ aborted: true, runId }`.
+- `runId`: your id for the run. `POST /api/generate/raw/abort` with `{ runId }` stops it, and so does
+  closing the request.
+- `debugMode` (1.386): pass the browser view's `debugMode`. When it is true, or the server runs with
+  `DEBUG_AGENTS`, the server logs the final messages sent to the provider and the reply. The body is
+  strict, so an older Engine refuses the field: send it only when it is true, from a package that
+  declares 1.386.
+
+The events are `raw_started` (`{ runId }`), `token` (the next piece of text), `result` (`{ content }`,
+the whole text), `aborted`, `error` (the message), `fallback_used` when the Engine's fallback connection
+answered instead, and `done`, always last.
+
 ### Capability API 1.50: Professor Mari actions
 
 A package holding the new `mari-actions` permission can offer named actions to Professor Mari. It
@@ -1995,6 +2176,44 @@ Server packages can call `api.runtime.integrations` to use the current Engine's 
 
 Shared request/result types are exported by `@marinara-engine/shared`. Keep package-specific prompt building and orchestration in the package; call these host entrypoints for provider I/O instead of copying Engine service implementations. Pure helpers and types may still be bundled.
 
+### Package audio
+
+From capability API **1.381**, `__MARINARA_HOST__.services.audio` provides Engine-owned playback and
+asset selection. Declare that minor in the package manifest, and update the Engine alongside the package.
+Speech remains in `services.tts`; music and sound effects use `services.audio`.
+`services.tts.ttsService.speakSequence(requests, id?, options?)` accepts `options.audioConnectionId`
+from 1.381, applying that selected speech connection to every chunk while retaining each request's
+voice. Leave it undefined for the normal default, or pass `""` to explicitly use legacy TTS settings.
+An unknown, deleted, quarantined or non-speech `audioConnectionId` is ignored and normal speech
+resolution runs: the saved speech selection, then the default/fallback connection, then legacy settings.
+If the saved speech selection itself is unavailable, playback refuses rather than borrowing another
+connection. Packages that require a particular connection should validate the saved ID before playback.
+
+- `createPlayer()` returns an independent player with `unlock()`, `playMusic(tag, assets?)`,
+  `stopMusic(immediate?)`, `playSfx(tag, assets?, loopCount?)`, `setVolumes({ music, sfx })`,
+  `setMuted(boolean)` and `dispose()`. Volumes range from 0 to 1. `assets` is a record keyed by tag,
+  whose entries have `{ path: string, url?: string }`; paths use the existing Game asset server, while
+  `url` can address a package-owned asset. Playback reuses the Engine's crossfade, autoplay retry and
+  SFX pool. Call `unlock()` directly in a user gesture when starting audio; browser autoplay rules still apply.
+- Keep one player for the mounted package surface and call `dispose()` on unmount. Disposal permanently
+  stops that player's audio, releases its context and gesture listeners, and makes later calls inert.
+  It does not stop Game or another package's player. Create a new player when the surface mounts again.
+- `getAssetManifest()` fetches `/api/game-assets/manifest` through the Engine API client and returns
+  `{ scannedAt, count, assets, byCategory }`. Each asset has `tag`, `category`, `subcategory`, `name`,
+  `path` and `ext`. Pass `manifest.assets` to playback; refetch after adding generated assets if needed.
+- `selectDefaultMusic(cue, manifest, { currentTag?, genre? }?)` returns an existing music tag or `null`.
+  Cues are `home`, `combat`, `boss`, `happy`, `tense`, `sad` and `bond`. It reuses the Game music scorer
+  and only the state-based library; another Game's area/tier tracks and generated package-context
+  tracks are excluded. Pass the current tag to keep fitting music stable. Choose again when the cue
+  changes, rather than on volume changes. Stock cues can share a track: this helper does not generate
+  music or promise a distinct composition for each mood.
+
+For a generated `{ tag, path }` returned by the Engine, play it with
+`player.playMusic(tag, { [tag]: { path } })`. Generation/provider selection stays server-side; packages
+must not duplicate provider requests or access saved credentials. Use the Engine's generation endpoint
+for opt-in generated music and effects, and keep generated context keys separate for each package world
+and cue. A failed or unavailable generated track can fall back to `selectDefaultMusic`.
+
 ### Capability API 1.341: host runtime services and shared server libraries
 
 A package server that bundles its own copy of an Engine service runs a second instance of it, with its own state:
@@ -2005,7 +2224,8 @@ servers take a few libraries from the Engine instead of bundling them. Every new
 
 - `runtime.services.get(key)` returns a service a package registered with `api.registerService`, or `null` while it is
   absent or during a shared-room generation. It reads the Engine's own registry, so every package sees it.
-  `agent-runtime:` and `mari-actions:` keys always return `null`; only the Engine reads those.
+  `agent-runtime:` and `mari-actions:` keys always return `null`; only the Engine reads those. So does a service
+  registered with `hostOnly` (Capability API 1.388), for every package including its owner.
 - `runtime.commands.parse(content)`, `strip(content)` and `instructions()` read conversation commands with the
   Engine's grammar and every package's registered tags.
 - `runtime.logger.isLevelEnabled(level)` says whether the Engine logger writes that level now.
@@ -2050,15 +2270,26 @@ copy splits state the Engine keeps in one place. Pure helpers and types may stil
 
 **Shared server libraries.** A package server may leave `zod`, `adm-zip`, `dotenv`, `nanoid` and `jsonrepair` out of
 its bundle and import them by name, as it already may for `@huggingface/transformers`, `onnxruntime-node`,
-`onnxruntime-web`, `sharp`, `pino`, `pino-pretty` and `undici`. Node resolves them from the package's runtime copy
-through two links, `<runtime copy>/node_modules` to `DATA_DIR/capability-packages/node_modules` to the Engine's
-`packages/server/node_modules`, so the package gets the very module instance the Engine uses. pnpm keeps only the
-server's direct dependencies there, so only those names resolve; a dependency of a dependency, such as `ws`, does not.
-The Engine keeps the names above as direct production dependencies of `packages/server`, and every install keeps that
-layout: source and launcher installs, Windows (where the data link is a junction), Android and Termux, and both
-Docker images. When it starts or activates a package, the Engine rebuilds a data link that points anywhere else,
-including one left dangling by a data folder moved from another install path. Anything there that is not a link is
-left alone.
+`onnxruntime-web`, `sharp`, `pino`, `pino-pretty` and `undici`. The Engine builds managed links in each package's
+host-managed runtime copy by resolving its server's declared dependencies with Node's package resolver. This works
+with direct, hoisted and partially hoisted dependencies, including when `DATA_DIR` is outside the Engine checkout.
+Zod is the compatibility exception: a package's `zod` import resolves to the full `zod-v3` dependency, including its
+default, named, CommonJS and subpath exports. Other libraries keep the very module instance the Engine uses. The
+Engine's own `zod` imports continue to resolve to native Zod 4. The names above remain direct production dependencies
+of `packages/server`. Managed snapshots link declared dependencies; undeclared transitives such as `ws` are not part
+of the shared-library contract. Missing optional libraries are skipped, and installed development tools remain
+available. A missing or incompatible Zod 3 alias fails activation explicitly instead of letting a package silently
+load native Zod 4. Host dependency setup failures preserve the requested package version and rollback metadata;
+after the Engine dependency is repaired, activation can retry without reinstalling the package.
+Windows uses junctions for these links; source and launcher installs, Android and Termux, and both Docker images use
+the same dependency-resolution contract. Legacy shared data links are refreshed when the physical server dependency
+directory is available. Existing real directories are left alone, and fresh runtime copies resolve their dependencies
+independently of that legacy data link. A package's own declared bundled dependency tree remains intact.
+
+At startup, legacy API-1 packages disabled by the known Zod migration errors are retried through the normal
+compatibility and file-integrity checks. This lets a repaired Engine recover an already failed installation without
+deleting its maps or other package data. Other error messages remain disabled. Historical registry entries
+record only error messages, so recovery recognizes the exact legacy `innerType` and nested `curve` failures.
 
 **Declaring it.** A package that uses any of this declares `schemaVersion: 2`, `capabilityApi: { major: 1, minor: 341 }`
 and `builtAgainst`, and keeps its `engine` range. A `schemaVersion: 1` manifest is never checked against the

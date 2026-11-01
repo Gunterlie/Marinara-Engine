@@ -1,6 +1,6 @@
 ---
 name: Themes and CSS
-description: Read before creating, editing, activating or reviewing a custom CSS theme, writing its CSS, or explaining what it restyles, what the app strips and how activation works.
+description: Read before creating, editing, activating or reviewing a custom CSS theme, or explaining what it restyles.
 ---
 
 # Themes and CSS
@@ -38,6 +38,7 @@ Public hooks: `.mari-window`, `.mari-drawer`, `.mari-window-bubble`, the `--mari
 - `theme.list` returns summaries with `cssLength` (characters, not bytes), never the CSS; read one row with `theme.get` or `theme.active`. `list` takes `active: true` and `limit` (default 50, max 1000).
 - Caps: name 200 characters (checked on `app_data` too); CSS 256 KiB (262144 UTF-8 bytes), enforced on the REST path only — `app_data` will store CSS the Theme Library can then never save. Stay far under it.
 - **`css` replaces the whole stylesheet.** An update that sends one changed rule deletes every other rule: `theme.get`, change the rule in that text, send all of it back.
+- When the output limit is small (your workspace rules say so, or a reply was cut at it), a stylesheet cannot go in parts, because every update replaces all of it: keep it to `:root` token overrides and a few hook rules. When the look needs more than one reply holds, say so and offer a smaller version; never send a cut stylesheet.
 - Dropped on their own: blank `css` or `name` on update (so **you cannot clear a theme's CSS** — send replacement CSS), `installedAt` and `activate` on update, unknown keys. An update whose only fields were dropped throws `theme.update needs a patch with name or css`. A taken id blocks a create (`Theme id <id> already exists`); a duplicate name and CSS still inserts and only notices `A theme with the same name and CSS already exists`.
 - A zero-change apply (identical CSS, re-activating the active row) writes nothing and returns `readBack` `unavailable` with `no applied changes to read back`.
 
@@ -62,7 +63,7 @@ The Theme Library activates on save and leaves activation alone when editing. A 
 
 A card styles its own chat with `<style>` blocks inside its **Creator Notes**, extracted at render as one `#marinara-card-css` element. There is no CSS action: write the note with `character.update` (or `persona.update`), splicing the block into the existing text, `apply:true`.
 
-- **You cannot turn it on.** The switch is **Chat Settings → Card Theming** (`cardCssMode`: `disabled`, `exclusive` or `chat`) and only that panel writes it; the section appears only when a card carries a `<style>` block. Send the user there, say which mode you wrote for, and ask them to reload before judging.
+- **You cannot turn it on.** The switch is **Chat Settings → Card Theming** (`cardCssMode`: `disabled`, `exclusive` or `chat`) and only that panel writes it. In Roleplay chats the section is always there (it also holds the inline name-color switch), but the mode buttons appear only when a card carries a `<style>` block. Send the user there, say which mode you wrote for, and ask them to reload before judging.
 - The browser sanitizes at render, silently: `position: fixed` becomes `absolute`, `:has()`/`!important` and theme-token declarations are dropped, and `display`, `visibility`, `opacity`, `transform` and `content:` survive. Write paint only — never a rule that covers, hides or imitates a control. There is no byte cap; keep it small, it is parsed on every render.
 - Reuse the class, variable and `data-card-css` names from `docs/appearance/card-css-theming.md`; do not invent selectors from the theme variables.
 

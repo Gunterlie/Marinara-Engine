@@ -1,3 +1,4 @@
+import { partialInput } from "@marinara-engine/shared";
 import { isDeepStrictEqual } from "node:util";
 import type { ChatMessage } from "../../services/llm/base-provider.js";
 import {
@@ -41,6 +42,8 @@ import {
   type WrapFormat,
 } from "@marinara-engine/shared";
 import { wrapContent } from "../../services/prompt/format-engine.js";
+import { resolveChatUserIdentity } from "../../services/chat-user-identity.js";
+import type { createCharactersStorage } from "../../services/storage/characters.storage.js";
 import {
   parseSceneManualOverrides,
   parseStoredRulesetClocks,
@@ -48,8 +51,6 @@ import {
 } from "../../services/storage/game-state.storage.js";
 import {
   appendReadableAttachmentsToContent,
-  extractFileAttachmentInputs,
-  extractImageAttachmentDataUrls,
   parseExtra,
   type PromptAttachment,
 } from "../../services/generation/prompt-attachments.js";
@@ -1072,6 +1073,25 @@ export async function resolveCharacterNameMap(
   return new Map([...identities].map(([id, identity]) => [id, identity.name]));
 }
 
+/** The names of a chat's characters and persona: who may speak in the prompt of a clip a character sent. */
+export async function resolveChatSpeakerNames(
+  chars: ReturnType<typeof createCharactersStorage>,
+  chat: { characterIds: unknown; personaId?: string | null; personaCharacterId?: string | null; mode?: string | null },
+): Promise<string[]> {
+  let characterIds: string[] = [];
+  try {
+    const parsed: unknown = typeof chat.characterIds === "string" ? JSON.parse(chat.characterIds) : chat.characterIds;
+    if (Array.isArray(parsed)) characterIds = parsed.filter((id): id is string => typeof id === "string");
+  } catch {
+    // Unreadable ids: no character names, as the routes read them.
+  }
+  const [names, persona] = await Promise.all([
+    resolveCharacterNameMap(characterIds, (id) => chars.getById(id)),
+    resolveChatUserIdentity(chars, chat),
+  ]);
+  return [...names.values(), ...(persona ? [persona.name] : [])];
+}
+
 function prefixSpeakerName(content: string, speakerName: string): string {
   const speaker = speakerName.trim();
   if (!speaker) return content;
@@ -1172,46 +1192,12 @@ export function buildUserMessageRegenerationInstruction(message: { content?: unk
   ].join("\n");
 }
 
-export function buildUserMessageRegenerationPrompt(message: { content?: unknown; extra?: unknown }): SimpleMessage {
-  const attachments = parsePromptAttachments(message.extra);
-  const images = extractImageAttachmentDataUrls(attachments);
-  const files = extractFileAttachmentInputs(attachments);
-  return {
-    role: "user",
-    content: buildUserMessageRegenerationInstruction(message),
-    ...(images.length ? { images } : {}),
-    ...(files.length ? { files } : {}),
-  };
-}
-
 export function buildUserMessageRegenerationPromptFromSource(source: SimpleMessage): SimpleMessage {
   return {
     role: "user",
     content: buildUserMessageRegenerationInstruction({ content: source.content }),
     ...(source.images?.length ? { images: source.images } : {}),
     ...(source.files?.length ? { files: source.files } : {}),
-  };
-}
-
-/**
- * Build the context-facing version of a user message being regenerated.
- * This preserves the original user text and attachments for prompt shaping
- * without adding the provider-facing rewrite instruction.
- */
-export function buildUserMessageRegenerationSourceMessage(message: {
-  content?: unknown;
-  extra?: unknown;
-}): SimpleMessage {
-  const original = typeof message.content === "string" ? message.content : "";
-  const attachments = parsePromptAttachments(message.extra);
-  const content = appendReadableAttachmentsToContent(original, attachments);
-  const images = extractImageAttachmentDataUrls(attachments);
-  const files = extractFileAttachmentInputs(attachments);
-  return {
-    role: "user",
-    content,
-    ...(images.length ? { images } : {}),
-    ...(files.length ? { files } : {}),
   };
 }
 
@@ -1509,7 +1495,7 @@ export function parseStoredGenerationParameters(raw: unknown): StoredGenerationP
 
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
 
-  const result = generationParametersSchema.partial().safeParse(parsed);
+  const result = partialInput(generationParametersSchema).safeParse(parsed);
   if (result.success) return result.data;
 
   // Older installs or extension callers may leave one malformed field in an
@@ -2112,4 +2098,24 @@ export function parseGameStateRow(row: Record<string, unknown>): GameState {
     rulesetClocks: parseStoredRulesetClocks(row.rulesetClocks),
     createdAt: row.createdAt as string,
   };
+}
+
+/** A turn's live sheet state laid over what the player changed while it was being written. A rest or
+ *  a slot pressed back on the sheet during a reply lands on the row the turn started from, and the
+ *  turn's own row, built from the state before it, would otherwise put the old numbers back
+ *  (laptop playtest 2026-10-27). Per character: one the turn left alone takes the player's edit; one
+ *  the turn changed keeps the turn's, which already started from the sheet the Game Master saw. */
+export function rebaseTurnRulesetLive<T>(
+  start: Readonly<Record<string, T>>,
+  after: Readonly<Record<string, T>>,
+  now: Readonly<Record<string, T>>,
+): Record<string, T> {
+  const next = { ...after };
+  for (const name of new Set([...Object.keys(start), ...Object.keys(now)])) {
+    if (isDeepStrictEqual(start[name], now[name])) continue;
+    if (!isDeepStrictEqual(start[name], after[name])) continue;
+    if (now[name] === undefined) delete next[name];
+    else next[name] = now[name]!;
+  }
+  return next;
 }

@@ -1,7 +1,12 @@
 import {
   audioConnectionSupportsGeneration,
+  parseCombatIconChoice,
+  resolveCombatIconUrl,
   RULESET_PARTY_KEY,
   assignCombatTactics,
+  gameCardTemperament,
+  partyTemperamentFallback,
+  withKeptTemperament,
   combatTacticsSchema,
   gameWorldKitFromMetadata,
   worldAssetsForFamily,
@@ -13,6 +18,9 @@ import {
   type WorldElementSet,
   gameInventoryBags,
   gameInventoryBagKey,
+  gameInventoryBearerStatus,
+  gameInventoryOverLimit,
+  gameInventoryFoldStandIn,
   gameInventoryFightEffects,
   gameFightOffers,
   gameInventoryNameKey,
@@ -27,10 +35,18 @@ import {
   type GameInventoryStack,
   type PlayerStats,
   type RulesetLiveStates,
+  type RulesetRestRecovery,
+  type RulesetUseRecover,
   type CreaturePack,
+  type DirectedCombatView,
+  rulesetCardHolder,
   rulesetCardItems,
+  rulesetStartingGearTakenBy,
   rulesetReadsItems,
+  rulesetCombatStyle,
   gameDungeonMapFromMetadata,
+  GAME_LOOT_GIVEN_LINE,
+  GAME_REWARD_PROMPT_LINE,
 } from "@marinara-engine/shared";
 // ──────────────────────────────────────────────
 // Game: Main Surface (rendered by ChatArea when mode === "game")
@@ -38,11 +54,21 @@ import {
 import { useExperienceMapPack } from "../../hooks/use-map-pack";
 import { ExperiencePeopleSpritesContext } from "../../hooks/use-overworld-view";
 import {
+  getCombatStyle,
+  isBuiltInCombatStyle,
+  listCombatStyles,
+  offerCombatStart,
+  resolveCombatStyle,
+  styleOwnedFightFromSnapshot,
+  type CombatSurfaceContext,
+} from "./combat-styles";
+import {
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   lazy,
   memo,
   Suspense,
@@ -62,6 +88,7 @@ import {
   type GameAssetManifest,
 } from "../../hooks/use-game-assets";
 import { cleanNpcAvatarDisplayName, normalizeNpcAvatarName } from "../../lib/game-npc-avatar";
+import { useDiscardNewChatSetup } from "../../hooks/use-discard-new-chat-setup";
 import { useChatStore } from "../../stores/chat.store";
 import { useUIStore } from "../../stores/ui.store";
 import { useCombatScreenStore } from "../../stores/combat-screen.store";
@@ -104,6 +131,7 @@ import {
   useRegenerateCharacterSheet,
   useRemovePartyMember,
   gameKeys,
+  isRequestCancelled,
   patchChatMetadata,
   useGameWorld,
 } from "../../hooks/use-game";
@@ -121,7 +149,6 @@ import {
   guardServerChatSnapshot,
   useBranchChat,
   useCreateMessage,
-  useDeleteChat,
   useUpdateChat,
   useUpdateChatMetadata,
   useUpdateMessage,
@@ -129,6 +156,7 @@ import {
 import { useConnections } from "../../hooks/use-connections";
 import { useAgentConfigs } from "../../hooks/use-agents";
 import {
+  capabilityPackageKeys,
   rulesetCatalogQuery,
   capabilityPackageDrawsOwnSurface,
   selectGameExperiencePackages,
@@ -152,6 +180,12 @@ import { createInputMacroResolverForChat, expandMessageIncludes, VARIABLE_WRITE_
 import { parseChatMetadata } from "../../lib/chat-display";
 import { lorebookKeys } from "../../hooks/use-lorebooks";
 import { api, ApiError, getJsonRepairRequest, type JsonRepairRequest } from "../../lib/api-client";
+import {
+  forgetCombatSetupFailure,
+  isDroppedRequest,
+  recalledCombatSetupFailure,
+  rememberCombatSetupFailure,
+} from "../../lib/combat-setup-failures";
 import { useRenderTimer } from "../../lib/perf-diagnostics";
 import { isGenerationSendBlocked } from "../../lib/generation-stream-policy";
 import { showChoiceDialog, showConfirmDialog } from "../../lib/app-dialogs";
@@ -163,7 +197,7 @@ import { StoryClockStrip, useStoryJournal } from "./StoryClockDial";
 import { ExperienceCreaturePacksContext } from "./CreatureArt";
 import {
   filterAudioGenerationConnections,
-  filterLanguageGenerationConnections,
+  matchesAudioGenerationConnectionId,
   isConnectionFlagTrue,
 } from "../../lib/connection-filters";
 import { gameAssetFileUrl } from "../../lib/game-asset-urls";
@@ -181,7 +215,7 @@ import {
 import { resolveAssetTag } from "../../lib/asset-fuzzy-match";
 import { filterGameAssetMap, parseGameAssetExcludedFolders } from "../../lib/game-asset-selection";
 import { resolveCombatFullBodyPose, resolveDialogueFullBodyPose } from "../../lib/game-full-body-pose";
-import { characterNamesMatch, findNamedEntry } from "../../lib/game-character-name-match";
+import { characterNamesMatch, findNamedEntry, hasExactNamedEntry } from "../../lib/game-character-name-match";
 import { normalizeGameSegmentEdit, serializeGameSegmentEdit, type GameSegmentEdit } from "../../lib/game-segment-edits";
 import { findReplayStoryboardKeyframe } from "../../lib/game-storyboard-keyframes";
 import {
@@ -193,7 +227,6 @@ import {
   type RulesetCombatSeeds,
 } from "../../lib/ruleset-combat-bridge";
 import { useSceneAnalysis } from "../../hooks/use-scene-analysis";
-import { useTTSConfig } from "../../hooks/use-tts";
 import { useSidecarStore } from "../../stores/sidecar.store";
 import { parsePartyDialogue } from "../../lib/party-dialogue-parser";
 import { dispatchSpotifySceneTrackChange } from "../../lib/spotify-playback-events";
@@ -225,7 +258,7 @@ import type {
   GenerateSpatialMapDraftResponse,
   PendingSpatialTransition,
 } from "@marinara-engine/shared";
-import type { AvatarCrop, Persona, SceneSegmentEffect } from "@marinara-engine/shared";
+import type { AvatarCrop, CombatIconChoice, Persona, SceneSegmentEffect } from "@marinara-engine/shared";
 import {
   PROFESSOR_MARI_ID,
   SPOTIFY_RECENT_TRACK_HISTORY_LIMIT,
@@ -249,7 +282,11 @@ import {
   type MusicEnemyTier,
   scoreAmbient,
   normalizeCharacterLookupName,
+  partyHealthWidgetUpdates,
   readRulesetSheetEnvelope,
+  rulesetHealthWords,
+  rulesetSheetBuildsByName,
+  rulesetSheetHealth,
   defaultRulesetSheetBuild,
   type RulesetSheetBuild,
   type RulesetCatalogEntriesById,
@@ -268,7 +305,7 @@ import type { GameCharacterSheetGameCard, GameCharacterSheetRuleset } from "@/co
 import { GameRulesetPartySheet, describeRefusedSheetCommands } from "./GameRulesetSheet";
 import { useGameRuleset } from "../../hooks/use-game-ruleset";
 import { useRulesetItemBook } from "../../hooks/use-ruleset-item-book";
-import { flushGameStatePatch, useGameStatePatcher } from "../../hooks/use-game-state-patcher";
+import { createEmptyGameState, flushGameStatePatch, useGameStatePatcher } from "../../hooks/use-game-state-patcher";
 import { GameDiceResult } from "./GameDiceResult";
 import { GameSkillCheckResult } from "./GameSkillCheckResult";
 import { GameElementReaction } from "./GameElementReaction";
@@ -286,6 +323,7 @@ import {
   type GameImagePromptReviewItem,
 } from "./GameImagePromptReviewModal";
 import { CHAT_HELP_CLOSE_EVENT, CHAT_HELP_OPEN_REQUEST_EVENT, readChatHelpEventMode } from "../../lib/chat-help-events";
+import { readSetupDismissed, writeSetupDismissed } from "../../lib/game-setup-dismissed";
 import { GameStoryboardBackgroundVisual, GameStoryboardInlineViewer } from "./GameStoryboardViewer";
 import { GameVolumeMixer } from "./GameVolumeMixer";
 import {
@@ -319,6 +357,7 @@ import { HISTORY_PAGER_BUTTON_CLASS } from "../chat/TranscriptWindowControls";
 import { NEUTRAL_PANEL_SCROLL_AREA, NEUTRAL_PANEL_SUBTITLE } from "../ui/neutral-surface-styles";
 import type { ReadableTag } from "../../lib/game-tag-parser";
 import type { DirectionCommand, GameNpc, GameStoryboardViewerDisplayMode } from "@marinara-engine/shared";
+import { GAME_CHECKPOINT_LOADED_EVENT } from "../../lib/game-checkpoint-events";
 
 type JournalReadable = ReadableTag & {
   sourceMessageId?: string | null;
@@ -679,6 +718,8 @@ type GamePartyMemberInfo = {
   name: string;
   avatarUrl: string | null;
   avatarCrop?: AvatarCrop | null;
+  /** The card's Game Mode Icon choice; missing means the avatar. */
+  combatIcon?: CombatIconChoice | null;
   nameColor?: string;
   dialogueColor?: string;
   canRemove?: boolean;
@@ -869,6 +910,7 @@ function combatLevelFromHp(maxHp: number, fallbackLevel: number): number {
 
 type StoredGameCombatCard = {
   name?: unknown;
+  temperament?: unknown;
   abilities?: unknown;
   rpgStats?: {
     attributes?: Array<{ name?: unknown; value?: unknown }>;
@@ -1114,7 +1156,7 @@ export function generatedPartyMemberToCombatant(
     speed: readGameCardAttribute(gameCard, "speed", "spd", "dexterity", "dex", "agility") ?? 6 + level,
     level,
     side: "player",
-    sprite: matchedAvatar?.avatarUrl ?? undefined,
+    sprite: combatTokenSprite(matchedAvatar),
     statusEffects: combatStatusEffectsFromGenerated(member.statuses),
     skills:
       combatSkillsFromSheet(gameCard?.abilities)?.map((skill) => ({
@@ -1128,7 +1170,16 @@ export function generatedPartyMemberToCombatant(
     movementMode,
     // Caught unaware as the scene set it (1.237), read by a ruleset fight only.
     ...(member.surprised === true ? { surprised: true } : {}),
+    // Where the story put them (2026-10-24), read by a ruleset fight only.
+    ...(member.start ? { start: member.start } : {}),
+    // What they set up before it (1.462), read by a ruleset fight only.
+    ...(Array.isArray(member.standing) && member.standing.length ? { standing: member.standing } : {}),
   };
+}
+
+/** The picture a party member's fight token draws (their Game Mode Icon), or undefined for initials. */
+function combatTokenSprite(member: GamePartyMemberInfo | null | undefined): string | undefined {
+  return member ? (resolveCombatIconUrl(member.combatIcon, member.avatarUrl) ?? undefined) : undefined;
 }
 
 function hydrateCombatPartyAvatars(party: Combatant[], avatarCandidates: GamePartyMemberInfo[]): Combatant[] {
@@ -1138,7 +1189,13 @@ function hydrateCombatPartyAvatars(party: Combatant[], avatarCandidates: GamePar
   const nextParty = party.map((combatant) => {
     if (combatant.side !== "player") return combatant;
     const matchedAvatar = findNamedEntry(avatarCandidates, combatant.name, (entry) => entry.name);
-    const avatarUrl = matchedAvatar?.avatarUrl?.trim();
+    // A card set to its initials drops whatever picture an older snapshot gave the token.
+    if (parseCombatIconChoice(matchedAvatar?.combatIcon)?.source === "initials") {
+      if (!combatant.sprite) return combatant;
+      changed = true;
+      return { ...combatant, sprite: undefined };
+    }
+    const avatarUrl = combatTokenSprite(matchedAvatar);
     if (!avatarUrl || combatant.sprite === avatarUrl) return combatant;
     changed = true;
     return { ...combatant, sprite: avatarUrl };
@@ -1182,9 +1239,17 @@ export function generatedEnemyToCombatant(enemy: CombatEnemy, index: number, fal
     // uses; a fight on any other style never reads them.
     ...(typeof enemy.creature === "string" && enemy.creature.trim() ? { creature: enemy.creature.trim() } : {}),
     ...(typeof enemy.tier === "string" && enemy.tier.trim() ? { tier: enemy.tier.trim() } : {}),
+    // What an invented one is (laptop v3b 2026-10-26: husks written as undead fought as humanoids, and
+    // Turn Undead did nothing to them).
+    ...(typeof enemy.creatureType === "string" && enemy.creatureType.trim()
+      ? { creatureType: enemy.creatureType.trim() }
+      : {}),
     ...(enemy.proposed !== undefined ? { proposed: enemy.proposed } : {}),
     ...(enemy.surprised === true ? { surprised: true } : {}),
     ...(enemy.inLair === true ? { inLair: true } : {}),
+    ...(enemy.start ? { start: enemy.start } : {}),
+    ...(Array.isArray(enemy.carrying) ? { carrying: enemy.carrying } : {}),
+    ...(Array.isArray(enemy.standing) && enemy.standing.length ? { standing: enemy.standing } : {}),
   };
 }
 
@@ -1631,15 +1696,8 @@ const GameAssetsBrowserView = lazy(async () => {
 
 const DirectedCombatUI = lazy(() => import("./DirectedCombatUI").then((m) => ({ default: m.DirectedCombatUI })));
 
-const GameCombatUI = lazy(async () => {
-  const module = await import("./GameCombatUI");
-  return { default: module.GameCombatUI };
-});
-
-const TacticalCombatUI = lazy(async () => {
-  const module = await import("./TacticalCombatUI");
-  return { default: module.TacticalCombatUI };
-});
+/** For a combat style without its own state: nothing to listen to. */
+const subscribeNever = () => () => {};
 
 const StoryboardBackgroundControls = lazy(async () => {
   const module = await import("./StoryboardBackgroundControls");
@@ -1661,23 +1719,44 @@ import type {
 import type { CharacterMap, PersonaInfo } from "../chat/chat-area.types";
 import { chatAvatarParticipants } from "../../features/avatars/stage/avatar-stage-logic";
 import { useChatAvatarAgentIds } from "../../features/avatars/stage/use-chat-avatar-agents";
+import { ConnectionSelect } from "../connections/ConnectionSelect";
 
 /** Typewriter component for the intro screen — reveals text character-by-character. */
+/** Empty "New Game" chats about to be dropped because the player left them, by chat id. */
+const emptySetupChatDrops = new Map<string, ReturnType<typeof setTimeout>>();
+
+/** How long the world overview takes to type out at most, however long it is. */
+const INTRO_TYPEWRITER_MAX_MS = 20_000;
+
 function IntroTypewriter({ text, onComplete }: { text: string; onComplete?: () => void }) {
   const [visible, setVisible] = useState(0);
   const endRef = useRef<HTMLSpanElement>(null);
   const firedRef = useRef(false);
+  // The latest callback, so a parent re-rendering with a new one never restarts the clock.
+  const onCompleteRef = useRef(onComplete);
+  useEffect(() => {
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
+  // The reveal is read off the clock: a re-render that cleared the next tick, or a hidden tab whose
+  // timers the browser slows to one a second, used to hold the Continue button for minutes (the
+  // 2026-10-23 playtest's 6-minute opening). A long overview types faster, never past 20 seconds.
+  const startedAtRef = useRef<number | null>(null);
   useEffect(() => {
     if (visible >= text.length) {
       if (!firedRef.current) {
         firedRef.current = true;
-        onComplete?.();
+        onCompleteRef.current?.();
       }
       return;
     }
-    const t = window.setTimeout(() => setVisible((v) => v + 1), 28);
+    startedAtRef.current ??= performance.now();
+    const msPerChar = Math.min(28, INTRO_TYPEWRITER_MAX_MS / Math.max(1, text.length));
+    const t = window.setTimeout(() => {
+      const byClock = Math.floor((performance.now() - startedAtRef.current!) / msPerChar);
+      setVisible((v) => Math.min(text.length, Math.max(v + 1, byClock)));
+    }, 28);
     return () => window.clearTimeout(t);
-  }, [visible, text.length, onComplete]);
+  }, [visible, text.length]);
   // Keep the reveal edge in view by scrolling the nearest scrollable ancestor.
   // A nested overflow-y-auto here blocks Android touch-scroll from reaching the
   // parent scroll container, so we don't create our own overflow on this div.
@@ -2095,6 +2174,7 @@ import {
   Loader2,
   Map as MapIcon,
   PanelsTopLeft,
+  Pencil,
   Play,
   Plug,
   RefreshCw,
@@ -2267,6 +2347,7 @@ interface GameSurfaceProps {
     appearance?: string;
     tags?: string[];
     avatarCrop?: AvatarCrop | null;
+    combatIcon?: CombatIconChoice | null;
     nameColor?: string;
     dialogueColor?: string;
   }>;
@@ -2286,6 +2367,29 @@ interface GameSurfaceProps {
   >;
 }
 
+/** The players of a room this Engine hosts, from the room stored on the chat: the host's own room
+ *  persona and every other player already in play. Null for any other chat. */
+function readHostedRoomHumans(value: unknown): {
+  host: { name: string; description: string } | null;
+  guests: Array<{ id: string; name: string }>;
+} | null {
+  const room = value && typeof value === "object" ? (value as Record<string, unknown>) : null;
+  if (!room || room.version !== 1 || room.role !== "host" || room.status === "ended") return null;
+  const humans = (Array.isArray(room.participants) ? room.participants : []).flatMap((entry) => {
+    const participant = entry && typeof entry === "object" ? (entry as Record<string, unknown>) : {};
+    const persona = participant.persona as { name?: unknown; description?: unknown } | undefined;
+    const name = typeof persona?.name === "string" ? persona.name.trim() : "";
+    if (!name || typeof participant.id !== "string" || participant.joinsNextRound === true) return [];
+    const description = typeof persona?.description === "string" ? persona.description : "";
+    return [{ id: participant.id, name, description, isHost: participant.isHost === true }];
+  });
+  const own = humans.find((human) => human.isHost);
+  return {
+    host: own ? { name: own.name, description: own.description } : null,
+    guests: humans.filter((human) => !human.isHost).map(({ id, name }) => ({ id, name })),
+  };
+}
+
 function GameSurfaceComponent({
   activeChatId,
   chat,
@@ -2294,7 +2398,7 @@ function GameSurfaceComponent({
   isStreaming,
   characterMap,
   characters: libraryCharacters,
-  personaInfo,
+  personaInfo: libraryPersonaInfo,
   chatBackground,
   connectedChatName,
   onCloseSettings,
@@ -2306,6 +2410,17 @@ function GameSurfaceComponent({
   isMessagesLoading,
   avatarStage,
 }: GameSurfaceProps) {
+  // A room the host shares plays the host as their room persona and lists every player's character,
+  // each on the card the room made for them (room playtest 2026-10-27: the host's Game screen showed
+  // "Player" and no guest, so neither sheet could be built).
+  const roomHumans = useMemo(() => readHostedRoomHumans(chatMeta.multiplayer), [chatMeta.multiplayer]);
+  const personaInfo = useMemo<PersonaInfo | undefined>(() => {
+    const own = roomHumans?.host;
+    if (!own) return libraryPersonaInfo;
+    return libraryPersonaInfo?.name === own.name
+      ? libraryPersonaInfo
+      : { name: own.name, ...(own.description ? { description: own.description } : {}) };
+  }, [libraryPersonaInfo, roomHumans]);
   const { t: localizeUi } = useUiTranslation();
   const { t } = useTranslation();
   useRenderTimer("game-surface"); // [#3104 diagnostic]
@@ -2414,16 +2529,19 @@ function GameSurfaceComponent({
     chatMeta.gameSessionStatus !== "concluded";
   const makeWorldRequest = useMemo(() => {
     const setup = chatMeta.gameSetupConfig as GameSetupConfig | undefined;
-    if (!chat.connectionId) return null;
     return {
-      connectionId: chat.connectionId,
+      connectionId: chat.connectionId ?? undefined,
       genre: setup?.genre || "Fantasy",
       setting: setup?.setting || "A world of its own",
       tone: setup?.tone || "Heroic",
       ...(setup?.playerGoals ? { playerGoals: setup.playerGoals } : {}),
       ...(setup?.language ? { language: setup.language } : {}),
+      // Written with the game's own reasoning effort, not the connection's (cheap-GM playtest 2026-10-26).
+      ...((chatMeta.chatParameters ?? setup?.generationParameters)
+        ? { generationParameters: chatMeta.chatParameters ?? setup?.generationParameters }
+        : {}),
     };
-  }, [chat.connectionId, chatMeta.gameSetupConfig]);
+  }, [chat.connectionId, chatMeta.gameSetupConfig, chatMeta.chatParameters]);
   const { data: agentConfigs } = useAgentConfigs(storyboardAgentActive || chatMeta.enableSpriteGeneration === true);
   const storyboardAgentConfig = useMemo(
     () => agentConfigs?.find((config) => config.type === STORYBOARD_AGENT_ID) ?? null,
@@ -2517,42 +2635,28 @@ function GameSurfaceComponent({
   const useCustomGameMusic = gameMusicDjEnabled && musicPlayerSource === "custom";
   const useJsonMusicDjGameMusic = useYoutubeGameMusic || useCustomGameMusic;
   const useMusicDjPlayerMusic = useSpotifyGameMusic || useJsonMusicDjGameMusic;
-  const { data: ttsConfig } = useTTSConfig();
   const activeGameMetaId = typeof chatMeta.gameId === "string" ? chatMeta.gameId : "";
   const sceneRuntimeScopeKey = `${activeChatId}:${activeGameMetaId}`;
   const { data: connectionsList } = useConnections();
-  // Game audio capability: the game's audio connection (explicit pick, else the
-  // one chosen as the Text to Speech Source, else the category default, else
-  // the fallback) wins; the legacy TTS settings blob still gates setups that
-  // predate audio connections. Mirrors the server's resolveAudioConfig order.
-  const ttsChosenConnectionId = ttsConfig?.connectionId ?? "";
+  // Music/SFX resolve independently of speech, including explicit legacy picks migrated by the host.
   const gameAudioConnection = useMemo(() => {
-    // Quarantined (review-required) imports are refused by the server's
-    // resolution (getWithKey/getDefaultForAudio return null for them), so
-    // they must not drive capability gating here either.
     const rows = filterAudioGenerationConnections((connectionsList ?? []) as Record<string, unknown>[]);
     const explicitId = typeof chatMeta.gameAudioConnectionId === "string" ? chatMeta.gameAudioConnectionId : "";
-    const explicit = explicitId ? rows.find((connection) => connection.id === explicitId) : undefined;
-    if (explicit) return explicit;
-    // A missing chosen connection is refused by the server, never swapped for the default.
-    if (ttsChosenConnectionId) return rows.find((connection) => connection.id === ttsChosenConnectionId) ?? null;
+    if (explicitId)
+      return rows.find((connection) => matchesAudioGenerationConnectionId(connection, explicitId)) ?? null;
     return (
       rows.find((connection) => isConnectionFlagTrue(connection.defaultForAgents)) ??
       rows.find((connection) => isConnectionFlagTrue(connection.fallbackForAgents)) ??
       null
     );
-  }, [connectionsList, chatMeta.gameAudioConnectionId, ttsChosenConnectionId]);
-  // The card's own ElevenLabs switches count only while no Audio connection is its Source.
-  const ttsSettingsElevenLabs = ttsConfig?.source === "elevenlabs" && !ttsChosenConnectionId;
+  }, [connectionsList, chatMeta.gameAudioConnectionId]);
   const generateGameSoundEffects =
-    (gameAudioConnection
-      ? audioConnectionSupportsGeneration(gameAudioConnection, "sfx")
-      : ttsSettingsElevenLabs && ttsConfig?.elevenLabsGameSoundEffects === true) &&
+    !!gameAudioConnection &&
+    audioConnectionSupportsGeneration(gameAudioConnection, "sfx") &&
     chatMeta.gameAudioSoundEffectsEnabled !== false;
   const generateGameMusic =
-    (gameAudioConnection
-      ? audioConnectionSupportsGeneration(gameAudioConnection, "music")
-      : ttsSettingsElevenLabs && ttsConfig?.elevenLabsGameMusic === true) &&
+    !!gameAudioConnection &&
+    audioConnectionSupportsGeneration(gameAudioConnection, "music") &&
     chatMeta.gameAudioMusicEnabled !== false &&
     !useMusicDjPlayerMusic;
   const sceneVideosQuery = useQuery({
@@ -2568,13 +2672,6 @@ function GameSurfaceComponent({
   const [replayBackgroundTag, setReplayBackgroundTag] = useState<string | null>(null);
   const [replaySpriteMessages, setReplaySpriteMessages] = useState<Message[]>([]);
   const replayActive = replaySessionNumber != null;
-  const languageConnections = useMemo(
-    () =>
-      filterLanguageGenerationConnections(
-        (connectionsList ?? []) as Array<{ id: string; name: string; model?: string; provider?: string }>,
-      ).sort((a, b) => (a.name || "").localeCompare(b.name || "")),
-    [connectionsList],
-  );
   const handleStartScreenConnectionChange = useCallback(
     (connectionId: string) => {
       updateChat.mutate({ id: activeChatId, connectionId: connectionId || null });
@@ -3019,16 +3116,34 @@ function GameSurfaceComponent({
   const [queuedEncounter, setQueuedEncounter] = useState<{ encounter: CombatEncounterTag; messageId: string } | null>(
     null,
   );
-  const [queuedCombatGeneration, setQueuedCombatGeneration] = useState<{ messageId: string; notify: boolean } | null>(
-    null,
-  );
+  /** `asked`: the player (or an Experience) asked for this fight, so it opens the moment it is ready
+   *  instead of waiting for the narration to be stepped through (laptop room playtest 2026-10-30). */
+  const [queuedCombatGeneration, setQueuedCombatGeneration] = useState<{
+    messageId: string;
+    notify: boolean;
+    asked?: boolean;
+  } | null>(null);
   const [preparedCombatState, setPreparedCombatState] = useState<PreparedCombatState | null>(null);
+  const preparedCombatStateRef = useRef(preparedCombatState);
+  preparedCombatStateRef.current = preparedCombatState;
+  const queuedCombatGenerationRef = useRef(queuedCombatGeneration);
+  queuedCombatGenerationRef.current = queuedCombatGeneration;
   const [combatGenerationPending, setCombatGenerationPending] = useState(false);
   const [combatGenerationError, setCombatGenerationError] = useState<string | null>(null);
+  /** The last failed setup stopped part way: the model ran out of room to answer (B1). */
+  const [combatGenerationCutOff, setCombatGenerationCutOff] = useState(false);
   /** Synchronous in-flight flag beside the async combatGenerationPending state: same-frame double
    *  requests all read the stale state, the ref does not. Declared early so the turn-retry handler,
    *  which must abandon an in-flight generation, can reach it. #5094. */
   const combatGenerationInFlightRef = useRef(false);
+  // The message whose fight a registered combat style took over (#8109), so it is started once.
+  const combatStyleStartedMessageIdRef = useRef<string | null>(null);
+  /** The directed fight (chat and starting message) this screen last ended, so a fight already over
+   *  is never ended twice, and the one directed fight just looked up and found not over yet, so the
+   *  setup after the look goes ahead. */
+  const endedDirectedFightRef = useRef<string | null>(null);
+  const directedFightLookedUpRef = useRef<string | null>(null);
+  const handleCombatEndRef = useRef<(outcome: "victory" | "defeat" | "flee", summary: CombatSummary) => void>(() => {});
   /** Monotonic id for the CURRENT combat request; a stale completion whose id no longer matches bails.
    *  Bumped on every new request, on chat switch, and when a turn retry abandons a generation. #5094. */
   const combatGenerationRequestIdRef = useRef(0);
@@ -3127,6 +3242,41 @@ function GameSurfaceComponent({
     () => gameInventoryFightEffects(fightInventoryLines, combatItemEffects),
     [fightInventoryLines, combatItemEffects],
   );
+  // A party health widget follows the sheets (laptop playtest 2026-10-25: "Ulfgar HP" stayed at 50
+  // while the sheet said 48, as the Game Master wrote no widget tag that turn). Whenever a sheet's
+  // health or the widgets change, a row that belongs to a member is brought to what the sheet says.
+  const healthDefinition = gameRuleset.status === "ok" ? gameRuleset.definition : null;
+  const healthCards = chatMeta.gameCharacterCards;
+  const healthLive = gameSnapshot?.rulesetLive;
+  const healthPlayer = personaInfo?.name;
+  useEffect(() => {
+    // A game whose sheets have taken nothing yet has no live state: their health is the sheet's own.
+    if (!healthDefinition?.battle || replaySessionNumber !== null || hudWidgets.length === 0) return;
+    const builds = rulesetSheetBuildsByName(healthDefinition, healthCards, healthPlayer);
+    if (builds.size === 0) return;
+    const rows = (Array.isArray(healthCards) ? (healthCards as Array<{ name?: unknown }>) : []).flatMap((card) => {
+      const name = typeof card?.name === "string" ? card.name.trim() : "";
+      const key = name ? normalizeCharacterLookupName(name) : "";
+      const build = key ? builds.get(key) : undefined;
+      const health = build ? rulesetSheetHealth(healthDefinition, build, healthLive?.[key]) : undefined;
+      return health ? [{ name, ...health }] : [];
+    });
+    // The ruleset's own name for what a fight damages ("Grit") names a row as well as "HP" does.
+    const updates = partyHealthWidgetUpdates(hudWidgets, rows, rulesetHealthWords(healthDefinition));
+    if (updates.length === 0) return;
+    let next = hudWidgets;
+    for (const update of updates) next = applyWidgetUpdate(update);
+    syncHudWidgetsToChatCache(next);
+  }, [
+    healthDefinition,
+    healthCards,
+    healthLive,
+    healthPlayer,
+    hudWidgets,
+    replaySessionNumber,
+    applyWidgetUpdate,
+    syncHudWidgetsToChatCache,
+  ]);
   /** What the inventory just did, shown for a moment: gains in green, everything else in red. */
   const [inventoryNotifications, setInventoryNotifications] = useState<Array<{ text: string; gain: boolean }>>([]);
   const [removingPartyMemberId, setRemovingPartyMemberId] = useState<string | null>(null);
@@ -3184,7 +3334,8 @@ function GameSurfaceComponent({
     setPendingAssetGeneration(null);
     setAssetGenerationBlocksScene(false);
     setAssetGenerationFailed(false);
-    setDismissedSetupWizardChatId(null);
+    // A wizard closed on a game whose setup never finished stays closed after a reload.
+    setDismissedSetupWizardChatId(activeChatId && readSetupDismissed(activeChatId) ? activeChatId : null);
     {
       const resolve = imagePromptReviewResolveRef.current;
       imagePromptReviewResolveRef.current = null;
@@ -3206,10 +3357,24 @@ function GameSurfaceComponent({
         const commandKey = `${messageId}:${partyChange.change}:${normalizeTextForMatch(characterName)}`;
         if (processedPartyChangeCommandsRef.current.has(commandKey)) continue;
         processedPartyChangeCommandsRef.current.add(commandKey);
-        const variables = { chatId: activeChatId, characterName };
+        const variables = {
+          chatId: activeChatId,
+          characterName,
+          ...(partyChange.copyOf ? { copyOf: partyChange.copyOf } : {}),
+          ...(partyChange.condition ? { condition: partyChange.condition } : {}),
+        };
         const forgetCommand = () => processedPartyChangeCommandsRef.current.delete(commandKey);
         if (partyChange.change !== "add") {
-          removePartyMember.mutate(variables, { onError: forgetCommand });
+          // The player says whether one leaves for good (laptop playtest 2026-10-25: the Game Master
+          // took the player's fallen heroes out of the party as it told them dead).
+          void showConfirmDialog({
+            title: localizeUi("game.partyLeave.title", { name: characterName }),
+            message: localizeUi("game.partyLeave.message", { name: characterName }),
+            confirmLabel: localizeUi("game.partyLeave.remove"),
+            cancelLabel: localizeUi("game.partyLeave.keep"),
+          }).then((confirmed) => {
+            if (confirmed) removePartyMember.mutate(variables, { onError: forgetCommand });
+          });
           continue;
         }
         // mutateAsync: the callbacks passed to mutate() only fire for the last of several calls.
@@ -3301,6 +3466,9 @@ function GameSurfaceComponent({
   const [sceneAnalysisFailed, setSceneAnalysisFailed] = useState(false);
   const [sceneStuckVisible, setSceneStuckVisible] = useState(false);
   const [generationFailed, setGenerationFailed] = useState(false);
+  /** The chat whose last typed turn failed before the server saved it, so the input holds it again. */
+  const [unsentTurnChatId, setUnsentTurnChatId] = useState<string | null>(null);
+  const [gameInputSendToken, setGameInputSendToken] = useState(0);
   const [pendingAssetGeneration, setPendingAssetGeneration] = useState<GameAssetGenerationPayload | null>(null);
   const [assetGenerationBlocksScene, setAssetGenerationBlocksScene] = useState(false);
   const [assetGenerationFailed, setAssetGenerationFailed] = useState(false);
@@ -3503,6 +3671,7 @@ function GameSurfaceComponent({
     // combat, apply state, or set an error against the reset combat state.
     combatGenerationInFlightRef.current = false;
     combatGenerationRequestIdRef.current += 1;
+    combatStyleStartedMessageIdRef.current = null;
     setCombatGenerationPending(false);
     setCombatItemEffects([]);
     setCombatMechanics([]);
@@ -4801,6 +4970,7 @@ function GameSurfaceComponent({
     // combat, apply state, or set an error against the reset combat state.
     combatGenerationInFlightRef.current = false;
     combatGenerationRequestIdRef.current += 1;
+    combatStyleStartedMessageIdRef.current = null;
     setCombatGenerationPending(false);
     setCombatItemEffects([]);
     setCombatMechanics([]);
@@ -4819,6 +4989,20 @@ function GameSurfaceComponent({
     if (combatRestoredChatIdRef.current === activeChatId) return;
     const snapshot = chatMeta.gameCombatState as GameCombatStateSnapshot | null | undefined;
     combatRestoredChatIdRef.current = activeChatId;
+    // A fight a registered style took over (#8109) saves only its pin and anchor; the style keeps
+    // the rest itself.
+    const styleOwnedFight = styleOwnedFightFromSnapshot(snapshot, activeChatId);
+    if (styleOwnedFight) {
+      // A style this client can no longer play leaves nothing to draw, so its save is stale.
+      if (styleOwnedFight.style === null || chatMeta.gameActiveState !== "combat") {
+        clearCombatSnapshot(activeChatId);
+        return;
+      }
+      setCombatPinnedStyle(styleOwnedFight.style);
+      setCombatStartMessageId(styleOwnedFight.startMessageId);
+      useGameModeStore.getState().setGameState("combat");
+      return;
+    }
     if (!snapshot || !snapshot.party?.length || !snapshot.enemies?.length) return;
     if (chatMeta.gameActiveState !== "combat") {
       // Stale snapshot — combat ended but the metadata write didn't land. Clear it.
@@ -4849,13 +5033,12 @@ function GameSurfaceComponent({
     // board before consulting the setting for the next encounter.
     const setup = chatMeta.gameSetupConfig as GameSetupConfig | undefined;
     const restoredCombatStyle: GameCombatStyle =
-      snapshot.combatStyle === "tactical" || snapshot.combatStyle === "classic"
-        ? snapshot.combatStyle
+      // A pinned style this client no longer knows plays as classic, as it does live.
+      snapshot.combatStyle
+        ? resolveCombatStyle(snapshot.combatStyle)
         : chatMeta.gameTacticalCombatSnapshot
           ? "tactical"
-          : (chatMeta.gameCombatStyle ?? setup?.combatStyle) === "tactical"
-            ? "tactical"
-            : "classic";
+          : resolveCombatStyle((chatMeta.gameCombatStyle as GameCombatStyle | undefined) ?? setup?.combatStyle);
     setCombatPinnedStyle(restoredCombatStyle);
     const restoredEnvironmentType =
       snapshot.sceneEnvironmentType ?? snapshot.styleNotes?.environmentType?.trim() ?? null;
@@ -4985,13 +5168,13 @@ function GameSurfaceComponent({
         return {
           ...combatant,
           name: personaInfo.name,
-          sprite: combatant.sprite ?? personaInfo.avatarUrl ?? combatant.sprite,
+          sprite: combatant.sprite ?? resolveCombatIconUrl(personaInfo.combatIcon, personaInfo.avatarUrl) ?? undefined,
         };
       }
       return combatant;
     });
     if (changed) setCombatParty(corrected);
-  }, [combatParty, personaInfo?.name, personaInfo?.avatarUrl]);
+  }, [combatParty, personaInfo?.name, personaInfo?.avatarUrl, personaInfo?.combatIcon]);
 
   // ── Persist narration segment index (localStorage for instant reads + server for durability) ──
   const segmentStorageKey = `narration-idx:${activeChatId}`;
@@ -5174,6 +5357,9 @@ function GameSurfaceComponent({
     setPendingSegmentEffects([]);
     setPendingInventorySegmentUpdates([]);
     appliedSegmentsRef.current = new Set();
+    // A new turn's inventory is announced afresh: a segment told last turn would otherwise keep this
+    // turn's buys and refusals at the same segment silent (laptop playtest 2026-10-25).
+    appliedInventorySegmentsRef.current = new Set();
     // Cancel any pending segment persist timer to prevent it from overwriting our reset
     if (segmentPersistTimer.current) {
       clearTimeout(segmentPersistTimer.current);
@@ -5240,7 +5426,7 @@ function GameSurfaceComponent({
     // contain. With the sub-option on the sparse tag is left exactly as it is, and the
     // outcome is narrated at the start of the next turn. The endpoint is untouched and
     // keeps serving the live path and the player's own composer.
-    const poolModeActive = chatMeta.gameOneRequestDice === true && chatMeta.gameDicePoolMode === true;
+    const poolModeActive = chatMeta.gameOneRequestDice !== false && chatMeta.gameDicePoolMode === true;
     void (async () => {
       for (const sc of tags.skillChecks) {
         try {
@@ -5258,6 +5444,7 @@ function GameSurfaceComponent({
                     preRolledD20: sc.preRolledD20,
                     who: sc.who,
                     withAbility: sc.withAbility,
+                    ...(sc.purpose ? { purpose: sc.purpose } : {}),
                     // Only a whole number in the endpoint's range is worth sending: anything else
                     // means "use the ruleset's own", which is what leaving it out says.
                     threshold:
@@ -6832,15 +7019,19 @@ function GameSurfaceComponent({
 
   // Clear generationFailed when a new generation starts (streaming begins).
   useEffect(() => {
-    if (isStreaming) setGenerationFailed(false);
+    if (!isStreaming) return;
+    setGenerationFailed(false);
+    setUnsentTurnChatId(null);
   }, [isStreaming]);
 
   // Play blueprint intro sequence only on first-ever load (not on re-navigation)
   useEffect(() => {
     if (introPlayedRef.current || !blueprint?.introSequence?.length) return;
     if (!latestAssistantMsg?.content) return;
-    // Skip intro if this is a restored session (user returning to an existing game)
-    if (isRestoredRef.current) {
+    // Skip intro if this is a restored session (user returning to an existing game), or one the player
+    // has already spoken in: the intro belongs to the opening alone (laptop room playtest 2026-10-30:
+    // the host's Game screen, mounted later, played it after a Continue story and stayed black).
+    if (isRestoredRef.current || messages.some((message) => message.role === "user")) {
       introPlayedRef.current = true;
       return;
     }
@@ -6848,7 +7039,7 @@ function GameSurfaceComponent({
     setIntroCinematicActive(true);
     setDirectionsPlaying(true);
     setActiveDirections(blueprint.introSequence);
-  }, [blueprint, latestAssistantMsg?.content]);
+  }, [blueprint, latestAssistantMsg?.content, messages]);
 
   const applyGameAudioSettings = useCallback(
     (overrides: Partial<GameAudioSettings> = {}, options: { unlock?: boolean } = {}) => {
@@ -6940,6 +7131,19 @@ function GameSurfaceComponent({
   useProvideChatGalleryActions(activeChatId, galleryActions);
 
   const retryGeneration = useCallback(() => {
+    // A turn that failed before the server saved it is back in the input (an interrupted or refused send): Retry sends
+    // it again rather than asking the Game Master to go on without it. The failure banner clears once streaming starts.
+    if (unsentTurnChatId && unsentTurnChatId === activeChatId) {
+      setGameInputSendToken((token) => token + 1);
+      return;
+    }
+    setGenerationFailed(false);
+    generate({ chatId: activeChatId, connectionId: null });
+  }, [activeChatId, generate, unsentTurnChatId]);
+
+  // The input no longer holds a turn it can send (cleared, or disabled): Retry asks the Game Master to go on instead.
+  const retryWithoutUnsentTurn = useCallback(() => {
+    setUnsentTurnChatId(null);
     setGenerationFailed(false);
     generate({ chatId: activeChatId, connectionId: null });
   }, [activeChatId, generate]);
@@ -6978,6 +7182,7 @@ function GameSurfaceComponent({
     // combat, apply state, or set an error against the reset combat state.
     combatGenerationInFlightRef.current = false;
     combatGenerationRequestIdRef.current += 1;
+    combatStyleStartedMessageIdRef.current = null;
     setCombatGenerationPending(false);
     setCombatItemEffects([]);
     setCombatMechanics([]);
@@ -7163,6 +7368,13 @@ function GameSurfaceComponent({
     localizeUi,
   ]);
 
+  // A shared room this Engine hosts and has not ended (2026-10-27).
+  const hostedRoom = (() => {
+    const room = chatMeta.multiplayer;
+    if (!room || typeof room !== "object") return false;
+    const { role, status } = room as { role?: unknown; status?: unknown };
+    return role === "host" && status !== "ended";
+  })();
   const sendMessage = useCallback(
     async (
       message: string,
@@ -7170,6 +7382,22 @@ function GameSurfaceComponent({
       pendingSpatialTransition?: PendingSpatialTransition,
     ) => {
       if ((chatMeta.gameSessionStatus as string) === "concluded") return false;
+      // A room this Engine hosts has its own Game Master (2026-10-27): what a fight played on this screen
+      // came to goes to the room as the host's turn, and the round closes on it. Every other turn is
+      // written in the room's own action box.
+      if (hostedRoom) {
+        if (!message.includes("[combat_result]")) {
+          toast.info(localizeUi("game.room.turnsInRoom"));
+          return false;
+        }
+        try {
+          await api.post("/multiplayer/host/actions", { type: "fight-result", text: message.slice(0, 8000) });
+          return true;
+        } catch {
+          toast.error(localizeUi("game.room.fightResultFailed"));
+          return false;
+        }
+      }
       let userMessage = formatTextQuotes(message, quoteFormat);
       // A turn is stored with its macros filled in, as a Roleplay or Conversation send is (#7585), so the Game
       // log and the model read the same {{random}} pick. Macros only: a turn skips user-input regex and
@@ -7208,7 +7436,7 @@ function GameSurfaceComponent({
         ...(pendingSpatialTransition ? { pendingSpatialTransition } : {}),
       });
     },
-    [activeChatId, chatMeta.gameSessionStatus, generate, queryClient, quoteFormat],
+    [activeChatId, chatMeta.gameSessionStatus, generate, hostedRoom, localizeUi, queryClient, quoteFormat],
   );
 
   // Background seam: the experience pushes a background and we render it behind the narration, so it
@@ -7264,7 +7492,7 @@ function GameSurfaceComponent({
   const updateCampaignProgression = useUpdateCampaignProgression();
   const startSession = useStartSession();
   const generateMap = useGenerateMap();
-  const deleteChat = useDeleteChat();
+  const discardNewChatSetup = useDiscardNewChatSetup();
   const updateChatMetadata = useUpdateChatMetadata();
   const uploadCharacterAvatar = useUploadAvatar();
   const uploadPersonaAvatar = useUploadPersonaAvatar();
@@ -7908,8 +8136,11 @@ function GameSurfaceComponent({
       if (response.rulesetLive && seq > inventoryCommitSeq.current.sheetApplied) {
         inventoryCommitSeq.current.sheetApplied = seq;
         const shown = useGameStateStore.getState().current;
-        if (shown?.chatId === activeChatId) {
-          useGameStateStore.getState().setGameState({ ...shown, rulesetLive: response.rulesetLive });
+        // A game with no state before this (its first turn not taken) has one now, made by the route.
+        if (shown?.chatId === activeChatId || !shown) {
+          useGameStateStore
+            .getState()
+            .setGameState({ ...(shown ?? createEmptyGameState(activeChatId)), rulesetLive: response.rulesetLive });
         }
       }
       // The server applies requests in order, so an answer to an older one that arrives after a
@@ -8170,6 +8401,42 @@ function GameSurfaceComponent({
       }
       try {
         const [result] = await commitInventory([{ op: "switch", id: stackId, on }]);
+        if (!result?.ok) {
+          toast.error(
+            inventoryRefusal(
+              result?.reason,
+              gameInventoryStackLabel(stack),
+              "ui.game.gamesurfacecomponent.failedToChangeValue1",
+            ),
+          );
+          return null;
+        }
+        return result.id ?? stackId;
+      } catch (error) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : localizeUi("ui.game.gamesurfacecomponent.failedToChangeValue1", {
+                value1: gameInventoryStackLabel(stack),
+              }),
+        );
+        return null;
+      }
+    },
+    [activeChatId, commitInventory, inventoryRefusal, localizeUi],
+  );
+
+  /** One stack turned into another of its forms (1.575), 0 as it was made. */
+  const handleFormInventoryStack = useCallback(
+    async (stackId: string, form: number) => {
+      if (!activeChatId) return null;
+      const stack = inventoryItemsRef.current.find((entry) => entry.id === stackId);
+      if (!stack) {
+        toast.error(localizeUi("ui.game.gamesurfacecomponent.thatStackIsNoLongerInYourInventory"));
+        return null;
+      }
+      try {
+        const [result] = await commitInventory([{ op: "form", id: stackId, form }]);
         if (!result?.ok) {
           toast.error(
             inventoryRefusal(
@@ -8749,6 +9016,7 @@ function GameSurfaceComponent({
             name: c.name,
             avatarUrl: c.avatarUrl ?? null,
             avatarCrop: c.avatarCrop ?? fromMap?.avatarCrop ?? null,
+            combatIcon: c.combatIcon ?? null,
             nameColor: fromMap?.nameColor,
             dialogueColor: fromMap?.dialogueColor,
             canRemove: true,
@@ -8775,6 +9043,7 @@ function GameSurfaceComponent({
           name: personaInfo.name,
           avatarUrl: personaInfo.avatarUrl ?? null,
           avatarCrop: personaInfo.avatarCrop ?? null,
+          combatIcon: personaInfo.combatIcon ?? null,
           nameColor: personaInfo.nameColor,
           dialogueColor: personaInfo.dialogueColor,
           canRemove: false,
@@ -8792,15 +9061,39 @@ function GameSurfaceComponent({
       }
     }
 
+    // The room's other players, each right after the host.
+    for (const guest of roomHumans?.guests ?? []) {
+      if (baseMembers.some((m) => m.id === guest.id)) continue;
+      baseMembers.splice(1, 0, { id: guest.id, name: guest.name, avatarUrl: null, canRemove: false });
+    }
+
     return baseMembers;
-  }, [chatCharacterIds, chatMeta, characters, characterMap, npcs, personaInfo]);
+  }, [chatCharacterIds, chatMeta, characters, characterMap, npcs, personaInfo, roomHumans]);
 
   /** Whose bags the inventory screen shows: the player first (no holder), then the party in order,
    *  then anybody who has left the party but still carries something. */
+  // A ruleset game with no persona plays its first character card as the player, as the server
+  // and the fight do, so the player's own bag is that character's and is named after them rather
+  // than standing beside their bag as a second one called "Player".
+  const inventoryStandIn = useMemo(() => {
+    const player = partyMembers.find((member) => member.id.startsWith("persona:"));
+    if (gameRuleset.status !== "ok" || player?.id !== "persona:default") return undefined;
+    const first = (Array.isArray(chatMeta.gameCharacterCards) ? chatMeta.gameCharacterCards : [])[0] as
+      { name?: unknown } | undefined;
+    return typeof first?.name === "string" && first.name.trim() ? first.name.trim() : undefined;
+  }, [partyMembers, gameRuleset.status, chatMeta.gameCharacterCards]);
+  // What a Game Master put in that card's own name before it was read as the player's is the
+  // player's bag too, so the window shows one bag for them.
+  const inventoryShown = useMemo(() => {
+    if (!inventoryStandIn) return inventoryItems;
+    return gameInventoryFoldStandIn(inventoryItems, inventoryStandIn);
+  }, [inventoryItems, inventoryStandIn]);
+
   const inventoryBags = useMemo(() => {
     const player = partyMembers.find((member) => member.id.startsWith("persona:"));
+    const firstCardName = inventoryStandIn;
     const bags: Array<{ holder?: string; name: string }> = [
-      { name: player?.name ?? localizeUi("ui.game.gameinventory.you") },
+      { name: firstCardName ?? player?.name ?? localizeUi("ui.game.gameinventory.you") },
     ];
     const seen = new Set<string>([""]);
     const addBag = (name: string) => {
@@ -8809,10 +9102,12 @@ function GameSurfaceComponent({
       seen.add(key);
       bags.push({ holder: name, name });
     };
-    for (const member of partyMembers) if (!member.id.startsWith("persona:")) addBag(member.name);
-    for (const stack of inventoryItems) if (stack.holder) addBag(stack.holder);
+    const playsAs = firstCardName ? gameInventoryBagKey(firstCardName) : "";
+    for (const member of partyMembers)
+      if (!member.id.startsWith("persona:") && gameInventoryBagKey(member.name) !== playsAs) addBag(member.name);
+    for (const stack of inventoryShown) if (stack.holder) addBag(stack.holder);
     return bags;
-  }, [partyMembers, inventoryItems, localizeUi]);
+  }, [partyMembers, inventoryShown, localizeUi, inventoryStandIn]);
 
   const combatAvatarCandidates = useMemo(() => {
     const candidatesByName = new Map<string, GamePartyMemberInfo>();
@@ -8820,7 +9115,7 @@ function GameSurfaceComponent({
       const normalizedName = normalizeSceneAssetName(candidate.name);
       if (!normalizedName) return;
       const existing = candidatesByName.get(normalizedName);
-      if (!existing || (!existing.avatarUrl && candidate.avatarUrl)) {
+      if (!existing || (!existing.avatarUrl && candidate.avatarUrl) || (!existing.combatIcon && candidate.combatIcon)) {
         candidatesByName.set(normalizedName, candidate);
       }
     };
@@ -8845,6 +9140,7 @@ function GameSurfaceComponent({
         name: character.name,
         avatarUrl: character.avatarUrl ?? null,
         avatarCrop: character.avatarCrop ?? null,
+        combatIcon: character.combatIcon ?? null,
         nameColor: character.nameColor,
         dialogueColor: character.dialogueColor,
         canRemove: false,
@@ -8879,6 +9175,7 @@ function GameSurfaceComponent({
         name: personaInfo.name,
         avatarUrl: personaInfo.avatarUrl ?? null,
         avatarCrop: personaInfo.avatarCrop ?? null,
+        combatIcon: personaInfo.combatIcon ?? null,
         nameColor: personaInfo.nameColor,
         dialogueColor: personaInfo.dialogueColor,
         canRemove: false,
@@ -8946,7 +9243,28 @@ function GameSurfaceComponent({
     [activeChatId, removePartyMember, localizeUi],
   );
 
-  const combatUiActive = gameState === "combat" && !!combatParty && !!combatEnemies;
+  // Effective combat style: active encounter pin ?? runtime metadata override
+  // (settings drawer) ?? wizard setup choice ?? legacy default "classic". An id
+  // this client has not registered plays as classic (#8109).
+  const combatSetupConfig = chatMeta.gameSetupConfig as Record<string, unknown> | undefined;
+  // A style the game's ruleset leaves out (`combat.styles`, 1.379) plays as the first it lists; a fight
+  // already pinned keeps its own.
+  const effectiveCombatStyle: GameCombatStyle = resolveCombatStyle(
+    combatPinnedStyle ??
+      rulesetCombatStyle(
+        gameRuleset.status === "ok" ? gameRuleset.definition : null,
+        (chatMeta.gameCombatStyle as GameCombatStyle | undefined) ??
+          (combatSetupConfig?.combatStyle as GameCombatStyle | undefined),
+        listCombatStyles(),
+      ),
+  );
+  const combatStyleSurface = getCombatStyle(effectiveCombatStyle);
+  // A style that keeps its own state (#8109) counts as an active fight while it says so.
+  const combatStyleActive = useSyncExternalStore(
+    combatStyleSurface.subscribe ?? subscribeNever,
+    () => !!activeChatId && (combatStyleSurface.isActive?.(activeChatId) ?? false),
+  );
+  const combatUiActive = gameState === "combat" && ((!!combatParty && !!combatEnemies) || combatStyleActive);
   // The Experience's own music (Capability API 1.345): its fight track in a fight, else the track the
   // Engine picked for here (the story's cue, the place's, the pack's default), over the Engine's own
   // music. The player's own music source wins, and their volumes and mute apply as to any music.
@@ -9009,14 +9327,6 @@ function GameSurfaceComponent({
     );
     closeChatControlSheet(CHAT_CONTROL_WINDOW_IDS.gameControls);
   }, [activeChatId, overworldShown, setWorldView]);
-  // Effective combat style: active encounter pin ?? runtime metadata override
-  // (settings drawer) ?? wizard setup choice ?? legacy default "classic".
-  const combatSetupConfig = chatMeta.gameSetupConfig as Record<string, unknown> | undefined;
-  const effectiveCombatStyle: GameCombatStyle =
-    combatPinnedStyle ??
-    (chatMeta.gameCombatStyle as GameCombatStyle | undefined) ??
-    (combatSetupConfig?.combatStyle as GameCombatStyle | undefined) ??
-    "classic";
   // Live snapshot for the identity-stable combat seam (#5094): a package may
   // cache requestCombat at mount, so the callback must read CURRENT values, not
   // its creation render's closure. messageId rides latestAssistantMsgRef.
@@ -9036,16 +9346,20 @@ function GameSurfaceComponent({
   useEffect(() => {
     combatGenerationInFlightRef.current = false;
     combatGenerationRequestIdRef.current += 1;
+    combatStyleStartedMessageIdRef.current = null;
     setCombatGenerationError(null);
   }, [activeChatId]);
-  const tacticalCombatActive = combatUiActive && effectiveCombatStyle === "tactical";
+  const combatOwnsTopChrome = combatUiActive && !!combatStyleSurface.ownsTopChrome;
   const topOverlayOffsetClass = "top-3";
   const queuedCombatMatchesLatest =
     !!queuedCombatGeneration?.messageId &&
     !!latestAssistantMsg?.id &&
     queuedCombatGeneration.messageId === latestAssistantMsg.id;
   const combatStartGateReached =
-    queuedCombatMatchesLatest && !isStreaming && !scenePreparing && (!latestNarrationText || narrationDone);
+    queuedCombatMatchesLatest &&
+    !isStreaming &&
+    !scenePreparing &&
+    (!latestNarrationText || narrationDone || !!queuedCombatGeneration?.asked);
   const combatStarting = combatStartGateReached && combatGenerationPending && !combatUiActive;
   const combatGenerationFailedAtGate = combatStartGateReached && !!combatGenerationError && !combatUiActive;
 
@@ -9121,15 +9435,36 @@ function GameSurfaceComponent({
   /** The Use button. One of the ruleset's items with a `use` is used by the Engine first: what it does
    *  to whoever carries it lands on their sheet, it is spent, and the Game Master is told what happened
    *  in an `[item_used]` block. Anything else is simply said, and the Game Master decides. */
+  // Looking an item over before trusting it (1.802): said, and the Game Master's inspect tag rolls it.
+  const inventorySpotsFakes =
+    gameRuleset.status === "ok" &&
+    (!!gameRuleset.definition.items?.revealsFakes?.length ||
+      !!inventoryItemBook?.entries.some((entry) => entry.entry.item?.tells?.length));
+  const handleInspectInventoryStack = useCallback(
+    (stackId: string, label: string) => {
+      setInventoryOpen(false);
+      const holder = inventoryItemsRef.current.find((entry) => entry.id === stackId)?.holder;
+      sendMessage(
+        holder
+          ? `${holder} looks the ${label} over carefully before trusting it.`
+          : `I look my ${label} over carefully before trusting it.`,
+      );
+    },
+    [sendMessage],
+  );
+
   const handleUseInventoryStack = useCallback(
-    async (stackId: string, label: string) => {
+    async (stackId: string, label: string, more?: number, lasts?: number) => {
       setInventoryOpen(false);
       const stack = inventoryItemsRef.current.find((entry) => entry.id === stackId);
       const said = () => sendMessage(`I use my ${label}.`);
       // Only an item the screen already knows has no use is simply said. One it cannot tell about yet
       // (the ruleset or its catalogs still loading) goes to the Engine, which always knows.
       const known = stack?.item ? inventoryItemBook?.itemOf(stack.item) : undefined;
-      if (!stack?.item || gameRuleset.status === "none" || (known && !known.entry.item?.use)) {
+      // An item whose only uses are its further ones (a Necklace of Prayer Beads' beads) has them spent
+      // by the Engine too.
+      const engineUse = !!known?.entry.item?.use || (more !== undefined && !!known?.entry.item?.moreUsesRolled);
+      if (!stack?.item || gameRuleset.status === "none" || (known && !engineUse)) {
         said();
         return;
       }
@@ -9146,13 +9481,24 @@ function GameSurfaceComponent({
             line: string;
             revealed?: string;
             playerStats?: PlayerStats;
-          }>("/game/inventory/use", { chatId, stackId }),
+          }>("/game/inventory/use", {
+            chatId,
+            stackId,
+            ...(more !== undefined ? { more } : {}),
+            ...(lasts !== undefined ? { lasts } : {}),
+          }),
         );
       } catch (error) {
         const reason =
           error instanceof ApiError && error.payload && typeof error.payload === "object"
             ? (error.payload as { reason?: unknown }).reason
             : undefined;
+        // Drawn as it is used (1.808), with what holds the slots it needs named.
+        const heldBy =
+          error instanceof ApiError && error.payload && typeof error.payload === "object"
+            ? (error.payload as { heldBy?: unknown }).heldBy
+            : undefined;
+        const held = Array.isArray(heldBy) ? heldBy.filter((name) => typeof name === "string").join(", ") : "";
         // Nothing the Engine uses: it is said as any other item is.
         if (reason === "no-use" || reason === "not-ruleset-item" || reason === "no-ruleset") {
           if (useChatStore.getState().activeChatId === usedIn) said();
@@ -9164,8 +9510,18 @@ function GameSurfaceComponent({
               ? "ui.game.gamesurfacecomponent.itemUseNoneLeft"
               : reason === "not-worn"
                 ? "ui.game.gamesurfacecomponent.itemUseNotWorn"
-                : "ui.game.gamesurfacecomponent.itemUseFailed",
-            { item: label },
+                : reason === "slots-full"
+                  ? held
+                    ? "ui.game.gamesurfacecomponent.itemUseSlotsFull"
+                    : "ui.game.gamesurfacecomponent.itemUseNoSlots"
+                  : reason === "forbidden"
+                    ? "ui.game.gamesurfacecomponent.itemUseForbidden"
+                    : reason === "needs-unmet"
+                      ? "ui.game.gamesurfacecomponent.itemUseNeedsUnmet"
+                      : reason === "dead"
+                        ? "ui.game.gamesurfacecomponent.itemUseDead"
+                        : "ui.game.gamesurfacecomponent.itemUseFailed",
+            { item: label, held },
           ),
         );
         return;
@@ -9207,8 +9563,14 @@ function GameSurfaceComponent({
       ),
     );
   }, [chatMeta.gameStartingGearTaken]);
+  const startingGearOffered = gameRuleset.status === "ok" && !!gameRuleset.definition.items?.startingGear?.length;
   const handleTakeStartingGear = useCallback(
-    async (holder: string | undefined, selection: RulesetStartingGearSelection, again: boolean) => {
+    async (
+      holder: string | undefined,
+      selection: RulesetStartingGearSelection,
+      again: boolean,
+      pastLimit?: boolean,
+    ) => {
       const gearLabel =
         gameRuleset.status === "ok"
           ? (gameRuleset.definition.items?.startingGear?.find((each) => each.id === selection.gear)?.label ??
@@ -9229,6 +9591,7 @@ function GameSurfaceComponent({
             ...(holder ? { holder } : {}),
             selection,
             ...(again ? { again: true } : {}),
+            ...(pastLimit ? { pastLimit: true } : {}),
           }),
         );
       } catch (error) {
@@ -9288,6 +9651,35 @@ function GameSurfaceComponent({
       ),
     [chatMeta.gameCharacterCards],
   );
+  // A game whose ruleset offers starting gear, with none taken and an empty inventory, says so once,
+  // with the way to it: never taken for the player (laptop pass 5 2026-10-26: a fighter and a cleric
+  // started at AC 10, the kits never offered). Once someone has taken gear, a party member who can
+  // still take theirs is named once too (playtest 2026-10-26: nothing said a member had gear waiting).
+  const startingGearNudged = useRef<string | null>(null);
+  const startingGearWaiting = useMemo(
+    () =>
+      startingGearOffered
+        ? inventoryBags
+            .filter((bag) => !bag.holder || startingGearHolders.has(gameInventoryBagKey(bag.holder)))
+            .filter(
+              (bag) => rulesetStartingGearTakenBy(startingGearTaken, gameInventoryBagKey(bag.holder)).length === 0,
+            )
+            .map((bag) => bag.name)
+        : [],
+    [inventoryBags, startingGearHolders, startingGearOffered, startingGearTaken],
+  );
+  useEffect(() => {
+    if (!startingGearOffered || startingGearNudged.current === chat.id) return;
+    const noneTaken = Object.keys(startingGearTaken).length === 0;
+    if (noneTaken ? inventoryItems.length > 0 : startingGearWaiting.length === 0) return;
+    startingGearNudged.current = chat.id;
+    toast.info(
+      noneTaken
+        ? localizeUi("game.ruleset.startingGear.nudge")
+        : localizeUi("game.ruleset.startingGear.nudgeWaiting", { names: startingGearWaiting.join(", ") }),
+      { action: { label: localizeUi("game.ruleset.startingGear.button"), onClick: () => setInventoryOpen(true) } },
+    );
+  }, [startingGearOffered, chat.id, startingGearTaken, startingGearWaiting, inventoryItems, localizeUi]);
   const inventoryStartingGear = useMemo(
     () =>
       gameRuleset.status === "ok" && gameRuleset.definition.items?.startingGear?.length
@@ -9332,6 +9724,17 @@ function GameSurfaceComponent({
   // presentation AND the ruleset says what one cell of one is worth. The server still decides: it
   // draws no board for a ruleset with no `distance`, and the screen follows the view it sends.
   const rulesetFightPositioned = !!rulesetFightDefinition?.combat?.distance && effectiveCombatStyle === "tactical";
+  // A directed fight in a game that pinned a ruleset waits for those rules: the server keeps the
+  // style a fight opened with, so opening it while the ruleset is still loading, or missing here,
+  // would quietly fight the whole battle by Marinara's own rules. A missing ruleset says so, and
+  // fighting without it is the player's choice, for this one fight.
+  const [plainFightChosen, setPlainFightChosen] = useState<string | null>(null);
+  const fightKey = activeChatId && combatStartMessageId ? `${activeChatId}:${combatStartMessageId}` : null;
+  const fightWaitsOnRules =
+    !!combatSetupConfig?.combatDirector &&
+    (gameRuleset.status === "loading" || (gameRuleset.status === "unavailable" && plainFightChosen !== fightKey))
+      ? gameRuleset.status
+      : null;
   // A fight on a board takes the whole chat area while its screen is up: the map, the party bar and the
   // Game toolbar's bubbles step aside, and the chat list folds away, coming back as it was after.
   const boardFightOnScreen = useCombatScreenStore((state) => state.round !== null);
@@ -9471,17 +9874,34 @@ function GameSurfaceComponent({
       const gameCharacterCards = Array.isArray(chatMeta.gameCharacterCards)
         ? (chatMeta.gameCharacterCards as StoredGameCombatCard[])
         : [];
-      const partyCombatants = Array.isArray(combatState.party)
-        ? combatState.party.map((member, index) =>
-            generatedPartyMemberToCombatant(
-              member,
-              index,
-              combatAvatarCandidates,
-              fallbackLevel,
-              findGameCombatCard(gameCharacterCards, member.name),
-            ),
-          )
-        : [];
+      // Each member its own id: one matched to a name another already took gets its own (laptop room
+      // playtest 2026-10-30: a rejoined guest's "Guest Hero", not yet on the party list, took the
+      // host's "persona:active" and no fight would open). Members named exactly as a unit claim it
+      // first, so a name-variant match never takes the unit or its picture from them.
+      const party = Array.isArray(combatState.party) ? combatState.party : [];
+      const isExact = (member: CombatPartyMember) =>
+        hasExactNamedEntry(combatAvatarCandidates, member.name, (entry) => entry.name);
+      const exactFirst = party
+        .map((member, index) => ({ member, index }))
+        .sort((a, b) => Number(!isExact(a.member)) - Number(!isExact(b.member)));
+      const takenIds = new Set<string>();
+      const partyCombatants: Combatant[] = new Array(party.length);
+      for (const { member, index } of exactFirst) {
+        const combatant = generatedPartyMemberToCombatant(
+          member,
+          index,
+          combatAvatarCandidates.filter((candidate) => !takenIds.has(candidate.id)),
+          fallbackLevel,
+          findGameCombatCard(gameCharacterCards, member.name),
+        );
+        if (takenIds.has(combatant.id)) {
+          // Another member already holds that unit, so this one keeps neither its id nor its picture.
+          combatant.id = `generated-party-${index}-${slugifyCombatantId(member.name)}`;
+          combatant.sprite = undefined;
+        }
+        takenIds.add(combatant.id);
+        partyCombatants[index] = combatant;
+      }
       const enemyCombatants = Array.isArray(combatState.enemies)
         ? combatState.enemies.map((enemy, index) => generatedEnemyToCombatant(enemy, index, fallbackLevel))
         : [];
@@ -9560,6 +9980,85 @@ function GameSurfaceComponent({
       // frame — same-frame double calls (a package spamming requestCombat, #5094)
       // all read false. The ref flips synchronously and clears with the request.
       if (combatGenerationPending || combatGenerationInFlightRef.current) return;
+      // A combat style that sets up its own encounter takes the fight here (#8109): the
+      // generation pass below is skipped, and the style's isActive keeps the fight on screen.
+      // One start per message, guarded like the pass below (#5094); see offerCombatStart.
+      const styleStart = offerCombatStart(
+        combatStyleSurface,
+        { chatId: activeChatId, messageId },
+        { inFlight: combatGenerationInFlightRef, startedMessageId: combatStyleStartedMessageIdRef },
+      );
+      if (styleStart === "already-taken") return;
+      if (styleStart === "taken") {
+        // Such a fight has no generated party, so the live snapshot writer never runs for it:
+        // save its pin and anchor now, so a reload restores the fight and its end can name it.
+        const snapshot: GameCombatStateSnapshot = {
+          party: [],
+          enemies: [],
+          itemEffects: [],
+          mechanics: [],
+          dialogueCues: [],
+          startMessageId: messageId,
+          combatStyle: effectiveCombatStyle,
+        };
+        // The server enters combat only once the snapshot is saved, so a save that fails cannot
+        // leave a game in combat with no fight to restore.
+        const requestChatId = activeChatId;
+        api
+          .patch(`/chats/${requestChatId}/metadata`, { gameCombatState: snapshot })
+          .then(() => transitionGameState.mutate({ chatId: requestChatId, newState: "combat" }))
+          .catch((err) => console.error("[game-surface] combat snapshot persist failed", err));
+        setQueuedCombatGeneration(null);
+        setPreparedCombatState(null);
+        setCombatPinnedStyle(effectiveCombatStyle);
+        setCombatStartMessageId(messageId);
+        useGameModeStore.getState().setGameState("combat");
+        return;
+      }
+      // A directed fight is kept on the server under the message that started it, and it may already
+      // be over there (laptop playtest 2026-10-26: the party fell, the server restarted before
+      // "Continue story", and the same fight was set up again behind "Combat starting", only to come
+      // back to its end). A fight already over goes straight to its end, the fall notice and the
+      // recap, and the model is asked for nothing. One this screen already ended is not ended again.
+      const directedFight = `${activeChatId}:${messageId}`;
+      const lookedUp = directedFightLookedUpRef.current === directedFight;
+      directedFightLookedUpRef.current = null;
+      if (combatSetupConfig?.combatDirector === true && !lookedUp) {
+        if (endedDirectedFightRef.current === directedFight) {
+          setQueuedCombatGeneration(null);
+          setPreparedCombatState(null);
+          return;
+        }
+        const requestChatId = activeChatId;
+        const requestId = ++combatGenerationRequestIdRef.current;
+        combatGenerationInFlightRef.current = true;
+        const params = new URLSearchParams({ chatId: requestChatId, anchor: messageId });
+        void api
+          .get<{ session: DirectedCombatView }>(`/game/combat/director/state?${params}`)
+          .then(
+            (answer) => answer.session,
+            () => null,
+          )
+          .then((session) => {
+            if (combatGenerationRequestIdRef.current !== requestId || activeChatIdRef.current !== requestChatId) return; // superseded
+            combatGenerationInFlightRef.current = false;
+            if (session?.outcome && session.summary) {
+              setQueuedCombatGeneration(null);
+              setPreparedCombatState(null);
+              const fought = session.ruleset?.summary;
+              endedDirectedFightRef.current = directedFight;
+              handleCombatEndRef.current(
+                session.summary.outcome,
+                fought ? { ...session.summary, ruleset: fought } : session.summary,
+              );
+              return;
+            }
+            // No fight yet, or one still going, which the screen picks up again by its message.
+            directedFightLookedUpRef.current = directedFight;
+            generateCombatRef.current(messageId, notify);
+          });
+        return;
+      }
       const debugMode = useUIStore.getState().debugMode;
       if (debugMode) {
         console.warn("[game-combat] Starting combat state generation", { chatId: activeChatId, messageId });
@@ -9714,6 +10213,7 @@ function GameSurfaceComponent({
           const blueprintTerrainBriefError = (response.combatState as { battlefield?: { terrainBriefError?: unknown } })
             .battlefield?.terrainBriefError;
 
+          forgetCombatSetupFailure(requestChatId, messageId);
           setPreparedCombatState({
             messageId,
             party: combatants.party,
@@ -9737,6 +10237,15 @@ function GameSurfaceComponent({
           if (combatGenerationRequestIdRef.current !== requestId || activeChatIdRef.current !== requestChatId) return; // superseded; don't set stale error
           const message = err instanceof Error ? err.message : "Combat generation failed.";
           console.warn("[game-combat] Failed to generate combat state", err);
+          const cutOff =
+            err instanceof ApiError &&
+            !!err.payload &&
+            typeof err.payload === "object" &&
+            (err.payload as { reason?: unknown }).reason === "cut-off";
+          // Remembered, so opening this chat again waits for Retry Combat rather than asking again. A request
+          // the browser dropped (a reload mid-setup) is not: the server may have finished it.
+          if (!isDroppedRequest(err)) rememberCombatSetupFailure(requestChatId, messageId, { message, cutOff });
+          setCombatGenerationCutOff(cutOff);
           setCombatGenerationError(message);
           // Only the Engine paths (manual button, retry, auto-queue) toast. An Experience/package
           // request passes notify=false and renders its own feedback from combatError, so a failed
@@ -9763,7 +10272,11 @@ function GameSurfaceComponent({
       ensureContextMusicTrack,
       playContextCombatMusic,
       chatMeta.gameSetupConfig,
+      combatSetupConfig?.combatDirector,
       localizeUi,
+      combatStyleSurface,
+      effectiveCombatStyle,
+      transitionGameState,
     ],
   );
 
@@ -9782,7 +10295,17 @@ function GameSurfaceComponent({
     }
     if (pendingEncounter || combatUiActive || combatGenerationPending || combatGenerationError) return;
     if (preparedCombatState?.messageId === queuedCombatGeneration.messageId) return;
-    if (isStreaming || scenePreparing || assetGenerationBlocksScene) return;
+    // The setup reads the saved reply, not the scene: it starts as soon as the reply is in, while the
+    // scene and its pictures are still being prepared (a 6.5-minute wait in the 2026-10-23 playtest),
+    // and the fight is only shown once they are, below.
+    if (isStreaming) return;
+    // This turn's setup already failed: it waits for Retry Combat instead of a new model call.
+    const failed = activeChatId ? recalledCombatSetupFailure(activeChatId, queuedCombatGeneration.messageId) : null;
+    if (failed) {
+      setCombatGenerationCutOff(failed.cutOff);
+      setCombatGenerationError(failed.message);
+      return;
+    }
 
     generateCombatStateForMessage(queuedCombatGeneration.messageId, queuedCombatGeneration.notify);
   }, [
@@ -9793,11 +10316,9 @@ function GameSurfaceComponent({
     generateCombatStateForMessage,
     isStreaming,
     latestAssistantMsg?.id,
-    assetGenerationBlocksScene,
     pendingEncounter,
     preparedCombatState?.messageId,
     queuedCombatGeneration,
-    scenePreparing,
   ]);
 
   useEffect(() => {
@@ -9938,11 +10459,18 @@ function GameSurfaceComponent({
       toast.error(localizeUi("ui.game.gamesurfacecomponent.noCurrentTurnIsAvailableForCombatGeneration"));
       return;
     }
+    if (activeChatId) forgetCombatSetupFailure(activeChatId, messageId);
     setQueuedCombatGeneration({ messageId, notify: true });
     setPreparedCombatState(null);
     setCombatGenerationError(null);
     generateCombatStateForMessage(messageId, true);
-  }, [generateCombatStateForMessage, latestAssistantMsg?.id, queuedCombatGeneration?.messageId, localizeUi]);
+  }, [
+    activeChatId,
+    generateCombatStateForMessage,
+    latestAssistantMsg?.id,
+    queuedCombatGeneration?.messageId,
+    localizeUi,
+  ]);
 
   /** Keeps the identity-stable combat seam pointing at the CURRENT generator
    *  (whose own identity tracks its render-state deps). */
@@ -9975,7 +10503,13 @@ function GameSurfaceComponent({
         if (notify) toast.error(localizeUi("ui.game.gamesurfacecomponent.theGmNeedsToWriteAtLeastOneTurn"));
         return "no-turn";
       }
-      setQueuedCombatGeneration({ messageId, notify });
+      // A fight already made for this turn, waiting to open, is never made twice (laptop room playtest
+      // 2026-10-30: a second Combat press generated a second encounter); asking again opens it now.
+      if (preparedCombatStateRef.current && queuedCombatGenerationRef.current?.messageId === messageId) {
+        setQueuedCombatGeneration((queued) => (queued ? { ...queued, asked: true } : queued));
+        return "pending";
+      }
+      setQueuedCombatGeneration({ messageId, notify, asked: true });
       setPreparedCombatState(null);
       setCombatGenerationError(null);
       generateCombatRef.current(messageId, notify);
@@ -10196,6 +10730,7 @@ function GameSurfaceComponent({
           name: libraryCharacter.name,
           avatarUrl: libraryCharacter.avatarUrl ?? null,
           avatarCrop: libraryCharacter.avatarCrop ?? fromMap?.avatarCrop ?? null,
+          combatIcon: libraryCharacter.combatIcon ?? null,
           nameColor: fromMap?.nameColor,
           dialogueColor: fromMap?.dialogueColor,
           canRemove: false,
@@ -10315,8 +10850,15 @@ function GameSurfaceComponent({
           speed: speedStat?.value ?? derivedSpeed,
           level: pLevel,
           side: "player" as const,
-          sprite: m.avatarUrl ?? undefined,
+          sprite: combatTokenSprite(m),
           skills: combatSkillsFromSheet(gameCard?.abilities),
+          // Their own temperament, the same in every fight (Alyssa 2026-10-31): the card's, or one
+          // drawn once for this game until a fight's setup keeps one on the card.
+          aiHints: withKeptTemperament(
+            undefined,
+            gameCardTemperament(gameCard as Record<string, unknown> | undefined)?.current ??
+              partyTemperamentFallback(activeChatId, typeof gameCard?.name === "string" ? gameCard.name : m.name),
+          ),
         };
       });
 
@@ -10537,8 +11079,50 @@ function GameSurfaceComponent({
       };
     }
 
+    // The room's other players, on the cards the room made for them.
+    for (const guest of roomHumans?.guests ?? []) {
+      const gc = findGameCard(guest.name);
+      const existing = cards[guest.id];
+      const carried = bagInventory(guest.name);
+      cards[guest.id] = {
+        ...existing,
+        title: guest.name,
+        subtitle: existing?.subtitle ?? "Player Character",
+        avatarUrl: existing?.avatarUrl ?? null,
+        level: Math.max(
+          1,
+          Math.round(
+            readGameCardAttribute(gc as StoredGameCombatCard | undefined, "level", "lvl") ?? sessionNumber ?? 1,
+          ),
+        ),
+        ...(carried.length > 0 ? { inventory: carried } : {}),
+        gameCard: gc
+          ? {
+              shortDescription: (gc.shortDescription as string) || "",
+              class: (gc.class as string) || "",
+              abilities: (gc.abilities as string[]) || [],
+              strengths: (gc.strengths as string[]) || [],
+              weaknesses: (gc.weaknesses as string[]) || [],
+              extra: (gc.extra as Record<string, string>) || {},
+              rpgStats: gc.rpgStats as
+                { attributes: Array<{ name: string; value: number }>; hp: { value: number; max: number } } | undefined,
+            }
+          : existing?.gameCard,
+      };
+    }
+
     return cards;
-  }, [chatCharacterIds, chatMeta, gameSnapshot, personaInfo, characters, npcs, sessionNumber, inventoryItems]);
+  }, [
+    chatCharacterIds,
+    chatMeta,
+    gameSnapshot,
+    personaInfo,
+    characters,
+    npcs,
+    sessionNumber,
+    inventoryItems,
+    roomHumans,
+  ]);
 
   const handleSaveCharacterSheet = useCallback(
     async (cardTitle: string, gameCard: GameCharacterSheetGameCard | undefined) => {
@@ -10682,10 +11266,24 @@ function GameSurfaceComponent({
       // landed since this sheet was rendered, and they must not be written back out.
       const current = useGameStateStore.getState().current;
       // The patch replaces the WHOLE live object. Built from a snapshot that is missing, or that
-      // belongs to another chat, it would wipe every other character's state, so the edit is
-      // refused and said out loud instead.
+      // belongs to another chat, it would wipe every other character's state, so the server merges
+      // this one character in instead (and makes the game's first state if it has none yet).
       if (current?.chatId !== activeChatId) {
-        toast.error(localizeUi("game.ruleset.sheet.stateNotReady"));
+        const chatId = activeChatId;
+        void api
+          .post<{ rulesetLive: RulesetLiveStates }>("/game/inventory/live", {
+            chatId,
+            character: cardTitle,
+            live: Object.keys(next).length > 0 ? next : null,
+          })
+          .then((saved) => {
+            const shown = useGameStateStore.getState().current;
+            if (shown && shown.chatId !== chatId) return;
+            useGameStateStore
+              .getState()
+              .setGameState({ ...(shown ?? createEmptyGameState(chatId)), rulesetLive: saved.rulesetLive });
+          })
+          .catch(() => toast.error(localizeUi("game.ruleset.sheet.stateNotReady")));
         return;
       }
       const { [key]: _previous, ...others } = current.rulesetLive ?? {};
@@ -10700,7 +11298,12 @@ function GameSurfaceComponent({
    *  charges it brings back to what the character carries are written with the sheet. Answers with
    *  what the sheet shows after it, or null when it was not taken. */
   const handleRulesetRest = useCallback(
-    async (cardTitle: string, rest: string): Promise<string | null> => {
+    async (
+      cardTitle: string,
+      rest: string,
+      diceFrom?: Record<string, number>,
+      recover?: Array<{ name: string; recover: RulesetUseRecover[] }>,
+    ): Promise<string | null> => {
       if (!activeChatId) return null;
       try {
         // A sheet edit still waiting to be saved lands first, so the rest starts from it.
@@ -10712,7 +11315,13 @@ function GameSurfaceComponent({
             now: string;
             recharged: Array<{ item: string; now: number; max: number }>;
             playerStats?: PlayerStats;
-          }>("/game/inventory/rest", { chatId, character: cardTitle, rest }),
+          }>("/game/inventory/rest", {
+            chatId,
+            character: cardTitle,
+            rest,
+            ...(diceFrom ? { diceFrom } : {}),
+            ...(recover ? { recover } : {}),
+          }),
         );
         if (!rested) return null;
         return [
@@ -10751,9 +11360,27 @@ function GameSurfaceComponent({
             inventoryPlayerName,
           )(cardTitle)
         : undefined;
+    // Whether they carry more than they should, for a chip on the sheet: their bag against what they
+    // can carry, as the inventory reads it.
+    const cardNames = cards.flatMap((card) =>
+      typeof card.name === "string" && card.name.trim() ? [card.name.trim()] : [],
+    );
+    const bearer =
+      inventoryItemBook?.bearer && gameRuleset.definition.items?.carry
+        ? gameInventoryBearerStatus(
+            inventoryItems,
+            rulesetCardHolder(cardNames, inventoryPlayerName)(cardTitle) ?? undefined,
+            inventoryItemBook,
+          )
+        : undefined;
+    const carrying =
+      bearer && bearer.encumberedAbove !== undefined
+        ? { encumbered: bearer.encumbered, over: gameInventoryOverLimit(bearer) }
+        : undefined;
     return {
       status: "ok",
       definition: gameRuleset.definition,
+      ...(carrying ? { carrying } : {}),
       // What the pin turned on: the names the sheet heads itself with, and the record the catalog
       // picker leaves hidden entries out by.
       layers: gameRuleset.layers,
@@ -10762,11 +11389,35 @@ function GameSurfaceComponent({
       live: gameSnapshot?.rulesetLive?.[normalizeCharacterLookupName(cardTitle)],
       onLiveChange: (next) => handleRulesetLiveChange(cardTitle, next),
       // Where the ruleset has items, a rest may bring charges back to what is carried.
-      ...(inventoryItemBook ? { onRest: (rest: string) => handleRulesetRest(cardTitle, rest) } : {}),
+      ...(inventoryItemBook
+        ? {
+            onRest: (
+              rest: string,
+              diceFrom?: Record<string, number>,
+              recover?: Array<{ name: string; recover: RulesetUseRecover[] }>,
+            ) => handleRulesetRest(cardTitle, rest, diceFrom, recover),
+            // What a rest offers to use as it ends (1.789), read off the server's sheet.
+            onRestOffers: async (rest: string) =>
+              activeChatId
+                ? (
+                    await api.post<{ offers: RulesetRestRecovery[] }>("/game/inventory/rest-offers", {
+                      chatId: activeChatId,
+                      character: cardTitle,
+                      rest,
+                    })
+                  ).offers
+                : [],
+          }
+        : {}),
       onEnvelopeSave: (next) => handleSaveRulesetSheet(cardTitle, next),
       ...(items ? { items } : {}),
+      // Mid-fight the fight keeps the sheet's pools and tracks: a slot pressed back with + would be
+      // a free spell, so the sheet is shown and not edited until the fight is over.
+      ...(combatUiActive ? { readOnly: true } : {}),
     };
   }, [
+    activeChatId,
+    combatUiActive,
     characterSheetCharId,
     findStoredGameCard,
     gameRuleset,
@@ -11240,6 +11891,7 @@ function GameSurfaceComponent({
       }
       setActiveChoices(null);
       const succeeded = await sendMessage(message, attachments, options?.pendingSpatialTransition);
+      setUnsentTurnChatId(succeeded === false ? activeChatId : null);
       if (succeeded !== false && options?.commitPendingMove && pendingMapMove) {
         setPendingMapMove(null);
       }
@@ -11389,6 +12041,7 @@ function GameSurfaceComponent({
     // combat, apply state, or set an error against the reset combat state.
     combatGenerationInFlightRef.current = false;
     combatGenerationRequestIdRef.current += 1;
+    combatStyleStartedMessageIdRef.current = null;
     setCombatGenerationPending(false);
     setCombatItemEffects([]);
     setCombatMechanics([]);
@@ -11428,6 +12081,9 @@ function GameSurfaceComponent({
     (outcome: "victory" | "defeat" | "flee", summary: CombatSummary) => {
       // The message that started the fight names it, so a win reported twice drops its loot once.
       const fightKey = combatStartMessageId;
+      if (activeChatId && fightKey) endedDirectedFightRef.current = `${activeChatId}:${fightKey}`;
+      // A fight a registered style took over has ended, so its message may start one again.
+      combatStyleStartedMessageIdRef.current = null;
       setCombatParty(null);
       setCombatEnemies(null);
       setCombatSceneMeta(null);
@@ -11520,7 +12176,10 @@ function GameSurfaceComponent({
       const tellCombatEnd = (loot: CombatSummary["loot"]) => {
         // Build a compact, model-friendly recap so the GM can narrate the aftermath.
         const defeatedEnemies = summary.enemies.filter((e) => e.defeated).map((e) => e.name);
-        const survivingEnemies = summary.enemies.filter((e) => !e.defeated);
+        const survivingEnemies = summary.enemies.filter((e) => !e.defeated && !e.left);
+        // Out of it alive, their heart gone: the story goes on with them.
+        const fledEnemies = summary.enemies.filter((e) => e.left === "fled");
+        const yieldedEnemies = summary.enemies.filter((e) => e.left === "surrendered");
         const partyStatus = summary.party.map((p) => {
           const hpPct = p.maxHp > 0 ? Math.round((p.hp / p.maxHp) * 100) : 0;
           const effects = p.statusEffects.length > 0 ? ` [${p.statusEffects.join(", ")}]` : "";
@@ -11547,16 +12206,38 @@ function GameSurfaceComponent({
           showInventoryNotification(localizeUi("ui.game.gamesurfacecomponent.lootDropped", { items: lootText }), true);
         }
 
-        // Flee on round 1 means no round actually resolved — phrase it accordingly.
+        // Flee on round 1 means no round actually resolved — phrase it accordingly. A ruleset fight
+        // left during its first round after somebody else had a turn was fought, and its costs stand.
         const rounds = fought ? fought.ruleset.rounds : summary.rounds;
+        const begun = fought ? (fought.ruleset.turns ?? 0) > 1 : false;
         const roundsPhrase =
-          outcome === "flee" && rounds <= 1 ? "before combat began" : `after ${rounds} round${rounds === 1 ? "" : "s"}`;
+          outcome === "flee" && rounds <= 1
+            ? begun
+              ? "during round 1"
+              : "before combat began"
+            : `after ${rounds} round${rounds === 1 ? "" : "s"}`;
 
         const recapLines: string[] = [];
         recapLines.push(`OUTCOME: ${outcome.toUpperCase()} (${roundsPhrase})`);
+        // Given up to honourable opponents (combat AI T6): beaten, but taken alive.
+        if (summary.yielded)
+          recapLines.push(
+            "The party surrendered to its honourable opponents, who accepted and take them alive as prisoners.",
+          );
+        // Called off after rounds in which nothing changed (K8): nobody got away, nobody won.
+        if (summary.stalled)
+          recapLines.push(
+            "Neither side could hurt or reach the other any more, and the fight broke off with both still standing.",
+          );
         if (defeatedEnemies.length > 0) recapLines.push(`Defeated: ${defeatedEnemies.join(", ")}`);
         if (survivingEnemies.length > 0 && !fought) {
           recapLines.push(`Survived: ${survivingEnemies.map((e) => `${e.name} (${e.hp}/${e.maxHp} HP)`).join(", ")}`);
+        }
+        if (fledEnemies.length > 0 && !fought) {
+          recapLines.push(`Fled the fight: ${fledEnemies.map((e) => `${e.name} (${e.hp}/${e.maxHp} HP)`).join(", ")}`);
+        }
+        if (yieldedEnemies.length > 0 && !fought) {
+          recapLines.push(`Surrendered to the party, alive: ${yieldedEnemies.map((e) => e.name).join(", ")}`);
         }
         // The ruleset's own numbers in place of the percentage lines: the fight was not fought on a
         // share of a maximum, so the Game Master is never shown one.
@@ -11565,25 +12246,58 @@ function GameSurfaceComponent({
         if (sheetRecapLine) recapLines.push(sheetRecapLine);
         if (summary.battlefieldSummary?.trim()) recapLines.push(`Battlefield: ${summary.battlefieldSummary.trim()}`);
         // What dropped is already in the bags, so the Game Master narrates it and never adds it again.
-        if (lootText) recapLines.push(`Loot (already in the party's bags): ${lootText}`);
+        if (lootText) recapLines.push(`${GAME_LOOT_GIVEN_LINE}${lootText}`);
         if (leftText) recapLines.push(`Left behind (nobody could carry it): ${leftText}`);
-        if (!lootText && !leftText)
-          recapLines.push(
-            'Rewards: If a reward is narratively appropriate, decide it now and add it with [inventory: action="add" item="..."].',
-          );
+        // The Game Master's alone: the Combat Result card leaves it out.
+        if (!lootText && !leftText) recapLines.push(GAME_REWARD_PROMPT_LINE);
 
         const recap = recapLines.join("\n");
         let prefix: string;
         if (outcome === "victory") prefix = "*The battle is won.*";
-        else if (outcome === "defeat") prefix = "*The party has been defeated...*";
-        else prefix = "*The party flees from battle!*";
+        else if (outcome === "defeat")
+          prefix = summary.yielded ? "*The party lays down its arms...*" : "*The party has been defeated...*";
+        else prefix = summary.stalled ? "*The fight breaks off...*" : "*The party flees from battle!*";
 
         // Wrap the recap in a clearly-labelled block so the GM treats it as canonical combat
         // context (the core prompt rule teaches how to narrate it). The block is stripped from
         // the user-visible bubble by stripGmTags / stripGmTagsKeepReadables, leaving only the
         // cosmetic italic prefix. State is flipped above via transitionGameState so no
         // [state:] tag is needed here.
-        sendMessage(`${prefix}\n\n[combat_result]\n${recap}\n[/combat_result]`);
+        const result = `${prefix}\n\n[combat_result]\n${recap}\n[/combat_result]`;
+        // The whole party fallen (Alyssa 2026-10-26): both ways on offer, a checkpoint or the story, and
+        // the story told only once the player has picked it (laptop pass 8 2026-10-26: the Game Master
+        // was already writing on while the checkpoints were open). Closing the notice is playing on; a
+        // checkpoint loaded puts it away with nothing sent.
+        if (outcome === "defeat" && !summary.yielded) {
+          let settled = false;
+          const playOn = () => {
+            if (settled) return;
+            settled = true;
+            window.removeEventListener(GAME_CHECKPOINT_LOADED_EVENT, loaded);
+            sendMessage(result);
+          };
+          const loaded = () => {
+            settled = true;
+            window.removeEventListener(GAME_CHECKPOINT_LOADED_EVENT, loaded);
+            toast.dismiss(notice);
+          };
+          window.addEventListener(GAME_CHECKPOINT_LOADED_EVENT, loaded);
+          const notice = toast.info(localizeUi("game.combat.partyFallen"), {
+            action: {
+              label: localizeUi("game.combat.partyFallenCheckpoint"),
+              onClick: (event) => {
+                // Kept up while the list is open, so playing on is still there if none is loaded.
+                event.preventDefault();
+                useUIStore
+                  .getState()
+                  .openModal("game-checkpoints", { chatId: activeChatId, highlight: "combat_start" });
+              },
+            },
+            cancel: { label: localizeUi("game.combat.partyFallenPlayOn"), onClick: playOn },
+            onDismiss: playOn,
+            duration: Number.POSITIVE_INFINITY,
+          });
+        } else sendMessage(result);
 
         // Journal: record combat outcome. The server's addCombatEntry only persists
         // (description, outcome) into JournalEntry.content, so fold the structured recap
@@ -11627,6 +12341,9 @@ function GameSurfaceComponent({
       transitionGameState,
     ],
   );
+  useEffect(() => {
+    handleCombatEndRef.current = handleCombatEnd;
+  });
 
   // Toggle audio mute
   const handleToggleMute = useCallback(() => {
@@ -11819,15 +12536,6 @@ function GameSurfaceComponent({
       return w;
     });
   }, [hudWidgets]);
-
-  const handleStartGameRequest = useCallback(() => {
-    if (experienceStartupBlocked || startGame.isPending || startGameRequested || startGameGuardRef.current) return;
-    if (normalizedWidgets.length > 0) {
-      setPrepareInitialWidgetsOpen(true);
-      return;
-    }
-    handleStartGameNow();
-  }, [experienceStartupBlocked, handleStartGameNow, normalizedWidgets.length, startGame.isPending, startGameRequested]);
 
   useEffect(() => {
     if (combatUiActive || normalizedWidgets.length === 0) {
@@ -12036,7 +12744,105 @@ function GameSurfaceComponent({
     [chat.characterIds],
   );
   const setupWizardDismissed = dismissedSetupWizardChatId === activeChatId;
-  const canAutoDeleteEmptySetupChat = needsCreation && !isMessagesLoading && messages.length === 0;
+  // Once its setup has finished, a game forgets that its wizard was ever closed.
+  useEffect(() => {
+    if (!needsCreation && sessionStatus !== "setup") writeSetupDismissed(activeChatId, false);
+  }, [activeChatId, needsCreation, sessionStatus]);
+  // The chat read can lag behind Start Game: once a game was made here (a failed setup still made
+  // it), the chat holds a campaign the server keeps, so closing setup keeps it too.
+  const setupMadeGame = createGame.data?.sessionChat.id === activeChatId;
+  const canAutoDeleteEmptySetupChat = needsCreation && !setupMadeGame && !isMessagesLoading && messages.length === 0;
+  // A "New Game" chat the player walks away from before any game was made in it is dropped, as
+  // closing the wizard already drops it, so leaving setup for another chat or page leaves no empty
+  // chat behind. The decision is the one the last commit saw for that chat; the drop waits a tick
+  // so a remount of the same chat (React's double effects in development) takes it back.
+  const leaveDropsChat = useRef<string | null>(null);
+  // Why the last Start Game did not finish, kept on screen over the wizard until the next try:
+  // the game is already made by then, and a toast that fades leaves a player looking at a wizard
+  // that seems to have done nothing.
+  const [setupFailure, setSetupFailure] = useState<{
+    chatId: string;
+    message: string;
+    /** Refused because a setup for this game is still running (409), so trying again or another
+     *  connection is no help: only its own reason is shown. */
+    running?: boolean;
+  } | null>(null);
+  // Refused because another tab is creating this game's world: this tab reads the game again until
+  // that setup is done, then leaves the wizard for the game it made (laptop playtest 2026-10-24: the
+  // second tab stayed on the GM step).
+  const waitingOnOtherSetup = setupFailure?.running === true && setupFailure.chatId === activeChatId;
+  useEffect(() => {
+    if (!waitingOnOtherSetup) return;
+    if (sessionStatus !== "setup") {
+      useGameModeStore.getState().setSetupActive(false);
+      setSetupFailure(null);
+      return;
+    }
+    const timer = window.setInterval(() => {
+      void queryClient.invalidateQueries({ queryKey: chatKeys.detail(activeChatId) });
+    }, 4000);
+    return () => window.clearInterval(timer);
+  }, [activeChatId, queryClient, sessionStatus, waitingOnOtherSetup]);
+  // A tab that only sits on the wizard reads the game again now and then, and whenever it is looked
+  // at again, so a setup another tab finished takes it to that game too (laptop re-test 2026-10-24:
+  // a second tab left on the wizard never noticed).
+  const unmade = needsCreation || sessionStatus === "setup";
+  const onSetupWizard = isSetupActive || (!setupWizardDismissed && unmade);
+  const setupBusy = createGame.isPending || gameSetup.isPending;
+  const sawUnmade = useRef(false);
+  useEffect(() => {
+    if (!onSetupWizard || setupBusy) {
+      sawUnmade.current = false;
+      return;
+    }
+    if (unmade) sawUnmade.current = true;
+    else if (sawUnmade.current) {
+      // Made elsewhere while this tab looked on: its wizard closes for the game.
+      sawUnmade.current = false;
+      useGameModeStore.getState().setSetupActive(false);
+      return;
+    }
+    if (waitingOnOtherSetup) return;
+    const reread = () => {
+      if (document.visibilityState === "visible")
+        void queryClient.invalidateQueries({ queryKey: chatKeys.detail(activeChatId) });
+    };
+    const timer = window.setInterval(reread, 5000);
+    window.addEventListener("focus", reread);
+    document.addEventListener("visibilitychange", reread);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", reread);
+      document.removeEventListener("visibilitychange", reread);
+    };
+  }, [activeChatId, onSetupWizard, queryClient, setupBusy, unmade, waitingOnOtherSetup]);
+  useEffect(() => {
+    leaveDropsChat.current =
+      canAutoDeleteEmptySetupChat && !createGame.isPending && !gameSetup.isPending ? activeChatId : null;
+  });
+  useEffect(() => {
+    const chatId = activeChatId;
+    const waiting = emptySetupChatDrops.get(chatId);
+    if (waiting) {
+      clearTimeout(waiting);
+      emptySetupChatDrops.delete(chatId);
+    }
+    return () => {
+      if (leaveDropsChat.current !== chatId) return;
+      emptySetupChatDrops.set(
+        chatId,
+        setTimeout(() => {
+          emptySetupChatDrops.delete(chatId);
+          if (useChatStore.getState().activeChatId === chatId) return;
+          // Without force: the server refuses a chat that holds a game after all.
+          void api
+            .delete(`/chats/${chatId}`)
+            .then(() => queryClient.invalidateQueries({ queryKey: chatKeys.list() }))
+            .catch(() => undefined);
+        }, 0),
+      );
+    };
+  }, [activeChatId, queryClient]);
   const shouldShowSetupWizard =
     isSetupActive || (!setupWizardDismissed && (needsCreation || sessionStatus === "setup"));
 
@@ -12060,7 +12866,7 @@ function GameSurfaceComponent({
   if (shouldShowSetupWizard) {
     // Shared with an experience's own setup, so closing either one behaves identically.
     /** Closes setup from either wizard: no-op while a launch is pending, and drops an empty chat. */
-    const dismissSetupWizard = () => {
+    const dismissSetupWizard = async () => {
       if (
         createGame.isPending ||
         gameSetup.isPending ||
@@ -12071,13 +12877,17 @@ function GameSurfaceComponent({
       )
         return;
       useGameModeStore.getState().setSetupActive(false);
-      if (canAutoDeleteEmptySetupChat) {
-        deleteChat.mutate(activeChatId, {
-          onSuccess: () => useChatStore.getState().setActiveChatId(null),
-        });
+      try {
+        if (await discardNewChatSetup(activeChatId)) return;
+      } catch {
+        toast.error(localizeUi("chat.wizard.cancelFailed"));
         return;
       }
       setDismissedSetupWizardChatId(activeChatId);
+      writeSetupDismissed(activeChatId, true);
+      // A Start Game that failed made the game without this page reading it yet: read it now, so
+      // the closed setup shows as unfinished at once rather than only after a reload (re-test 10).
+      if (setupMadeGame) void queryClient.invalidateQueries({ queryKey: chatKeys.detail(activeChatId) });
       if (needsCreation || sessionStatus === "setup") {
         toast.info(localizeUi("ui.game.gamesurfacecomponent.gameSetupDismissedTheCampaignWasKept"));
       }
@@ -12096,6 +12906,7 @@ function GameSurfaceComponent({
             activeChatId={activeChatId}
             isNewGame={needsCreation}
             chatMetadata={chatMeta}
+            savedGameName={chat.name}
             onSetupError={handleJsonRepairError}
             onComplete={(config, preferences, conns, wizardGameName, mapPlan) => {
               const queueSetupMapPlan = (chatId: string) => {
@@ -12116,6 +12927,7 @@ function GameSurfaceComponent({
               };
               const runSetup = (chatId: string) => {
                 if (!queueSetupMapPlan(chatId)) return;
+                setSetupFailure(null);
                 gameSetup.mutate(
                   {
                     chatId,
@@ -12130,7 +12942,19 @@ function GameSurfaceComponent({
                     },
                     onError: (error) => {
                       if (activeChatIdRef.current !== chatId) return;
-                      if (!handleJsonRepairError(error)) clearPendingSetupMapPlan(chatId);
+                      if (handleJsonRepairError(error)) return;
+                      clearPendingSetupMapPlan(chatId);
+                      // Stopped by the player: the wizard stays open with their choices, and nothing failed.
+                      if (isRequestCancelled(error)) return;
+                      setSetupFailure({
+                        chatId,
+                        message: error instanceof Error && error.message.trim() ? error.message.trim() : "",
+                        ...(error instanceof ApiError &&
+                        (error.status === 409 ||
+                          (error.payload as { code?: unknown } | undefined)?.code === "setup_running")
+                          ? { running: true }
+                          : {}),
+                      });
                     },
                   },
                 );
@@ -12199,6 +13023,7 @@ function GameSurfaceComponent({
               }
             }}
             onCancel={dismissSetupWizard}
+            onStopGeneration={gameSetup.isPending ? gameSetup.cancel : undefined}
             isLoading={
               createGame.isPending ||
               gameSetup.isPending ||
@@ -12212,6 +13037,28 @@ function GameSurfaceComponent({
             characters={libraryCharacters}
             initialPartyCharacterIds={initialSetupPartyCharacterIds}
           />
+          {setupFailure?.chatId === activeChatId && !gameSetup.isPending && (
+            <div
+              role="alert"
+              className="fixed left-1/2 top-3 z-[10002] flex w-[min(36rem,calc(100vw-2rem))] -translate-x-1/2 items-start gap-3 rounded-lg border border-red-400/40 bg-red-950/90 px-4 py-3 text-sm text-red-100 shadow-xl backdrop-blur"
+            >
+              <p className="flex-1">
+                {setupFailure.running && setupFailure.message
+                  ? setupFailure.message
+                  : localizeUi("ui.game.gamesurfacecomponent.setupDidNotFinish", {
+                      reason: setupFailure.message || localizeUi("ui.game.gamesurfacecomponent.setupNoReason"),
+                    })}
+              </p>
+              <button
+                type="button"
+                onClick={() => setSetupFailure(null)}
+                aria-label={localizeUi("ui.game.gamesurfacecomponent.setupFailureDismiss")}
+                className="rounded p-0.5 text-red-200 hover:bg-red-500/20"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          )}
           {activePendingSharedWorldSetupApply ? (
             <CapabilityElement
               key={`${activePendingSharedWorldSetupApply.chatId}:${activePendingSharedWorldSetupApply.attempt}`}
@@ -12272,6 +13119,32 @@ function GameSurfaceComponent({
           onClose={() => setJsonRepairRequest(null)}
           onApplied={handleJsonRepairApplied}
         />
+      </>
+    );
+  }
+
+  // Setup was closed before it finished: nothing is loading or playable yet, so say so and offer it again.
+  if (setupWizardDismissed && sessionStatus === "setup" && !gameSetup.isPending && !isStreaming) {
+    return (
+      <>
+        <div
+          data-component="GameSurface.SetupNotFinished"
+          className="flex h-full items-center justify-center bg-[var(--background)] p-6 dark:bg-black/80"
+        >
+          <div className="flex max-w-sm flex-col items-center gap-3 text-center text-sm text-[var(--muted-foreground)] dark:text-white/60">
+            <span>{localizeUi("ui.game.gamesurfacecomponent.setupNotFinished")}</span>
+            <button
+              onClick={() => {
+                writeSetupDismissed(activeChatId, false);
+                setDismissedSetupWizardChatId(null);
+              }}
+              className="flex items-center gap-2 rounded-lg bg-[var(--muted)]/30 px-4 py-2 text-xs text-[var(--foreground)]/70 transition-colors hover:bg-[var(--muted)]/50 hover:text-[var(--foreground)] dark:bg-white/10 dark:text-white/70 dark:hover:bg-white/20 dark:hover:text-white"
+            >
+              {localizeUi("ui.game.gamesurfacecomponent.openSetup")}
+            </button>
+          </div>
+        </div>
+        {imagePromptReviewModal}
       </>
     );
   }
@@ -12359,23 +13232,15 @@ function GameSurfaceComponent({
                   <Plug size={12} />
                   {localizeUi("ui.game.gamesurfacecomponent.gmPartyModel")}
                 </span>
-                <select
-                  value={chat.connectionId ?? ""}
-                  onChange={(e) => handleStartScreenConnectionChange(e.target.value)}
+                <ConnectionSelect
+                  job={t("connections.picker.job.gameMaster")}
+                  value={chat.connectionId || null}
                   disabled={isStreaming || startGame.isPending || updateChat.isPending}
-                  className="w-full rounded-lg bg-zinc-950/80 px-3 py-2 text-xs text-[var(--foreground)] outline-none ring-1 ring-zinc-700/80 transition-all focus:ring-zinc-400/40 disabled:opacity-60 dark:bg-white/10"
-                >
-                  <option value="">{localizeUi("ui.game.gamesurfacecomponent.none")}</option>
-                  <option value="random">{localizeUi("ui.game.gamesurfacecomponent.random")}</option>
-                  {languageConnections.map((connection) => (
-                    <option key={connection.id} value={connection.id}>
-                      {connection.name}
-                      {connection.model
-                        ? localizeUi("ui.game.gamesetupwizard.value1", { value1: connection.model })
-                        : ""}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(id) => handleStartScreenConnectionChange(id ?? "")}
+                  defaultLabel={localizeUi("ui.game.gamesurfacecomponent.none")}
+                  inherits="main"
+                  extraOptions={[{ value: "random", label: localizeUi("ui.game.gamesurfacecomponent.random") }]}
+                />
               </label>
               {introPhase === "intro" ? (
                 <div className="flex flex-col items-center gap-3">
@@ -12455,18 +13320,32 @@ function GameSurfaceComponent({
                     </button>
                   )}
                 </div>
-              ) : (
-                <button
-                  onClick={() => {
-                    audioManager.unlock();
-                    handleStartGameRequest();
-                  }}
-                  disabled={experienceStartupBlocked || startGame.isPending || startGameRequested}
-                  className="group flex items-center gap-2 rounded-lg bg-zinc-900 px-6 py-3 text-sm font-semibold text-zinc-100 ring-1 ring-zinc-700/80 transition-all hover:scale-105 hover:bg-zinc-800 hover:shadow-lg hover:shadow-black/25 disabled:opacity-50 disabled:hover:scale-100"
-                >
-                  <Play size={18} className="transition-transform group-hover:scale-110" />
-                  {localizeUi("ui.game.gamesurfacecomponent.startGame")}
-                </button>
+              ) : prepareInitialWidgetsOpen ? null : (
+                // Start Game starts the game: the setup wizard already asked once. The starting widgets
+                // sheet is there for whoever wants it, and has its own Start Game, so this one waits.
+                <div className="flex flex-col items-center gap-2">
+                  <button
+                    onClick={() => {
+                      audioManager.unlock();
+                      handleStartGameNow();
+                    }}
+                    disabled={experienceStartupBlocked || startGame.isPending || startGameRequested}
+                    className="group flex items-center gap-2 rounded-lg bg-zinc-900 px-6 py-3 text-sm font-semibold text-zinc-100 ring-1 ring-zinc-700/80 transition-all hover:scale-105 hover:bg-zinc-800 hover:shadow-lg hover:shadow-black/25 disabled:opacity-50 disabled:hover:scale-100"
+                  >
+                    <Play size={18} className="transition-transform group-hover:scale-110" />
+                    {localizeUi("ui.game.gamesurfacecomponent.startGame")}
+                  </button>
+                  {normalizedWidgets.length > 0 && (
+                    <button
+                      onClick={() => setPrepareInitialWidgetsOpen(true)}
+                      disabled={experienceStartupBlocked || startGame.isPending || startGameRequested}
+                      className={cn(SURFACE_BTN, "disabled:opacity-50")}
+                    >
+                      <Pencil size={12} />
+                      {localizeUi("ui.game.gamesurfacecomponent.reviewStartingWidgets")}
+                    </button>
+                  )}
+                </div>
               )}
             </div>
           </div>
@@ -12612,6 +13491,7 @@ function GameSurfaceComponent({
             <Suspense fallback={null}>
               <GameJournal
                 chatId={activeChatId}
+                rulesetPin={chatMeta.gameRuleset}
                 hasWorld={Boolean(chatMeta.gameWorld)}
                 canMakeWorld={canMakeWorld}
                 worldRequest={makeWorldRequest}
@@ -12929,6 +13809,8 @@ function GameSurfaceComponent({
               setDirectionsPlaying(playing);
               // When intro cinematic finishes, clear the flag
               if (!playing && introCinematicActive) setIntroCinematicActive(false);
+              // Played out: a remounted engine must never play them again.
+              if (!playing) setActiveDirections((current) => (current.length ? [] : current));
             }}
           >
             {!replayActive && renderStoryboardBackgroundVisual()}
@@ -12992,7 +13874,7 @@ function GameSurfaceComponent({
                   data-tracker-panel-anchor="roleplay-hud"
                   className={cn(
                     "pointer-events-none absolute right-3 z-50",
-                    tacticalCombatActive
+                    combatOwnsTopChrome
                       ? "top-[calc(var(--tactical-chrome-height,3rem)+0.5rem)]"
                       : topOverlayOffsetClass,
                     (replayActive || boardFightOnScreen) && "hidden",
@@ -13078,7 +13960,7 @@ function GameSurfaceComponent({
                         gameRuleset.definition.clocks &&
                         Boolean(gameSnapshot?.rulesetClocks?.length) &&
                         "flex-wrap md:flex-nowrap",
-                      tacticalCombatActive
+                      combatOwnsTopChrome
                         ? "top-[calc(var(--tactical-chrome-height,3rem)+0.5rem)]"
                         : topOverlayOffsetClass,
                       replayActive && "hidden",
@@ -13110,6 +13992,7 @@ function GameSurfaceComponent({
                         spatialContextLoading={activeSpatialContextLoading}
                         chatId={activeChatId}
                         constraintsRef={hudSurfaceRef}
+                        inFight={combatUiActive}
                       />
                     </div>
 
@@ -13426,6 +14309,46 @@ function GameSurfaceComponent({
                         </>
                       );
 
+                      const directedCombatStyle = rulesetFightDefinition
+                        ? ("ruleset" as const)
+                        : isBuiltInCombatStyle(effectiveCombatStyle)
+                          ? effectiveCombatStyle
+                          : null;
+                      const combatSurfaceContext: CombatSurfaceContext = {
+                        chatId: activeChatId,
+                        anchorMessageId: combatStartMessageId,
+                        party: combatParty,
+                        enemies: combatEnemies,
+                        setupConfig: combatSetupConfig,
+                        chatMeta,
+                        scene: {
+                          environment: combatSceneMeta?.environmentType ?? null,
+                          formation: combatSceneMeta?.formation ?? null,
+                          battlefield: combatSceneMeta?.battlefield ?? null,
+                          battlefieldError: combatSceneMeta?.battlefieldError ?? null,
+                          tileWords: gameKit?.tiles,
+                        },
+                        elements: gameKit ? gameElements : undefined,
+                        inventoryItems: fightInventoryLines,
+                        itemEffects: fightItemEffects,
+                        mechanics: combatMechanics,
+                        dialogue: {
+                          lines: combatDialogueLines,
+                          cues: combatDialogueCues,
+                          voicedSpeakerNames: voicedCombatSpeakerNames,
+                          voiceVolume: effectiveGameVoiceVolume,
+                        },
+                        isStreaming,
+                        controlsSlot: combatControlsSlot,
+                        onCombatEnd: handleCombatEnd,
+                        onInventoryItemUsed: handleUseCombatInventoryItem,
+                        onCombatantsChange: handleCombatantsChange,
+                        onOpenInventory: () => setInventoryOpen(true),
+                        onCustomInstruction: handleCombatCustomInstruction,
+                        onSpriteSuggestionChange: setCombatSpriteSuggestion,
+                        onBattlefieldReady: handleTacticalBattlefieldReady,
+                      };
+
                       return (
                         <div className="relative h-full min-h-0">
                           <Suspense
@@ -13435,12 +14358,65 @@ function GameSurfaceComponent({
                               </div>
                             }
                           >
-                            {combatSetupConfig?.combatDirector && combatStartMessageId ? (
+                            {/* The director runs the built-in styles and a ruleset's own fights; a registered
+                                style draws its battle itself. */}
+                            {combatSetupConfig?.combatDirector && combatStartMessageId && fightWaitsOnRules ? (
+                              <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center text-sm text-white/80">
+                                {fightWaitsOnRules === "loading" ? (
+                                  <p>{localizeUi("ui.game.gamesurfacecomponent.combatRulesLoading")}</p>
+                                ) : (
+                                  <>
+                                    <p className="max-w-md">
+                                      {/* Why, in words: a read that failed is not a ruleset that is missing,
+                                          and the ruleset is named by its own name where one is installed. */}
+                                      {localizeUi(
+                                        gameRuleset.status === "unavailable" && gameRuleset.reason === "unreadable"
+                                          ? "ui.game.gamesurfacecomponent.combatRulesUnreadable"
+                                          : gameRuleset.status === "unavailable" && gameRuleset.reason === "older"
+                                            ? "ui.game.gamesurfacecomponent.combatRulesOlder"
+                                            : gameRuleset.status === "unavailable" && gameRuleset.name
+                                              ? "ui.game.gamesurfacecomponent.combatRulesUnavailable"
+                                              : "ui.game.gamesurfacecomponent.combatRulesMissing",
+                                        {
+                                          name: gameRuleset.status === "unavailable" ? (gameRuleset.name ?? "") : "",
+                                          version:
+                                            gameRuleset.status === "unavailable" ? (gameRuleset.ref?.version ?? 1) : 1,
+                                        },
+                                      )}
+                                    </p>
+                                    <div className="flex flex-wrap justify-center gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          void queryClient.invalidateQueries({
+                                            queryKey: capabilityPackageKeys.rulesets(),
+                                          })
+                                        }
+                                        className="rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-black hover:bg-amber-400"
+                                      >
+                                        {localizeUi("ui.game.gamesurfacecomponent.combatRulesRetry")}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setPlainFightChosen(fightKey)}
+                                        className="rounded-lg border border-white/20 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/70 hover:bg-white/15"
+                                      >
+                                        {localizeUi("ui.game.gamesurfacecomponent.combatRulesWithout")}
+                                      </button>
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            ) : combatSetupConfig?.combatDirector &&
+                              combatStartMessageId &&
+                              combatParty &&
+                              combatEnemies &&
+                              directedCombatStyle ? (
                               <DirectedCombatUI
                                 key={`${activeChatId}:${combatStartMessageId}`}
                                 chatId={activeChatId}
                                 anchor={combatStartMessageId}
-                                style={rulesetFightDefinition ? "ruleset" : effectiveCombatStyle}
+                                style={directedCombatStyle}
                                 rulesetDefinition={rulesetFightDefinition ?? undefined}
                                 positioned={rulesetFightPositioned}
                                 battlefield={combatSceneMeta?.battlefield ?? undefined}
@@ -13461,50 +14437,8 @@ function GameSurfaceComponent({
                                 onInventoryItemUsed={handleUseCombatInventoryItem}
                                 onCombatantsChange={handleCombatantsChange}
                               />
-                            ) : effectiveCombatStyle === "tactical" ? (
-                              <TacticalCombatUI
-                                tileWords={gameKit?.tiles}
-                                key={activeChatId}
-                                chatId={activeChatId}
-                                party={combatParty}
-                                enemies={combatEnemies}
-                                difficulty={(combatSetupConfig?.difficulty as string | undefined) ?? "normal"}
-                                initialState={
-                                  (chatMeta.gameTacticalCombatSnapshot as TacticalCombatState | null | undefined) ??
-                                  null
-                                }
-                                environment={combatSceneMeta?.environmentType ?? null}
-                                formation={combatSceneMeta?.formation ?? null}
-                                battlefield={combatSceneMeta?.battlefield ?? null}
-                                battlefieldError={combatSceneMeta?.battlefieldError ?? null}
-                                onBattlefieldReady={handleTacticalBattlefieldReady}
-                                playerCombatantId={combatParty[0]?.id ?? null}
-                                onCombatEnd={handleCombatEnd}
-                                onCustomInstruction={handleCombatCustomInstruction}
-                              />
                             ) : (
-                              <GameCombatUI
-                                elements={gameKit ? gameElements : undefined}
-                                chatId={activeChatId}
-                                party={combatParty}
-                                enemies={combatEnemies}
-                                inventoryItems={fightInventoryLines}
-                                onCombatEnd={handleCombatEnd}
-                                onInventoryItemUsed={handleUseCombatInventoryItem}
-                                onCombatantsChange={handleCombatantsChange}
-                                onOpenInventory={() => setInventoryOpen(true)}
-                                onCustomInstruction={handleCombatCustomInstruction}
-                                onSpriteSuggestionChange={setCombatSpriteSuggestion}
-                                isStreaming={isStreaming}
-                                narration="Battle starts."
-                                combatDialogue={combatDialogueLines}
-                                combatDialogueCues={combatDialogueCues}
-                                combatItemEffects={fightItemEffects}
-                                combatMechanics={combatMechanics}
-                                voicedCombatSpeakerNames={voicedCombatSpeakerNames}
-                                gameVoiceVolume={effectiveGameVoiceVolume}
-                                combatControlsSlot={combatControlsSlot}
-                              />
+                              combatStyleSurface.render(combatSurfaceContext)
                             )}
                           </Suspense>
                         </div>
@@ -13558,6 +14492,8 @@ function GameSurfaceComponent({
                             onRequestCombatStart={classicCombatStarter}
                             combatStarting={combatStarting}
                             combatGenerationFailed={combatGenerationFailedAtGate}
+                            combatGenerationCutOff={combatGenerationCutOff}
+                            combatGenerationReason={combatGenerationError}
                             onRetryCombatGeneration={retryCombatGeneration}
                             onDeleteMessage={onDeleteMessage}
                             onPeekPrompt={onPeekPrompt}
@@ -13598,6 +14534,8 @@ function GameSurfaceComponent({
                                   inline
                                   draftKey={activeChatId}
                                   focusToken={gameInputFocusToken}
+                                  sendToken={gameInputSendToken}
+                                  onSendTokenUnsent={retryWithoutUnsentTurn}
                                   onIllustrate={handleManualSceneIllustration}
                                   spatialCapabilityEnabled={hierarchicalMapsActive}
                                   interruptMode={pendingInterruptMode}
@@ -13657,6 +14595,8 @@ function GameSurfaceComponent({
                         onRequestCombatStart={classicCombatStarter}
                         combatStarting={combatStarting}
                         combatGenerationFailed={combatGenerationFailedAtGate}
+                        combatGenerationCutOff={combatGenerationCutOff}
+                        combatGenerationReason={combatGenerationError}
                         onRetryCombatGeneration={retryCombatGeneration}
                         onDeleteMessage={onDeleteMessage}
                         onPeekPrompt={onPeekPrompt}
@@ -13697,6 +14637,8 @@ function GameSurfaceComponent({
                               inline
                               draftKey={activeChatId}
                               focusToken={gameInputFocusToken}
+                              sendToken={gameInputSendToken}
+                              onSendTokenUnsent={retryWithoutUnsentTurn}
                               onIllustrate={handleManualSceneIllustration}
                               spatialCapabilityEnabled={hierarchicalMapsActive}
                               interruptMode={pendingInterruptMode}
@@ -13838,7 +14780,7 @@ function GameSurfaceComponent({
 
                 {/* Inventory overlay */}
                 <GameInventory
-                  items={inventoryItems}
+                  items={inventoryShown}
                   bags={inventoryBags}
                   open={inventoryOpen}
                   onClose={() => setInventoryOpen(false)}
@@ -13849,6 +14791,7 @@ function GameSurfaceComponent({
                   placeAmong={inventoryPlaceAmong}
                   onWearItem={handleWearInventoryStack}
                   onSwitchItem={handleSwitchInventoryStack}
+                  onFormItem={handleFormInventoryStack}
                   onRenameItem={handleRenameInventoryItem}
                   onSetItemQuantity={handleSetInventoryStackQuantity}
                   onSplitItem={handleSplitInventoryStack}
@@ -13857,6 +14800,7 @@ function GameSurfaceComponent({
                   onSwapItems={handleSwapInventoryStacks}
                   canInteract={sessionInteractive && narrationDone && !isStreaming}
                   onUseItem={handleUseInventoryStack}
+                  onInspectItem={inventorySpotsFakes ? handleInspectInventoryStack : undefined}
                   startingGear={inventoryStartingGear}
                 />
 

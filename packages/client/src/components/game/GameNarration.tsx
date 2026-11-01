@@ -48,8 +48,10 @@ import { useRenderTimer } from "../../lib/perf-diagnostics";
 import { findNamedMapValue } from "../../lib/game-character-name-match";
 import type { GameSegmentEdit } from "../../lib/game-segment-edits";
 import { hasVisibleGameNarrationText, parseGmTags, stripGmTagsKeepReadables } from "../../lib/game-tag-parser";
+import { truncateMessageContentAtSegment } from "../../lib/narration-truncation";
 import { audioManager } from "../../lib/game-audio";
 import { normalizeSpriteExpressionKey, resolveSpriteExpression } from "../../lib/sprite-expression-match";
+import { normalizeGameTtsEmotion } from "../../lib/game-tts-emotion";
 import type { SpriteInfo } from "../../hooks/use-characters";
 import { useTranslate } from "../../hooks/use-translate";
 import { useGenerationStatus } from "../../hooks/use-chats";
@@ -75,12 +77,15 @@ import { estimateGameSessionHistoryTokens } from "../../lib/game-session-history
 import { createMessageMacroResolver, findCharacterByName } from "../../lib/chat-macros";
 import { animateTextHtml } from "./AnimatedText";
 import { ttsService } from "../../lib/tts-service";
+import { TTS_AUTOPLAY_VOICE_EVENT, type TTSAutoplayVoiceDetail } from "../../lib/tts-autoplay";
 import { getOrCreateCachedTTSAudioBlob } from "../../lib/tts-audio-cache";
 import {
   findTTSCharacterIdBySpeakerName,
+  getTTSPersonaVoice,
   resolveTTSNarratorVoice,
   resolveTTSVoiceForSpeaker,
   splitTTSChunks,
+  type TTSVoicePersona,
 } from "../../lib/tts-dialogue";
 import {
   buildGameTranslationSource,
@@ -91,6 +96,7 @@ import {
   type PartyDialogueLine,
   type Message,
   type TTSConfig,
+  type GameTtsEmotion,
   type GameNpc,
   type SkillCheckResult,
   type GameDicePlaceholderRecord,
@@ -117,84 +123,8 @@ import {
 
 const GamePeekPromptButton = lazy(() => import("./GamePeekPromptButton"));
 
-const GAME_TTS_EMOTIONS = [
-  "neutral",
-  "happy",
-  "sad",
-  "angry",
-  "surprised",
-  "scared",
-  "disgusted",
-  "thinking",
-  "laughing",
-  "crying",
-  "blushing",
-  "smirk",
-  "embarrassed",
-  "determined",
-  "confused",
-  "sleepy",
-] as const;
-
-type GameTtsEmotion = (typeof GAME_TTS_EMOTIONS)[number];
-
-const GAME_TTS_EMOTION_SET = new Set<string>(GAME_TTS_EMOTIONS);
 const SIDE_VOICE_AUTOPLAY_MAX_FAILURES = 3;
 const SIDE_VOICE_AUTOPLAY_RETRY_DELAY_MS = 350;
-
-const GAME_TTS_EMOTION_ALIASES: Record<string, GameTtsEmotion> = {
-  afraid: "scared",
-  anger: "angry",
-  amused: "laughing",
-  blush: "blushing",
-  confused_look: "confused",
-  confusion: "confused",
-  cry: "crying",
-  determined_look: "determined",
-  disgust: "disgusted",
-  drowsy: "sleepy",
-  embarrassed_smile: "embarrassed",
-  fear: "scared",
-  fearful: "scared",
-  flustered: "blushing",
-  focused: "determined",
-  grin: "happy",
-  joyful: "happy",
-  laugh: "laughing",
-  nervous: "scared",
-  pensive: "thinking",
-  puzzled: "confused",
-  sad_look: "sad",
-  sadness: "sad",
-  serious: "determined",
-  shocked: "surprised",
-  shy: "blushing",
-  sleep: "sleepy",
-  sleepy_eyes: "sleepy",
-  smile: "happy",
-  smirking: "smirk",
-  sobbing: "crying",
-  startled: "surprised",
-  surprise: "surprised",
-  think: "thinking",
-  tired: "sleepy",
-  worried: "scared",
-};
-
-function normalizeGameTtsEmotion(value?: string | null): GameTtsEmotion | null {
-  const normalized = value ? normalizeSpriteExpressionKey(value) : "";
-  if (!normalized) return null;
-  if (GAME_TTS_EMOTION_SET.has(normalized)) return normalized as GameTtsEmotion;
-  if (GAME_TTS_EMOTION_ALIASES[normalized]) return GAME_TTS_EMOTION_ALIASES[normalized];
-
-  const parts = normalized.split("_").filter(Boolean);
-  for (const part of parts) {
-    if (GAME_TTS_EMOTION_SET.has(part)) return part as GameTtsEmotion;
-    if (GAME_TTS_EMOTION_ALIASES[part]) return GAME_TTS_EMOTION_ALIASES[part];
-  }
-
-  return null;
-}
 
 function resolveGameSegmentTtsEmotion(segment: NarrationSegment): GameTtsEmotion {
   return normalizeGameTtsEmotion(segment.sprite) ?? (segment.partyType === "thought" ? "thinking" : "neutral");
@@ -364,6 +294,15 @@ const GAME_TTS_CHUNK_ATTEMPTS = 2;
 function GameGenerationStatus() {
   const { t: localizeUi } = useUiTranslation();
   const narrationSaved = useChatStore((s) => (s.activeChatId ? s.narrationSavedChatIds.has(s.activeChatId) : false));
+  // How long the turn has been waiting, so a slow or stalled provider is not five silent minutes
+  // (playtest 2026-10-26). Shown once the wait is long enough to wonder about.
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  useEffect(() => {
+    const startedAt = Date.now();
+    const timer = window.setInterval(() => setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000)), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const elapsed = `${Math.floor(elapsedSeconds / 60)}:${String(elapsedSeconds % 60).padStart(2, "0")}`;
 
   return (
     <div className="mt-2 flex items-center gap-1 text-xs text-[var(--foreground)]/50">
@@ -371,8 +310,11 @@ function GameGenerationStatus() {
       <span>
         {narrationSaved
           ? localizeUi("ui.game.gamenarration.preparingScene")
-          : localizeUi("ui.game.gamenarration.theGameMasterIsWritingTheNextSegment")}
+          : elapsedSeconds >= 60
+            ? localizeUi("ui.game.gamenarration.stillWaitingOnTheModel")
+            : localizeUi("ui.game.gamenarration.theGameMasterIsWritingTheNextSegment")}
       </span>
+      {elapsedSeconds >= 15 && <span className="tabular-nums">· {elapsed}</span>}
     </div>
   );
 }
@@ -450,6 +392,10 @@ interface GameNarrationProps {
   combatStarting?: boolean;
   /** Whether combat state generation failed for the current combat beat. */
   combatGenerationFailed?: boolean;
+  /** The failed setup was cut off before it finished, rather than refused or malformed. */
+  combatGenerationCutOff?: boolean;
+  /** What the failed setup said went wrong, shown beside the failure. */
+  combatGenerationReason?: string | null;
   /** Retry combat state generation. */
   onRetryCombatGeneration?: () => void;
   /** Open the standard delete-message flow for a backing chat message. */
@@ -717,6 +663,7 @@ function hashVoiceKey(value: string): string {
 function buildVoiceConfigSignature(config?: TTSConfig | null): string {
   if (!config) return "tts:none";
   return [
+    config.connectionId,
     config.source,
     config.baseUrl,
     config.model,
@@ -748,6 +695,7 @@ function buildVoiceLineTextCacheKey(
   job: Omit<GameVoiceAudioJob, "cacheKey" | "textCacheKey">,
 ): string {
   const rawKey = [
+    config.connectionId,
     config.source,
     config.baseUrl,
     config.model,
@@ -871,6 +819,7 @@ function findNpcVoiceHint(speaker: string | null | undefined, gameNpcs: GameNpc[
 
 type GameSegmentVoiceOptions = {
   playerSpeakerNames?: ReadonlySet<string>;
+  persona?: TTSVoicePersona | null;
 };
 
 function normalizeGameVoiceSpeakerName(value: string | null | undefined): string {
@@ -902,11 +851,17 @@ function isGameVoicePlayerTaggedNarration(
   return isGameVoicePlayerSpeaker(speakerMatch[1], playerSpeakerNames);
 }
 
-function shouldSkipGameVoiceSegment(segment: NarrationSegment, options: GameSegmentVoiceOptions): boolean {
+function shouldSkipGameVoiceSegment(
+  segment: NarrationSegment,
+  options: GameSegmentVoiceOptions,
+  config: TTSConfig,
+): boolean {
   if (segment.sourceRole === "user" || segment.sourceRole === "system") return true;
   if (segment.partyType === "thought") return true;
-  if (isGameVoicePlayerSpeaker(segment.speaker, options.playerSpeakerNames)) return true;
-  return segment.type === "narration" && isGameVoicePlayerTaggedNarration(segment.content, options.playerSpeakerNames);
+  const playerSpeaker =
+    isGameVoicePlayerSpeaker(segment.speaker, options.playerSpeakerNames) ||
+    (segment.type === "narration" && isGameVoicePlayerTaggedNarration(segment.content, options.playerSpeakerNames));
+  return playerSpeaker && !getTTSPersonaVoice(config, options.persona);
 }
 
 function getGameSegmentVoiceRequest(
@@ -915,23 +870,23 @@ function getGameSegmentVoiceRequest(
   gameNpcs: GameNpc[] = [],
   options: GameSegmentVoiceOptions = {},
 ): GameSegmentVoiceRequest | null {
-  if (shouldSkipGameVoiceSegment(segment, options)) return null;
+  if (shouldSkipGameVoiceSegment(segment, options, config)) return null;
   if (segment.type !== "dialogue" && segment.type !== "narration") return null;
 
-  if (segment.type === "dialogue") {
+  const playerSpeaker =
+    isGameVoicePlayerSpeaker(segment.speaker, options.playerSpeakerNames) ||
+    (segment.type === "narration" && isGameVoicePlayerTaggedNarration(segment.content, options.playerSpeakerNames));
+  if (segment.type === "dialogue" || playerSpeaker) {
     const chunks = splitTTSChunks(segment.content, config);
     if (chunks.length === 0) return null;
     const tone = resolveGameSegmentTtsEmotion(segment);
-    const voice = resolveTTSVoiceForSpeaker(
-      config,
-      segment.speaker,
-      undefined,
-      findNpcVoiceHint(segment.speaker, gameNpcs),
-    );
+    const voice = playerSpeaker
+      ? getTTSPersonaVoice(config, options.persona)
+      : resolveTTSVoiceForSpeaker(config, segment.speaker, undefined, findNpcVoiceHint(segment.speaker, gameNpcs));
     if (config.source === "elevenlabs" && !voice) return null;
     return {
       chunks,
-      speaker: segment.speaker,
+      speaker: playerSpeaker ? options.persona?.name || segment.speaker : segment.speaker,
       tone,
       voice,
     };
@@ -1117,11 +1072,16 @@ function formatSkillCheckLogContent(
   const checkSegments: NarrationSegment[] = skillChecks.map((skillCheck, index) => {
     const result = skillCheck.resolvedResult;
     // Not rolled because the character could not attempt it: said as that, never as a check still owed.
-    if (!result && skillCheck.reason === "untrained") {
+    if (!result && skillCheck.reason) {
       return {
         id: `${message.id}-skill-check-log-${index}`,
         type: "system",
-        content: localizeUi("game.narration.skillCheckUntrained", { skill: skillCheck.skill }),
+        content: localizeUi(
+          skillCheck.reason === "untrained"
+            ? "game.narration.skillCheckUntrained"
+            : "game.narration.skillCheckUnknownRoller",
+          { skill: skillCheck.skill },
+        ),
       };
     }
     if (!result) {
@@ -1187,6 +1147,8 @@ export function GameNarration({
   onRequestCombatStart,
   combatStarting,
   combatGenerationFailed,
+  combatGenerationCutOff,
+  combatGenerationReason,
   onRetryCombatGeneration,
   onDeleteMessage,
   onPeekPrompt,
@@ -2357,7 +2319,27 @@ export function GameNarration({
   const gameVoiceEnabled = Boolean(ttsConfig?.enabled && ttsConfig.autoplayGame);
   const gameVoiceConfigSignature = useMemo(() => buildVoiceConfigSignature(ttsConfig), [ttsConfig]);
   const normalizedGameVoiceVolume = Math.max(0, Math.min(1, gameVoiceVolume));
-  const gameVoicePlaybackBlocked = voicePlaybackBlocked ?? autoPlayBlocked;
+  const [pendingPersonaReadings, setPendingPersonaReadings] = useState<Set<string>>(() => new Set());
+  const voiceChatId = latestAssistant?.chatId ?? messages[0]?.chatId;
+  useEffect(() => {
+    setPendingPersonaReadings(new Set());
+    const onReading = (event: Event) => {
+      const detail = (event as CustomEvent<TTSAutoplayVoiceDetail>).detail;
+      if (!detail || detail.chatId !== voiceChatId) return;
+      setPendingPersonaReadings((current) => {
+        const next = new Set(current);
+        if (detail.pending) next.add(detail.readingId);
+        else next.delete(detail.readingId);
+        return next;
+      });
+    };
+    window.addEventListener(TTS_AUTOPLAY_VOICE_EVENT, onReading);
+    return () => {
+      window.removeEventListener(TTS_AUTOPLAY_VOICE_EVENT, onReading);
+    };
+  }, [voiceChatId]);
+  const gameVoiceExternallyBlocked = voicePlaybackBlocked ?? autoPlayBlocked;
+  const gameVoicePlaybackBlocked = gameVoiceExternallyBlocked || pendingPersonaReadings.size > 0;
 
   const cacheGameVoiceEntry = useCallback(
     (key: string, entry: GameSegmentVoiceEntry) => {
@@ -2469,7 +2451,7 @@ export function GameNarration({
             element: audio,
             blob,
             chatId: latestAssistant?.chatId ?? null,
-            characterId: findTTSCharacterIdBySpeakerName(entry.speaker, activeCharacterEntries),
+            characterId: findTTSCharacterIdBySpeakerName(entry.speaker, activeCharacterEntries, personaInfo),
             text: entry.chunks[urlIndex] ?? "",
           });
 
@@ -2524,6 +2506,7 @@ export function GameNarration({
       activeCharacterEntries,
       latestAssistant?.chatId,
       normalizedGameVoiceVolume,
+      personaInfo,
       queueLogScrollTopRestore,
       stopGameVoicePlayback,
     ],
@@ -2638,12 +2621,13 @@ export function GameNarration({
       const requests: GameSegmentVoiceRequest[] = [];
       const baseRequest = getGameSegmentVoiceRequest(segment, ttsConfig, gameNpcs, {
         playerSpeakerNames: playerVoiceSpeakerNames,
+        persona: personaInfo,
       });
       if (baseRequest) requests.push(baseRequest);
 
       return requests;
     },
-    [gameNpcs, playerVoiceSpeakerNames, ttsConfig],
+    [gameNpcs, personaInfo, playerVoiceSpeakerNames, ttsConfig],
   );
 
   const getVoiceRequestForSideLine = useCallback(
@@ -2663,10 +2647,11 @@ export function GameNarration({
       };
       const request = getGameSegmentVoiceRequest(sideSegment, ttsConfig, gameNpcs, {
         playerSpeakerNames: playerVoiceSpeakerNames,
+        persona: personaInfo,
       });
       return request ? [request] : [];
     },
-    [gameNpcs, playerVoiceSpeakerNames, ttsConfig],
+    [gameNpcs, personaInfo, playerVoiceSpeakerNames, ttsConfig],
   );
 
   const getVoiceKeyForSegment = useCallback(
@@ -3656,10 +3641,16 @@ export function GameNarration({
   useEffect(() => {
     if (gameVoiceEnabled && !isStreaming && !scenePreparing && !directionsActive && !gameVoicePlaybackBlocked) return;
     if (isStreaming || scenePreparing || directionsActive || gameVoicePlaybackBlocked) {
-      lastAutoPlayedVoiceKeyRef.current = null;
+      if (isStreaming || scenePreparing || directionsActive || gameVoiceExternallyBlocked) {
+        lastAutoPlayedVoiceKeyRef.current = null;
+        autoPlayedSideVoiceKeysRef.current.clear();
+      } else if (gameVoiceAudioRef.current && !gameVoiceAudioRef.current.ended) {
+        // Persona speech only restarts the Game line it actually interrupted.
+        if (lastAutoPlayedVoiceKeyRef.current === gameVoicePlayingKey) lastAutoPlayedVoiceKeyRef.current = null;
+        if (gameVoicePlayingKey) autoPlayedSideVoiceKeysRef.current.delete(gameVoicePlayingKey);
+      }
       autoPlayInFlightVoiceKeyRef.current = null;
       autoPlayInFlightSideVoiceKeysRef.current.clear();
-      autoPlayedSideVoiceKeysRef.current.clear();
       sideVoiceAutoPlayFailuresRef.current.clear();
       clearSideVoiceAutoPlayRetry();
     }
@@ -3668,7 +3659,9 @@ export function GameNarration({
     clearSideVoiceAutoPlayRetry,
     directionsActive,
     gameVoiceEnabled,
+    gameVoiceExternallyBlocked,
     gameVoicePlaybackBlocked,
+    gameVoicePlayingKey,
     isStreaming,
     scenePreparing,
     stopGameVoicePlayback,
@@ -3814,8 +3807,14 @@ export function GameNarration({
     const TICK_MS = 33; // ~30 fps
     const charsPerTick = Math.max(1, Math.round((cps * TICK_MS) / 1000));
 
+    // Read off the clock as well as counted per tick: a browser slows the timers of a tab it hides
+    // to one a second, and counted alone a turn then took minutes to type out (the 2026-10-23
+    // playtest's fight that waited 6.5 minutes on the narration).
+    const startedAt = performance.now();
+    const from = tw.pos;
     const interval = setInterval(() => {
-      tw.pos = Math.min(dispLen, tw.pos + charsPerTick);
+      const byClock = from + Math.floor((performance.now() - startedAt) / msPerChar);
+      tw.pos = Math.min(dispLen, Math.max(tw.pos + charsPerTick, byClock));
       setVisibleChars(tw.pos);
       if (tw.pos >= dispLen) clearInterval(interval);
     }, TICK_MS);
@@ -4128,7 +4127,13 @@ export function GameNarration({
           <span>
             {combatStarting
               ? localizeUi("ui.game.gamenarration.combatStartingPleaseWait")
-              : localizeUi("ui.game.gamenarration.combatGenerationFailed")}
+              : combatGenerationCutOff
+                ? localizeUi("ui.game.gamenarration.combatGenerationCutOff")
+                : combatGenerationReason?.trim()
+                  ? localizeUi("ui.game.gamenarration.combatGenerationFailedWithReason", {
+                      value1: combatGenerationReason.trim(),
+                    })
+                  : localizeUi("ui.game.gamenarration.combatGenerationFailed")}
           </span>
         </span>
         {combatGenerationFailed && onRetryCombatGeneration && (
@@ -6610,125 +6615,6 @@ export function GameNarration({
   );
 }
 
-type TruncationLine = {
-  text: string;
-  originalStart: number;
-  originalEnd: number;
-};
-
-function findReadableBlockEnd(source: string, start: number): number {
-  let depth = 0;
-  for (let i = start; i < source.length; i++) {
-    if (source[i] === "[") depth++;
-    else if (source[i] === "]") {
-      depth--;
-      if (depth === 0) return i;
-    }
-  }
-  return -1;
-}
-
-function splitTextIntoBoundedLines(text: string, originalStart: number): TruncationLine[] {
-  const lines: TruncationLine[] = [];
-  let lineStart = 0;
-
-  for (let i = 0; i <= text.length; i++) {
-    if (i < text.length && text[i] !== "\n") continue;
-    const rawLine = text.slice(lineStart, i);
-    const lineText = rawLine.endsWith("\r") ? rawLine.slice(0, -1) : rawLine;
-    lines.push({
-      text: lineText,
-      originalStart: originalStart + lineStart,
-      originalEnd: originalStart + lineStart + lineText.length,
-    });
-    lineStart = i + 1;
-  }
-
-  return lines;
-}
-
-function splitInlineVnDialogueLineMetadata(line: TruncationLine): TruncationLine[] {
-  const headerRe = /\[[^\]]+\]\s*\[(?:main|side|extra|action|thought|whisper(?::[^\]]+)?)\]\s*(?:\[[^\]]+\])?\s*:/gi;
-  const pieces: TruncationLine[] = [];
-  let chunkStart = 0;
-  let match: RegExpExecArray | null;
-
-  while ((match = headerRe.exec(line.text))) {
-    if (match.index > chunkStart && /\s/.test(line.text[match.index - 1] ?? "")) {
-      pieces.push({
-        text: line.text.slice(chunkStart, match.index),
-        originalStart: line.originalStart + chunkStart,
-        originalEnd: line.originalStart + match.index,
-      });
-      chunkStart = match.index;
-    }
-  }
-  pieces.push({
-    text: line.text.slice(chunkStart),
-    originalStart: line.originalStart + chunkStart,
-    originalEnd: line.originalEnd,
-  });
-
-  return pieces.flatMap((piece) => {
-    const splitRe =
-      /^(\s*\[[^\]]+\]\s*\[(?:main|side|extra|whisper(?::[^\]]+)?)\]\s*(?:\[[^\]]+\])?\s*:\s*(?:"[^"]*"|“[^”]*”|«[^»]*»))\s+(?=\S)/i;
-    const split = splitRe.exec(piece.text);
-    if (!split || split[1].length >= piece.text.length) return [piece];
-
-    const splitAt = split[1].length;
-    return [
-      {
-        text: piece.text.slice(0, splitAt),
-        originalStart: piece.originalStart,
-        originalEnd: piece.originalStart + splitAt,
-      },
-      {
-        text: piece.text.slice(splitAt).trimStart(),
-        originalStart: piece.originalStart + splitAt + (piece.text.slice(splitAt).match(/^\s*/)?.[0].length ?? 0),
-        originalEnd: piece.originalEnd,
-      },
-    ];
-  });
-}
-
-function buildTruncationLines(rawContent: string): TruncationLine[] {
-  const chunks: TruncationLine[] = [];
-  const readableTagRe = /\[(?:Note|Book):/gi;
-  let cursor = 0;
-  let placeholderIndex = 0;
-  let match: RegExpExecArray | null;
-
-  while ((match = readableTagRe.exec(rawContent))) {
-    const start = match.index;
-    const end = findReadableBlockEnd(rawContent, start);
-    if (end < 0) continue;
-
-    if (start > cursor) {
-      chunks.push(...splitTextIntoBoundedLines(rawContent.slice(cursor, start), cursor));
-    }
-    chunks.push({
-      text: `__READABLE_${placeholderIndex}__`,
-      originalStart: start,
-      originalEnd: end + 1,
-    });
-    placeholderIndex += 1;
-    cursor = end + 1;
-    readableTagRe.lastIndex = cursor;
-  }
-
-  if (cursor < rawContent.length) {
-    chunks.push(...splitTextIntoBoundedLines(rawContent.slice(cursor), cursor));
-  }
-
-  return chunks.flatMap((chunk) => {
-    if (/^__READABLE_\d+__$/.test(chunk.text)) return [chunk];
-    return splitInlineVnDialogueLineMetadata(chunk).map((line) => ({
-      ...line,
-      text: stripGmTagsKeepReadables(line.text),
-    }));
-  });
-}
-
 export function parseNarrationSegments(
   message: NarrationMessage,
   speakerColors: Map<string, string>,
@@ -6737,66 +6623,4 @@ export function parseNarrationSegments(
   return parseGameNarrationSegments(message, extractInlineDialogue).map((segment) =>
     segment.speaker ? { ...segment, color: findNamedMapValue(speakerColors, segment.speaker) } : segment,
   );
-}
-
-/**
- * Truncate an assistant message's raw content so that it ends just after the
- * Nth segment (inclusive) that `parseNarrationSegments` would emit. Used by
- * the Interrupt feature so the model on the next turn can't see narration
- * the player never read.
- *
- * The parser-facing text is normalized for segment detection, but the returned
- * string is always a byte-for-byte prefix of the original raw content.
- */
-function truncateMessageContentAtSegment(rawContent: string, segmentIndexInclusive: number): string {
-  if (segmentIndexInclusive < 0) return "";
-
-  const lines = buildTruncationLines(rawContent || "");
-  const readablePlaceholderRe = /^__READABLE_(\d+)__$/;
-  const narrationRegex = /^\s*Narration\s*:\s*(.+)$/i;
-  const legacyDialogueRegex = /^\s*Dialogue\s*\[([^\]]+)\]\s*(?:\[([^\]]+)\])?\s*:\s*(.+)$/i;
-  const compactDialogueRegex = /^\s*\[([^\]]+)\](?:\s*\[[^\]]+\])*?\s*(?:\[([^\]]+)\])?\s*:\s*(.+)$/;
-  const partyLineRegex =
-    /^\s*\[([^\]]+)\]\s*\[(main|side|extra|action|thought|whisper(?::([^\]]+))?)\]\s*(?:\[([^\]]+)\])?\s*:\s*(.+)$/i;
-
-  const target = segmentIndexInclusive + 1;
-  let segmentCount = 0;
-  let pendingFallback = false;
-  let lastIncludedLineIdx = -1;
-
-  for (let i = 0; i < lines.length; i++) {
-    if (segmentCount >= target) break;
-    const line = lines[i]!.text.trim();
-
-    if (!line) {
-      if (pendingFallback) {
-        segmentCount++;
-        pendingFallback = false;
-      }
-      continue;
-    }
-
-    const isSpecial =
-      readablePlaceholderRe.test(line) ||
-      partyLineRegex.test(line) ||
-      narrationRegex.test(line) ||
-      legacyDialogueRegex.test(line) ||
-      compactDialogueRegex.test(line);
-
-    if (isSpecial) {
-      if (pendingFallback) {
-        segmentCount++;
-        pendingFallback = false;
-        if (segmentCount >= target) break;
-      }
-      segmentCount++;
-      lastIncludedLineIdx = i;
-    } else {
-      pendingFallback = true;
-      lastIncludedLineIdx = i;
-    }
-  }
-
-  if (lastIncludedLineIdx < 0) return rawContent;
-  return rawContent.slice(0, lines[lastIncludedLineIdx]!.originalEnd);
 }

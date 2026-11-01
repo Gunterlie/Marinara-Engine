@@ -25,7 +25,7 @@ The panel gives you these controls:
 - **New** creates a persona.
 - **Import** opens the **Import Persona** window.
 - **Select** turns on bulk-selection mode so you can act on many personas at once.
-- The search box, with placeholder **Search personas**, matches name, description, comment, and tags.
+- The search box, with placeholder **Search personas/tags**, matches name, description, comment, and tags. Enter `male genshin` or `male,genshin` to find personas with both exact tags; quote multiword tags, such as `male "Modern AU"`. Ordinary name and phrase searches still work. The full-page Persona Library supports the same search.
 - The sort dropdown offers **Manual order**, **A-Z**, **Z-A**, **Newest**, **Oldest**, and **Tokens** (estimated prompt size). **Manual order** keeps the order you set: drag a row up or down, or press Alt+Up or Alt+Down on a focused row. On a touch screen, press and hold a row to pick it up.
 - **New Folder** creates a folder to organize personas.
 - A **Tags** chip expands the tag list for filtering.
@@ -126,6 +126,10 @@ The **Lorebook** tab lets you attach lorebook entries to your persona. A loreboo
 
 The **Sprites** tab lets you upload standing character art for your persona. Sprites are used in Game Mode and Roleplay. It has category tabs for **Facial Expressions**, **Full-body**, and **Clips**. You can upload one image at a time or use **Upload Folder** to bulk-import a folder of PNG images. Because sprites are a shared system, see [Character Sprites](sprites.md) for the full details.
 
+Expressions and full-body sprites have separate optional folders above the loose grid. Use **New folder**, then double-click or double-tap its name to rename it. Drag sprites into or out of folders, or use a tile's **Move sprite** action and **Folder** selector with the keyboard. Removing a folder keeps its sprites. All sprites remain available to chats and agents, and supported exports, imports and profile transfers retain folder membership and labels.
+
+Search filters the grid. A search with no results shows a no-matches message; it does not mean the collection is empty. **Delete All Expressions** and **Delete All Full-Body** still apply to the whole category, including sprites hidden by a search.
+
 ### Gallery tab
 
 The **Gallery** tab keeps reference art and videos attached to your persona. It has two sub-tabs, **Images** and **Videos**. Use **Upload Persona Images** or **Upload Persona Videos** to add files. The **Videos** sub-tab also manages video-call clips for the Conversation-mode call feature. See [Character and Persona Galleries](galleries.md).
@@ -147,6 +151,8 @@ The **Stats** tab has two separate blocks. Both feed the on-screen stat display 
 
 - **Enable Persona Stats** turns on status bars for needs like hunger, energy, and mood. When you enable it fresh, you get starter bars for Satiety, Energy, Hygiene, and Mood, each at 100 of 100. The **Persona Stats** agent adjusts these values as the story goes.
 - **Enable RPG Attributes** turns on RPG-style Pools and Attributes. When you enable it fresh, you get starter HP and MP Pools at 100 out of 100 and starter Attributes STR, DEX, CON, INT, WIS, and CHA at 10. These values are sent with the persona card for Combat and Game Mode, and for optional rolls in Roleplay or Game Mode. Tracker agents do not update them.
+
+A **Game Mode Icon** block sets the picture on your persona's token in a Game Mode fight: the avatar, a picture from the persona's gallery, or the initials. See [Game Mode Icon](colors-and-stats.md#game-mode-icon).
 
 When a Game Mode ruleset is installed, or the persona still holds a sheet for a ruleset you no longer have, a **Ruleset sheets** block appears below these two. It holds your persona's starting build for each ruleset, which a new game on that ruleset copies. See [Ruleset sheets](colors-and-stats.md#ruleset-sheets).
 

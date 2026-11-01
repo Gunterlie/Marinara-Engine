@@ -1,6 +1,8 @@
+import { partialInput } from "@marinara-engine/shared";
 // ──────────────────────────────────────────────
 // Professor Mari DB service
 // ──────────────────────────────────────────────
+import { applyChatModelOverride, readChatModelOverride } from "../generation/connection-resolution.js";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -77,6 +79,7 @@ import {
   homeCustomWidgetSchema,
   normalizeLorebookCategory,
   normalizePersonalExtensionCapabilities,
+  PERSONAL_EXTENSION_FULL_PAGE_CAPABILITY,
   scopedRegexModeSchema,
   type MariDbCommandResult,
   type MariDbMutationReadBack,
@@ -91,6 +94,7 @@ import {
   MARI_PERMISSIONS_MODE_SETTINGS_KEY,
   MARI_RUNTIME_SETTINGS_KEY,
   MARI_SKILL_GATE_SETTINGS_KEY,
+  createCustomToolSchema,
   createLorebookEntrySchema,
   lorebookDecisionModeSchema,
   parseLorebookDecisionActivation,
@@ -1573,7 +1577,8 @@ function selectiveKeysNotice(entry: Row, label: string): string | null {
   const howTo =
     'To need two words, put one in keys, the other in secondaryKeys, and set selective: true; with several secondary keys, "and_all" needs every one and "and" needs any one.';
   if (selective && secondary.length === 0) {
-    return `${label}: selective is on but secondaryKeys is empty, so selectiveLogic does nothing and the entry fires on any one of keys ${keys}. ${howTo}`;
+    // Usually a leftover flag on an imported book, so the turn-off comes before the two-word how-to.
+    return `${label}: selective is on but secondaryKeys is empty, so selectiveLogic does nothing and the entry fires on any one of keys ${keys}. If one keyword is enough (common on imported books), set selective: false. ${howTo}`;
   }
   if (!selective && secondary.length > 0) {
     return `${label}: secondaryKeys are set but selective is off, so they are ignored and the entry fires on any one of keys ${keys}. ${howTo}`;
@@ -1787,6 +1792,7 @@ function normalizeAgentActionData(input: Row, existing?: Row | null): Row {
   delete row.resultType;
   delete row.result_type;
   delete row.prompt;
+  delete row.prompt_template;
   return row;
 }
 
@@ -2247,6 +2253,19 @@ function assignStringField(target: Row, source: Row, sourceKeys: string[], targe
   if (value === undefined) return false;
   target[targetKey] = value;
   return true;
+}
+
+// Like assignStringField, but "" and whitespace are a real value (a clear), as summary and the
+// character card fields already treat them; non-strings are still dropped.
+function assignClearableStringField(target: Row, source: Row, sourceKeys: string[], targetKey: string): boolean {
+  for (const key of sourceKeys) {
+    const value = source[key];
+    if (typeof value === "string") {
+      target[targetKey] = value.trim();
+      return true;
+    }
+  }
+  return false;
 }
 
 function assignNumberField(target: Row, source: Row, sourceKeys: string[], targetKey: string): boolean {
@@ -3651,27 +3670,27 @@ export class MariDbService {
         assignStringField(patch, data, ["name"], "name");
         if (typeof data.summary === "string") patch.summary = data.summary.trim();
         if (typeof data.mes_example === "string") patch.mes_example = data.mes_example.trim();
-        assignStringField(patch, data, ["description"], "description");
-        assignStringField(patch, data, ["personality"], "personality");
-        assignStringField(patch, data, ["scenario"], "scenario");
-        assignStringField(patch, data, ["backstory"], "backstory");
-        assignStringField(patch, data, ["appearance"], "appearance");
-        assignStringField(patch, data, ["imageAppearance", "image_appearance"], "imageAppearance");
+        assignClearableStringField(patch, data, ["description"], "description");
+        assignClearableStringField(patch, data, ["personality"], "personality");
+        assignClearableStringField(patch, data, ["scenario"], "scenario");
+        assignClearableStringField(patch, data, ["backstory"], "backstory");
+        assignClearableStringField(patch, data, ["appearance"], "appearance");
+        assignClearableStringField(patch, data, ["imageAppearance", "image_appearance"], "imageAppearance");
         if (data.imageAppearanceEnabled !== undefined || data.image_appearance_enabled !== undefined) {
           const flag = data.imageAppearanceEnabled ?? data.image_appearance_enabled;
           patch.imageAppearanceEnabled = flag === true || flag === "true" ? "true" : "false";
         }
-        assignStringField(patch, data, ["comment"], "comment");
-        assignStringField(patch, data, ["creator"], "creator");
-        assignStringField(patch, data, ["creatorNotes", "creator_notes", "creator-notes"], "creatorNotes");
-        assignStringField(patch, data, ["phoneticName", "phonetic_name", "phonetic-name"], "phoneticName");
-        assignStringField(
+        assignClearableStringField(patch, data, ["comment"], "comment");
+        assignClearableStringField(patch, data, ["creator"], "creator");
+        assignClearableStringField(patch, data, ["creatorNotes", "creator_notes", "creator-notes"], "creatorNotes");
+        assignClearableStringField(patch, data, ["phoneticName", "phonetic_name", "phonetic-name"], "phoneticName");
+        assignClearableStringField(
           patch,
           data,
           ["convoDisplayName", "convo_display_name", "convo-display-name"],
           "convoDisplayName",
         );
-        assignStringField(patch, data, ["aboutMe", "about_me", "about-me"], "aboutMe");
+        assignClearableStringField(patch, data, ["aboutMe", "about_me", "about-me"], "aboutMe");
         if (
           data.convoBehavior !== undefined ||
           data.convo_behavior !== undefined ||
@@ -5045,9 +5064,9 @@ export class MariDbService {
         const id = requiredString(args, ["id", "widgetId"], "Home widget id");
         const index = catalog.widgets.findIndex((candidate) => candidate.id === id);
         if (index < 0) throw missingRecord("home widget", id, "home_widget.list");
-        const patch = homeCustomWidgetDraftSchema
-          .partial()
-          .parse(actionDataWithTopLevel(args, ["patch", "data", "widget"], ["title", "description", "accent", "icon"]));
+        const patch = partialInput(homeCustomWidgetDraftSchema).parse(
+          actionDataWithTopLevel(args, ["patch", "data", "widget"], ["title", "description", "accent", "icon"]),
+        );
         if (Object.keys(patch).length === 0)
           throw new Error(
             'home_widget.update needs a non-empty patch. Send at least one of title, description, accent, icon, top-level or inside "patch" or "data".',
@@ -5205,6 +5224,14 @@ export class MariDbService {
         serverJs: runtime === "server" && typeof row.serverJs === "string" ? row.serverJs : null,
       } as const;
     };
+    // The Settings/runtime path drops this capability for Mari's drafts while the startup trust check hashes the
+    // raw row, so a stored declaration would leave a draft whose approval is revoked on every restart.
+    const refuseFullPageAccess = (capabilities: readonly string[]) => {
+      if (capabilities.includes(PERSONAL_EXTENSION_FULL_PAGE_CAPABILITY))
+        throw new Error(
+          `Personal Extensions cannot request "${PERSONAL_EXTENSION_FULL_PAGE_CAPABILITY}"; only External Extensions can. Nothing was changed. Send "capabilities" without it and retry.`,
+        );
+    };
 
     switch (sub) {
       case "list": {
@@ -5243,6 +5270,7 @@ export class MariDbService {
           js: runtime === "client" ? (parsed.js ?? null) : null,
           serverJs: runtime === "server" ? (parsed.serverJs ?? null) : null,
         } as const;
+        refuseFullPageAccess(executable.capabilities);
         const timestamp = now();
         const id = firstString(args, ["id", "extensionId"]) ?? newId();
         const row: Row = {
@@ -5326,6 +5354,7 @@ export class MariDbService {
           js: runtime === "client" ? (parsed.js ?? null) : null,
           serverJs: runtime === "server" ? (parsed.serverJs ?? null) : null,
         } as const;
+        refuseFullPageAccess(executable.capabilities);
         const previousExecutable = executableFromRow(existing);
         const previousHash =
           typeof existing.contentHash === "string" && existing.contentHash
@@ -5504,6 +5533,7 @@ export class MariDbService {
               "imagePath",
               "promptTemplate",
               "prompt",
+              "prompt_template",
               "settings",
               "resultType",
             ],
@@ -5636,6 +5666,8 @@ export class MariDbService {
             "wrapFormat",
             "scopedRegexMode",
             "scoped_regex_mode",
+            "conversation_prompt",
+            "game_prompt",
             "defaultChoices",
             "isDefault",
             "author",
@@ -6609,7 +6641,8 @@ export class MariDbService {
           this.validateAgentConfigRow(row, id, issues, change?.beforeRaw);
         }
         if (tableName === "custom_tools") {
-          this.validateCustomToolRow(row, id, issues);
+          const change = changes?.find((entry) => entry.table === tableName && entry.id === id);
+          this.validateCustomToolRow(row, id, issues, change?.beforeRaw);
         }
       }
     }
@@ -6747,10 +6780,16 @@ export class MariDbService {
     }
   }
 
-  private validateCustomToolRow(row: Row, idValue: unknown, issues: MariDbValidationIssue[]) {
+  private validateCustomToolRow(row: Row, idValue: unknown, issues: MariDbValidationIssue[], previousRow?: Row | null) {
     const id = idValue == null ? null : String(idValue);
+    // The editor's own limits (#8516) apply to values this change sets: a row Mari writes past them could not be saved
+    // again from the editor, but a stored value already past them (an import, an older write) must not block an
+    // unrelated edit such as `enabled`, which the editor itself now saves.
+    const sets = (field: string) => !previousRow || row[field] !== previousRow[field];
     if (typeof row.name !== "string" || !/^[a-z][a-z0-9_]*$/.test(row.name)) {
       issues.push({ level: "error", table: "custom_tools", id, message: "Tool name must be lowercase snake_case" });
+    } else if (sets("name") && !createCustomToolSchema.shape.name.safeParse(row.name).success) {
+      issues.push({ level: "error", table: "custom_tools", id, message: "Tool name must be at most 100 characters" });
     }
     if (typeof row.description !== "string" || row.description.trim().length === 0) {
       issues.push({
@@ -6758,6 +6797,13 @@ export class MariDbService {
         table: "custom_tools",
         id,
         message: "Tool description must be a non-empty string",
+      });
+    } else if (sets("description") && !createCustomToolSchema.shape.description.safeParse(row.description).success) {
+      issues.push({
+        level: "error",
+        table: "custom_tools",
+        id,
+        message: "Tool description must be at most 500 characters",
       });
     }
     if (typeof row.executionType !== "string" || !TOOL_EXECUTION_TYPES.has(row.executionType)) {
@@ -8328,7 +8374,11 @@ export class MariDbService {
         "Token Budget": (row as unknown as Lorebook).tokenBudget,
       }));
 
-    const connection = chat.connectionId ? await createConnectionsStorage(this.db).getById(chat.connectionId) : null;
+    const connectionsStorage = createConnectionsStorage(this.db);
+    const storedConnection = chat.connectionId
+      ? await connectionsStorage.getById(chat.connectionId)
+      : await connectionsStorage.getDefault();
+    const connection = storedConnection ? applyChatModelOverride(storedConnection, readChatModelOverride(chat)) : null;
     const presetCandidates = buildGenerationPromptPresetCandidates({
       chatMode: chat.mode,
       chatPromptPresetId: chat.promptPresetId,
@@ -9855,7 +9905,7 @@ export class MariDbService {
       }
       addCharacterDataShapeIssues(change.table, row, change.id, issues);
       if (change.table === "agent_configs") this.validateAgentConfigRow(row, change.id, issues, change.beforeRaw);
-      if (change.table === "custom_tools") this.validateCustomToolRow(row, change.id, issues);
+      if (change.table === "custom_tools") this.validateCustomToolRow(row, change.id, issues, change.beforeRaw);
     }
 
     for (const change of changes) {
