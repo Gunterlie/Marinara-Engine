@@ -1834,6 +1834,7 @@
   "connections.add.showKey": "Show key",
   "connections.add.signInFirst": "Sign in first: on the computer that runs Marinara, run “{{command}}”.",
   "connections.add.startChatting": "Start chatting",
+  "connections.add.tag.cheapApiPrices": "Cheap API Prices",
   "connections.add.tag.device": "On this device",
   "connections.add.tag.free": "Free models",
   "connections.add.tag.offline": "Free · offline",

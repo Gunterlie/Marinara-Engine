@@ -54,6 +54,7 @@ export function ServiceListStep({
   const tagOf = (key: ServiceId) => {
     const media = mediaBackendOf(key);
     if (key === "local_model") return t("connections.add.tag.offline");
+    if (key === "linkapi") return t("connections.add.tag.cheapApiPrices");
     if (key === "openrouter") return t("connections.add.tag.free");
     if (key === "openai_chatgpt" || key === "claude_subscription" || key === "grok_subscription")
       return t("connections.add.tag.signIn");
